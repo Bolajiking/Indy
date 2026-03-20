@@ -89,8 +89,8 @@ The Indyfren MVP is **complete and ready for production deployment**. All core f
 - **COMPLETION_STATUS.md:** Progress tracker
 
 ### Testing ✅
-- **186 Tests Passing:** 100% pass rate
-- **44 Test Files:** All components covered
+- **198 Tests Passing:** 100% pass rate (updated March 20)
+- **45 Test Files:** All components covered
 - **Integration Tests:** Bot-to-agent, full-flow, OAuth
 - **Build Verification:** Backend + dashboard both passing
 - **Test Coverage:** ~85% overall
@@ -105,12 +105,27 @@ The Indyfren MVP is **complete and ready for production deployment**. All core f
 
 ---
 
+## 🎨 Latest Improvements (March 20, 2026)
+
+### Telegram Bot UX Enhancements ✨
+- ✅ **Slash Commands:** All commands support `/` format (/help, /scan, /calendar, etc.)
+- ✅ **Command Menu:** Auto-registers commands in Telegram's built-in menu
+- ✅ **Visual Polish:** Emojis throughout for better scannability
+- ✅ **Better Buttons:** ✅ Send and ❌ Skip instead of plain text
+- ✅ **Typing Indicators:** Shows "bot is typing..." before responses
+- ✅ **Enhanced Messages:** Improved welcome, help, and error messages
+- ✅ **Test Coverage:** 12 new tests for slash commands and UX improvements
+
+These improvements make the bot more discoverable, easier to use, and visually appealing for creators on Telegram.
+
+---
+
 ## 📈 Project Statistics
 
 | Metric | Count |
 |--------|-------|
-| **Test Files** | 44 |
-| **Tests Passing** | 186 |
+| **Test Files** | 45 |
+| **Tests Passing** | 198 |
 | **Agent Skills** | 12 |
 | **Agent Tools** | 6 |
 | **API Endpoints** | 25+ |
