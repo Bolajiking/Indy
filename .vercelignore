@@ -1,0 +1,13 @@
+# Vercel build exclusions
+src/
+tests/
+scripts/
+!dashboard/
+*.md
+!README.md
+.env.example
+.env.local
+railway.json
+docker-compose.yml
+Dockerfile
+!dashboard/Dockerfile

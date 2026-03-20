@@ -1,0 +1,15 @@
+# Railway build exclusions
+dashboard/
+tests/
+docs/
+.github/
+*.md
+!README.md
+.env.example
+.env.local
+.vscode/
+.claude/
+research/
+scripts/seed-db.ts
+scripts/test-*.ts
+scripts/smoke-*.ts
