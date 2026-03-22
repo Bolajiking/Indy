@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   approveAgentAction,
@@ -19,10 +19,10 @@ const EMPTY_AGENT_STATE: DashboardAgentState = {
 };
 
 const QUICK_PROMPTS = [
-  "scan for brand deals",
-  "show my wallet balance",
-  "give me my morning brief",
-  "draft a pitch for a fintech sponsor",
+  "Plan my day",
+  "Check my deals",
+  "Show wallet activity",
+  "Draft a sponsor reply",
 ];
 
 export function AgentConsole({
@@ -42,6 +42,17 @@ export function AgentConsole({
   const [working, setWorking] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    if (typeof messagesEndRef.current?.scrollIntoView === "function") {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [data.messages.length, scrollToBottom]);
 
   const load = useCallback(
     async (token: string) => {
@@ -113,14 +124,14 @@ export function AgentConsole({
       setDraft("");
       setActionMessage(
         response.reply.requiresApproval
-          ? "The agent drafted an action that needs your approval. Review it below."
-          : "The agent replied."
+          ? "Indyfren drafted an action that needs your approval."
+          : "Indyfren replied."
       );
     } catch (sendError) {
       setActionError(
         sendError instanceof Error
           ? sendError.message
-          : "Unable to send your message to the agent."
+          : "Unable to send your message right now."
       );
     } finally {
       setWorking(false);
@@ -145,7 +156,7 @@ export function AgentConsole({
       setActionMessage(
         response.execution?.costCents
           ? `${response.execution.message} ($${(response.execution.costCents / 100).toFixed(2)})`
-          : response.execution?.message ?? "Approved action executed."
+          : response.execution?.message ?? "Approved and executed."
       );
       await refresh();
     } catch (approveError) {
@@ -174,7 +185,7 @@ export function AgentConsole({
         ...current,
         pendingApprovals: response.pendingApprovals,
       }));
-      setActionMessage("The pending action was skipped.");
+      setActionMessage("Action skipped.");
     } catch (skipError) {
       setActionError(
         skipError instanceof Error ? skipError.message : "Unable to skip that action."
@@ -185,116 +196,195 @@ export function AgentConsole({
   }
 
   return (
-    <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-      <article className="paper-panel rounded-card border border-black/10 p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+    <article
+      className="flex flex-col overflow-hidden"
+      style={{
+        background: 'var(--bg-surface)',
+        borderRadius: 'var(--radius-card)',
+        border: '1px solid var(--border-default)',
+      }}
+    >
+      {/* Header */}
+      <div className="border-b border-border-default px-6 pt-6 pb-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="eyebrow text-[11px] text-fog">Agent console</p>
-            <h3 className="display-title mt-2 text-3xl text-ink">
-              Chat with the same agent that answers in Telegram.
+            <h3
+              className="text-[15px] font-semibold"
+              style={{ color: 'var(--text-primary)' }}
+            >
+              Chat with Indyfren
             </h3>
-            <p className="mt-3 max-w-2xl text-sm leading-7 text-fog">
-              Every dashboard message writes into the same creator history, so your agent
-              can pick up where Telegram, WhatsApp, or the dashboard left off.
+            <p className="mt-1 text-sm" style={{ color: 'var(--text-tertiary)', fontSize: 12 }}>
+              Ask for help with deals, pitches, approvals, payouts, or planning
+              your next move.
             </p>
           </div>
-          <p className="rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-ink">
-            {creator?.display_name ?? "Creator"} console
-          </p>
+          {creator?.display_name ? (
+            <p
+              className="px-3 py-1.5 text-xs font-medium"
+              style={{
+                color: 'var(--text-tertiary)',
+                background: 'var(--bg-input)',
+                borderRadius: 'var(--radius-chip)',
+                border: '1px solid var(--border-default)',
+              }}
+            >
+              {creator.display_name}
+            </p>
+          ) : null}
         </div>
 
         {!onboarding.walletProvisioned ? (
-          <div className="mt-5 rounded-[22px] border border-black/10 bg-parchment p-4 text-sm leading-7 text-fog">
-            Wallet-backed actions may still pause until provisioning and funding catch up,
-            but you can already brief the agent, review drafts, and manage pending actions
-            from here.
+          <div
+            className="mt-3 px-4 py-3 text-xs leading-6"
+            style={{
+              border: '1px solid var(--border-default)',
+              background: 'var(--bg-input)',
+              color: 'var(--text-tertiary)',
+              borderRadius: 'var(--radius-input)',
+            }}
+          >
+            Your wallet is still being set up. You can chat, review drafts, and
+            manage approvals while that finishes in the background.
           </div>
         ) : null}
 
-        <div className="mt-6 flex flex-wrap gap-2">
-          {QUICK_PROMPTS.map((prompt) => (
+        {/* Quick prompts */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          {QUICK_PROMPTS.map((prompt, index) => (
             <button
               key={prompt}
               onClick={() => {
                 void handleSend(prompt);
               }}
               disabled={working}
-              className="rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-ink transition hover:bg-parchment disabled:opacity-50"
+              className="disabled:opacity-50"
+              style={{
+                border: index % 2 === 0
+                  ? '1.5px solid var(--accent-pink-border-strong)'
+                  : '1.5px solid var(--accent-blue-border-strong)',
+                color: index % 2 === 0
+                  ? 'var(--accent-pink)'
+                  : 'var(--accent-blue)',
+                background: 'var(--bg-canvas)',
+                borderRadius: 'var(--radius-chip)',
+                padding: '6px 12px',
+                fontSize: 12,
+                fontWeight: 500,
+              }}
             >
               {prompt}
             </button>
           ))}
         </div>
+      </div>
 
-        <div className="mt-6 max-h-[520px] space-y-3 overflow-y-auto pr-1">
-          {data.messages.map((message) => {
-            const platform =
-              message.metadata && typeof message.metadata.platform === "string"
-                ? message.metadata.platform
-                : null;
-            const isAssistant = message.role === "assistant";
+      {/* Message area */}
+      <div className="min-h-[420px] max-h-[460px] flex-1 space-y-3 overflow-y-auto px-6 py-4">
+        {data.messages.map((message) => {
+          const platform =
+            message.metadata && typeof message.metadata.platform === "string"
+              ? message.metadata.platform
+              : null;
+          const isAssistant = message.role === "assistant";
 
-            return (
-              <div
-                key={message.id}
-                className={`rounded-[22px] border p-4 ${
-                  isAssistant
-                    ? "border-black/10 bg-white/85"
-                    : "border-black/10 bg-parchment"
-                }`}
-              >
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-fog">
-                    {isAssistant ? "Agent" : "You"}
-                    {platform ? ` • ${platform}` : ""}
-                  </p>
-                  <p className="text-xs text-fog">
-                    {formatDashboardDateTime(message.created_at)}
-                  </p>
-                </div>
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-ink">
-                  {message.content}
+          return (
+            <div
+              key={message.id}
+              className={`px-4 py-3 ${isAssistant ? "" : "ml-8"}`}
+              style={{
+                border: '1px solid var(--border-default)',
+                background: isAssistant ? 'var(--bg-canvas)' : 'var(--bg-input)',
+                borderRadius: 'var(--radius-input)',
+              }}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p
+                  className="text-xs font-semibold"
+                  style={{
+                    fontSize: 11,
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  {isAssistant ? "Indyfren" : "You"}
+                  {platform ? ` · ${platform}` : ""}
+                </p>
+                <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+                  {formatDashboardDateTime(message.created_at)}
                 </p>
               </div>
-            );
-          })}
-
-          {data.messages.length === 0 ? (
-            <div className="rounded-[22px] border border-dashed border-black/10 p-5 text-sm leading-7 text-fog">
-              {isLoading
-                ? "Loading the shared creator conversation..."
-                : "No conversation yet. Ask the agent to scan for deals, summarize the day, or draft a sponsor pitch."}
+              <p
+                className="mt-2 whitespace-pre-wrap text-sm leading-7"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {message.content}
+              </p>
             </div>
-          ) : null}
-        </div>
+          );
+        })}
 
+        {data.messages.length === 0 ? (
+          <div
+            className="flex h-full items-center justify-center p-8 text-center text-sm leading-7"
+            style={{
+              border: '1px dashed var(--border-default)',
+              color: 'var(--text-tertiary)',
+              borderRadius: 'var(--radius-card)',
+            }}
+          >
+            {isLoading
+              ? "Loading your conversation..."
+              : "No conversation yet. Ask Indyfren to scan for deals, summarize the day, or draft a sponsor pitch."}
+          </div>
+        ) : null}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Composer */}
+      <div className="border-t border-border-default px-6 py-4">
         <form
-          className="mt-6 space-y-4"
+          className="flex gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             void handleSend();
           }}
         >
-          <label className="block space-y-2">
-            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-fog">
-              Message the agent
-            </span>
-            <textarea
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="Ask for a morning brief, scan for deals, or draft a sponsor pitch..."
-              rows={4}
-              className="w-full rounded-[22px] border border-black/10 bg-parchment px-4 py-4 text-sm text-ink outline-none transition focus:border-plum"
-            />
-          </label>
-
-          <div className="flex flex-wrap items-center gap-3">
+          <textarea
+            id="agent-console-input"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void handleSend();
+              }
+            }}
+            placeholder="Ask Indyfren to review a deal, draft a reply, explain your numbers, or plan your day..."
+            rows={2}
+            className="flex-1 resize-none px-4 py-3 text-sm outline-none transition focus:border-[var(--border-focus)]"
+            style={{
+              border: '1.5px solid var(--border-light)',
+              background: 'var(--bg-input)',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-input)',
+            }}
+          />
+          <div className="flex flex-col gap-2">
             <button
               type="submit"
               disabled={working}
-              className="rounded-full bg-ink px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-paper transition hover:bg-plum disabled:opacity-50"
+              className="disabled:opacity-50"
+              style={{
+                background: 'var(--accent-blue)',
+                color: 'white',
+                borderRadius: 'var(--radius-button)',
+                padding: '8px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+              }}
             >
-              {working ? "Working..." : "Send to agent"}
+              {working ? "Working..." : "Ask Indyfren"}
             </button>
             <button
               type="button"
@@ -302,74 +392,122 @@ export function AgentConsole({
                 void refresh();
               }}
               disabled={working}
-              className="rounded-full border border-black/10 bg-white px-5 py-3 text-xs font-semibold uppercase tracking-[0.18em] text-ink transition hover:bg-parchment disabled:opacity-50"
+              className="disabled:opacity-50"
+              style={{
+                border: '1.5px solid var(--border-light)',
+                borderRadius: 'var(--radius-button)',
+                padding: '8px 16px',
+                fontSize: 13,
+                fontWeight: 500,
+                color: 'var(--text-primary)',
+              }}
             >
-              Refresh thread
+              Refresh
             </button>
           </div>
         </form>
 
         {error || actionError ? (
-          <p className="mt-4 rounded-[18px] border border-blush/20 bg-blush/10 px-4 py-3 text-sm text-ink">
+          <p
+            className="mt-3 px-4 py-3 text-sm"
+            style={{
+              border: '1px solid var(--accent-pink-border)',
+              background: 'var(--accent-pink-subtle)',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-input)',
+            }}
+          >
             {actionError ?? error}
           </p>
         ) : null}
         {actionMessage ? (
-          <p className="mt-4 rounded-[18px] border border-black/10 bg-white px-4 py-3 text-sm text-ink">
+          <p
+            className="mt-3 px-4 py-3 text-sm"
+            style={{
+              border: '1px solid var(--border-default)',
+              background: 'var(--bg-canvas)',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-input)',
+            }}
+          >
             {actionMessage}
           </p>
         ) : null}
-      </article>
+      </div>
 
-      <article className="rounded-[28px] border border-black/10 bg-ink p-6 text-paper shadow-card">
-        <p className="eyebrow text-[11px] text-paper/55">Pending approvals</p>
-        <h3 className="display-title mt-2 text-3xl text-paper">Actions waiting on you.</h3>
-        <p className="mt-3 text-sm leading-7 text-paper/72">
-          Hybrid tools like outbound email stay gated here until the creator approves them.
-          Telegram and dashboard approvals write to the same queue.
-        </p>
-
-        <div className="mt-6 space-y-4">
-          {data.pendingApprovals.map((approval) => (
-            <div
-              key={approval.id}
-              className="rounded-[22px] border border-white/10 bg-white/6 p-4"
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-paper/60">
-                {approval.type}
-              </p>
-              <p className="mt-2 text-lg font-semibold">{approval.description}</p>
-              <p className="mt-3 text-sm leading-7 text-paper/72">{approval.preview}</p>
-              <div className="mt-5 flex flex-wrap gap-3">
-                <button
-                  onClick={() => {
-                    void handleApprove(approval.actionId);
-                  }}
-                  disabled={working}
-                  className="rounded-full bg-paper px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-ink transition hover:bg-white disabled:opacity-50"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => {
-                    void handleSkip(approval.actionId);
-                  }}
-                  disabled={working}
-                  className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-paper transition hover:bg-white/15 disabled:opacity-50"
-                >
-                  Skip
-                </button>
+      {/* Pending approvals */}
+      {data.pendingApprovals.length > 0 ? (
+        <div
+          className="px-6 py-5"
+          style={{
+            background: 'var(--gradient-approval)',
+            borderTop: '1px solid var(--border-default)',
+            color: 'white',
+          }}
+        >
+          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
+            Actions waiting on you
+          </p>
+          <div className="mt-4 space-y-3">
+            {data.pendingApprovals.map((approval) => (
+              <div
+                key={approval.id}
+                className="p-4"
+                style={{
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  background: 'rgba(255,255,255,0.06)',
+                  borderRadius: 'var(--radius-input)',
+                }}
+              >
+                <p className="text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                  {approval.type}
+                </p>
+                <p className="mt-2 text-base font-semibold">
+                  {approval.description}
+                </p>
+                <p className="mt-2 text-sm leading-7" style={{ color: 'rgba(255,255,255,0.72)' }}>
+                  {approval.preview}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    onClick={() => {
+                      void handleApprove(approval.actionId);
+                    }}
+                    disabled={working}
+                    className="transition hover:opacity-90 disabled:opacity-50"
+                    style={{
+                      background: 'var(--accent-green)',
+                      color: 'white',
+                      borderRadius: 'var(--radius-chip)',
+                      padding: '6px 14px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => {
+                      void handleSkip(approval.actionId);
+                    }}
+                    disabled={working}
+                    className="transition hover:opacity-90 disabled:opacity-50"
+                    style={{
+                      background: 'rgba(255,255,255,0.1)',
+                      color: 'white',
+                      borderRadius: 'var(--radius-chip)',
+                      padding: '6px 14px',
+                      fontSize: 12,
+                    }}
+                  >
+                    Skip
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
-
-          {data.pendingApprovals.length === 0 ? (
-            <div className="rounded-[22px] border border-dashed border-white/15 p-5 text-sm leading-7 text-paper/70">
-              No actions are waiting on approval right now.
-            </div>
-          ) : null}
+            ))}
+          </div>
         </div>
-      </article>
-    </section>
+      ) : null}
+    </article>
   );
 }
