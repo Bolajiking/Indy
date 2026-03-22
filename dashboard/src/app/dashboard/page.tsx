@@ -3,7 +3,11 @@
 import React from "react";
 
 import { AgentConsole } from "@/components/agent-console";
+import { CommandBar } from "@/components/command-bar";
 import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
+import { DashboardHomeHero } from "@/components/dashboard-home-hero";
+import { DashboardSupportRail } from "@/components/dashboard-support-rail";
+import { IconBarChart, IconList } from "@/components/icons";
 import {
   EMPTY_HOME_DATA,
   buildDashboardHomeModel,
@@ -24,154 +28,74 @@ export default function DashboardPage() {
   return (
     <DashboardAuthGate>
       <div className="space-y-6">
-        <section className="paper-panel rounded-card border border-black/10 p-6 md:p-8">
-        <div className="grid gap-5 md:grid-cols-[1.3fr_0.7fr]">
-          <div className="space-y-4">
-            <p className="eyebrow text-[11px] text-fog">Overview</p>
-            <h2 className="display-title text-4xl leading-none text-ink md:text-5xl">
-              A calm command center for messy creator revenue.
-            </h2>
-            <p className="max-w-2xl text-sm leading-7 text-fog">
-              Morning briefs, sponsor opportunities, and wallet events settle into one
-              readable desk. When a creator is selected, these cards pull directly from the
-              backend routes already exposed by Indyfren.
-            </p>
-          </div>
+        <DashboardHomeHero model={model.hero} />
 
-          <div className="rounded-[28px] border border-black/10 bg-ink p-6 text-paper">
-            <p className="eyebrow text-[11px] text-paper/55">Today</p>
-            <p className="mt-3 text-2xl font-semibold">
-              {isLoading ? "Syncing creator data" : model.todayHero.summary}
-            </p>
-            <p className="mt-3 text-sm leading-7 text-paper/72">
-              {error
-                ? error
-                : isLoading
-                  ? "Collecting creator, deal, wallet, and approval data from the dashboard API."
-                  : model.status.detail}
-            </p>
-            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-paper/55">
-              Approvals {model.todayHero.approvalsCount} · Follow-ups{" "}
-              {model.todayHero.followUpsCount} · Wallet{" "}
-              {model.todayHero.walletReady ? "ready" : "pending"}
-            </p>
-          </div>
-          </div>
-        </section>
+        <CommandBar />
+
+        <div style={{ height: 1, background: "var(--border-default)", margin: "var(--space-section) 0" }} />
+
+        <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
+          <IconList size={14} className="text-text-tertiary" />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Workspace</span>
+        </div>
 
         {agentConsoleState.showLoadingShell ? (
-          <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <article className="paper-panel rounded-card border border-black/10 p-6">
-              <p className="eyebrow text-[11px] text-fog">Agent console</p>
-              <h3 className="display-title mt-2 text-3xl text-ink">
-                Loading your shared conversation.
+          <section className="grid lg:grid-cols-2" style={{ gap: "var(--column-gap)" }}>
+            <article
+              style={{
+                background: "var(--bg-surface)",
+                borderRadius: "var(--radius-card)",
+                border: "1px solid var(--border-default)",
+                padding: 24
+              }}
+            >
+              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Agent workspace</p>
+              <h3 style={{ fontSize: 20, fontWeight: 600, color: "var(--text-primary)", marginTop: 8 }}>
+                Loading your conversation.
               </h3>
-              <p className="mt-4 max-w-2xl text-sm leading-7 text-fog">
-                We&apos;re collecting your latest messages, approvals, and agent context.
+              <p className="mt-4 max-w-2xl text-sm leading-7" style={{ color: "var(--text-tertiary)" }}>
+                Collecting your latest messages, approvals, and agent context.
               </p>
             </article>
+            <DashboardSupportRail model={model.supportRail} />
           </section>
         ) : (
-          <AgentConsole
-            initialState={agentConsoleState.initialState}
-            isHydrated={agentConsoleState.isHydrated}
-          />
+          <section
+            id="agent-workspace"
+            className="grid lg:grid-cols-2"
+            style={{ gap: "var(--column-gap)" }}
+          >
+            <AgentConsole
+              initialState={agentConsoleState.initialState}
+              isHydrated={agentConsoleState.isHydrated}
+            />
+            <DashboardSupportRail model={model.supportRail} />
+          </section>
         )}
 
+        <div style={{ height: 1, background: "var(--border-default)", margin: "var(--space-section) 0" }} />
+
+        <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
+          <IconBarChart size={14} className="text-text-tertiary" />
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>At a glance</span>
+        </div>
+
         <section className="grid gap-4 md:grid-cols-3">
-        <article className="rounded-[28px] border border-black/10 bg-white/70 p-6 shadow-card">
-          <p className="eyebrow text-[11px] text-fog">Active deals</p>
-          <p className="mt-3 text-5xl font-semibold text-moss">{model.stats.activeDealsCount}</p>
-          <p className="mt-3 text-sm leading-7 text-fog">
-            Pitched, negotiating, contracted, or already active.
-          </p>
-        </article>
-
-        <article className="rounded-[28px] border border-black/10 bg-parchment p-6 shadow-card">
-          <p className="eyebrow text-[11px] text-fog">Pipeline value</p>
-          <p className="mt-3 text-5xl font-semibold text-plum">
-            {model.stats.pipelineValueLabel}
-          </p>
-          <p className="mt-3 text-sm leading-7 text-fog">
-            Based on current estimated values across the full pipeline.
-          </p>
-        </article>
-
-        <article className="rounded-[28px] border border-black/10 bg-white/75 p-6 shadow-card">
-          <p className="eyebrow text-[11px] text-fog">Wallet pulse</p>
-          <p className="mt-3 text-5xl font-semibold text-sand">
-            {model.stats.walletHeadline.count}
-          </p>
-          <p className="mt-3 text-sm leading-7 text-fog">
-            {model.stats.walletHeadline.detail}
-          </p>
-        </article>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-        <article className="paper-panel rounded-card border border-black/10 p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="eyebrow text-[11px] text-fog">Pipeline by stage</p>
-              <h3 className="display-title mt-2 text-3xl text-ink">Deal movement</h3>
-            </div>
-            <p className="text-sm text-fog">{model.stats.totalDeals} total deals</p>
-          </div>
-
-          <div className="mt-6 space-y-4">
-            {Object.entries(model.stageCounts).map(([stage, count]) => (
-              <div key={stage} className="grid grid-cols-[110px_1fr_40px] items-center gap-4">
-                <p className="text-sm font-semibold capitalize text-ink">{stage}</p>
-                <div className="h-3 rounded-full bg-black/6">
-                  <div
-                    className="h-3 rounded-full bg-ink"
-                    style={{
-                      width: `${
-                        count > 0 && model.stats.totalDeals > 0
-                          ? Math.max((count / model.stats.totalDeals) * 100, 8)
-                          : 0
-                      }%`,
-                    }}
-                  />
-                </div>
-                <p className="text-right text-sm text-fog">{count}</p>
-              </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="rounded-[28px] border border-black/10 bg-ink p-6 text-paper shadow-card">
-          <p className="eyebrow text-[11px] text-paper/55">Recent focus</p>
-          <div className="mt-6 space-y-4">
-            {model.recentDeals.map((deal) => (
-              <div
-                key={deal.id}
-                className="rounded-[22px] border border-white/10 bg-white/6 p-4"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-lg font-semibold">{deal.brandName}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.22em] text-paper/58">
-                      {deal.stage}
-                    </p>
-                  </div>
-                  <p className="text-sm text-paper/70">{deal.valueLabel}</p>
-                </div>
-                <p className="mt-3 text-sm leading-7 text-paper/72">
-                  {deal.fitScoreLabel}
-                  {deal.notes ? ` • ${deal.notes}` : ""}
-                </p>
-              </div>
-            ))}
-
-            {model.recentDeals.length === 0 ? (
-              <div className="rounded-[22px] border border-dashed border-white/20 p-5 text-sm leading-7 text-paper/70">
-                <p className="text-base font-semibold text-paper">{model.emptyState.title}</p>
-                <p className="mt-2">{model.emptyState.detail}</p>
-              </div>
-            ) : null}
-          </div>
-        </article>
+          {model.insights.map((insight) => (
+            <article
+              key={insight.label}
+              style={{
+                padding: 18,
+                borderRadius: "var(--radius-card)",
+                border: "1px solid var(--border-default)",
+                background: "var(--bg-canvas)"
+              }}
+            >
+              <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{insight.label}</p>
+              <p style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.3px", color: "var(--text-primary)", marginTop: 4 }}>{insight.value}</p>
+              <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>{insight.detail}</p>
+            </article>
+          ))}
         </section>
       </div>
     </DashboardAuthGate>
