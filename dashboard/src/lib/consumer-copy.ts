@@ -1,11 +1,5 @@
 import type { DashboardAuthStage } from "./auth-state";
 
-export interface DashboardShellCopy {
-  eyebrow: string;
-  title: string;
-  description: string;
-}
-
 export interface DashboardSignedOutCopy {
   eyebrow: string;
   title: string;
@@ -23,15 +17,6 @@ export interface DashboardWalletPendingCopy {
 function formatAlmostReadyTitle(creatorDisplayName?: string | null): string {
   const trimmedName = creatorDisplayName?.trim();
   return trimmedName ? `${trimmedName} is almost ready` : "Your creator workspace is almost ready";
-}
-
-export function getDashboardShellCopy(): DashboardShellCopy {
-  return {
-    eyebrow: "Indyfren",
-    title: "Your workspace",
-    description:
-      "Keep your deals, approvals, messages, and connected channels in one place.",
-  };
 }
 
 export function getSignedOutCopy(): DashboardSignedOutCopy {
@@ -74,30 +59,4 @@ export function getWalletPendingCopy(input: {
       "Your creator profile is ready, and wallet setup is still finishing up. The rest of the workspace stays available.",
     actionLabel: "Retry wallet setup",
   };
-}
-
-export function getDashboardShellStatusCopy(input: {
-  stage: DashboardAuthStage;
-  creatorDisplayName?: string | null;
-  walletProvisioningInProgress?: boolean;
-  walletProvisioningLastError?: string | null;
-}): string {
-  switch (input.stage) {
-    case "loading":
-      return "Restoring your creator workspace.";
-    case "signed_out":
-      return getSignedOutCopy().detail;
-    case "unregistered":
-      return "You are signed in, but your creator profile still needs a quick setup before this workspace opens.";
-    case "wallet_pending":
-      return getWalletPendingCopy({
-        inProgress: input.walletProvisioningInProgress ?? false,
-        lastError: input.walletProvisioningLastError ?? null,
-        creatorDisplayName: input.creatorDisplayName,
-      }).detail;
-    case "active":
-      return input.creatorDisplayName?.trim()
-        ? `Signed in as ${input.creatorDisplayName.trim()}. Your creator workspace is ready.`
-        : "You're signed in. Your creator workspace is ready.";
-  }
 }
