@@ -51,7 +51,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <AgentConsole />
+        <AgentConsole initialState={data.agentState} isHydrated={!isLoading} />
 
         <section className="grid gap-4 md:grid-cols-3">
         <article className="rounded-[28px] border border-black/10 bg-white/70 p-6 shadow-card">
@@ -102,9 +102,9 @@ export default function DashboardPage() {
                     className="h-3 rounded-full bg-ink"
                     style={{
                       width: `${
-                        model.stats.totalDeals === 0
-                          ? 0
-                          : Math.max((count / model.stats.totalDeals) * 100, 8)
+                        count > 0 && model.stats.totalDeals > 0
+                          ? Math.max((count / model.stats.totalDeals) * 100, 8)
+                          : 0
                       }%`,
                     }}
                   />

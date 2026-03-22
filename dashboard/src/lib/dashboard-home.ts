@@ -28,14 +28,12 @@ export interface DashboardHomeData {
 export interface DashboardHomeModel {
   hasActivity: boolean;
   todayHero: {
-    title: string;
     summary: string;
     approvalsCount: number;
     followUpsCount: number;
     walletReady: boolean;
   };
   status: {
-    title: string;
     detail: string;
   };
   stats: {
@@ -121,7 +119,6 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
   return {
     hasActivity,
     todayHero: {
-      title: hasActivity ? "Today" : "Today is still quiet",
       summary: hasActivity
         ? `${describeCount(approvalsCount, "approval")}, ${describeCount(
             followUpsCount,
@@ -134,13 +131,11 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
     },
     status: hasActivity
       ? {
-          title: walletReady ? "Ready for review" : "Live activity, wallet still catching up",
           detail: walletReady
             ? "Approvals, follow-ups, and wallet events are all flowing through the same home view."
             : "The creator desk is active, but wallet-backed actions still need setup to finish.",
         }
       : {
-          title: "Waiting for the first creator signal",
           detail:
             "No approvals, follow-ups, connections, or wallet events have landed yet.",
         },
