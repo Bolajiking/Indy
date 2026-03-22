@@ -3,79 +3,81 @@
 @tailwind utilities;
 
 :root {
-  --paper: #f5efe2;
-  --parchment: #efe4d2;
-  --ink: #1f1c17;
-  --fog: #7a6f61;
-  --moss: #476344;
-  --sand: #b88857;
-  --blush: #d38770;
-  --plum: #734b38;
+  --bg-canvas: #FFFFFF;
+  --bg-surface: #FAFAFA;
+  --bg-input: #F5F5F5;
+  --border-default: #EBEBEB;
+  --border-light: #E0E0E0;
+  --border-focus: #2D7CF6;
+  --text-primary: #000000;
+  --text-secondary: #555555;
+  --text-tertiary: #8E8E93;
+  --text-placeholder: #AEAEB2;
+  --text-muted: #C7C7CC;
+  --accent-pink: #FF2D78;
+  --accent-pink-bg: rgba(255,45,120,0.08);
+  --accent-pink-subtle: rgba(255,45,120,0.04);
+  --accent-pink-border: rgba(255,45,120,0.1);
+  --accent-pink-border-strong: rgba(255,45,120,0.2);
+  --accent-blue: #2D7CF6;
+  --accent-blue-hover: #1B6AE0;
+  --accent-blue-bg: rgba(45,124,246,0.04);
+  --accent-blue-border: rgba(45,124,246,0.1);
+  --accent-blue-border-strong: rgba(45,124,246,0.2);
+  --accent-green: #34C759;
+  --accent-green-hover: #2DB84E;
+  --accent-green-bg: rgba(52,199,89,0.1);
+  --accent-green-text: #2E7D32;
+  --bg-disconnected: #F5F5F5;
+  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --space-page: 32px;
+  --space-section: 24px;
+  --space-card-padding: 20px;
+  --space-hero-padding: 24px;
+  --space-item-gap-sm: 8px;
+  --space-item-gap-md: 12px;
+  --space-divider-above: 16px;
+  --space-divider-below: 20px;
+  --nav-height: 56px;
+  --command-bar-height: 46px;
+  --column-gap: 24px;
+  --radius-hero: 16px;
+  --radius-card: 14px;
+  --radius-input: 12px;
+  --radius-button: 10px;
+  --radius-chip: 8px;
+  --radius-badge: 6px;
+  --radius-logo: 8px;
+  --gradient-hero: linear-gradient(135deg, rgba(255,45,120,0.05), rgba(45,124,246,0.05));
+  --gradient-logo: linear-gradient(135deg, #FF2D78, #FF6B9D);
+  --gradient-avatar: linear-gradient(135deg, #2D7CF6, #6BA3FF);
+  --gradient-approval: linear-gradient(135deg, #1a1a2e, #16213e);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-html {
-  background:
-    radial-gradient(circle at top left, rgba(211, 135, 112, 0.16), transparent 26rem),
-    radial-gradient(circle at top right, rgba(71, 99, 68, 0.12), transparent 24rem),
-    linear-gradient(180deg, #f7f1e5 0%, #f3ebdd 100%);
-}
+html { background: var(--bg-canvas); }
 
 body {
   margin: 0;
-  color: var(--ink);
+  color: var(--text-primary);
   background: transparent;
-  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  font-family: var(--font-family);
   min-height: 100vh;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+a { color: inherit; text-decoration: none; }
+
+::selection { background: rgba(45, 124, 246, 0.16); }
+
+/* Shimmer animation for loading states */
+@keyframes shimmer {
+  0% { background-position: -200px 0; }
+  100% { background-position: calc(200px + 100%) 0; }
 }
 
-::selection {
-  background: rgba(115, 75, 56, 0.16);
-}
-
-.paper-panel {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.1)),
-    var(--paper);
-  box-shadow: 0 24px 60px rgba(31, 28, 23, 0.1);
-}
-
-.surface-card {
-  @apply rounded-[28px] border border-black/10 bg-white/75 shadow-card;
-}
-
-.surface-muted {
-  @apply rounded-[22px] border border-black/10 bg-parchment;
-}
-
-.cta-primary {
-  @apply rounded-full bg-ink px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-paper transition hover:bg-plum;
-}
-
-.cta-secondary {
-  @apply rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-ink transition hover:bg-white/70;
-}
-
-.eyebrow {
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-}
-
-.display-title {
-  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
-}
-
-.soft-grid {
-  background-image:
-    linear-gradient(rgba(31, 28, 23, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31, 28, 23, 0.05) 1px, transparent 1px);
-  background-size: 2rem 2rem;
+.shimmer {
+  background: linear-gradient(90deg, var(--bg-input) 0%, var(--border-default) 50%, var(--bg-input) 100%);
+  background-size: 200px 100%;
+  animation: shimmer 1.5s ease infinite;
 }
