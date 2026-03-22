@@ -26,6 +26,7 @@ import {
   EMPTY_HOME_DATA,
   buildDashboardHomeModel,
   fetchDashboardHome,
+  shouldHydrateAgentConsole,
 } from "../../../dashboard/src/lib/dashboard-home";
 
 describe("dashboard home state", () => {
@@ -150,5 +151,28 @@ describe("dashboard home state", () => {
     expect(model.emptyState.detail).toBe(
       "The desk stays quiet until a creator starts a conversation, sends a pitch, or uses the wallet."
     );
+  });
+
+  it("hydrates the console only when the home query succeeds", () => {
+    expect(
+      shouldHydrateAgentConsole({
+        isLoading: false,
+        error: null,
+      })
+    ).toBe(true);
+
+    expect(
+      shouldHydrateAgentConsole({
+        isLoading: true,
+        error: null,
+      })
+    ).toBe(false);
+
+    expect(
+      shouldHydrateAgentConsole({
+        isLoading: false,
+        error: "Request failed",
+      })
+    ).toBe(false);
   });
 });

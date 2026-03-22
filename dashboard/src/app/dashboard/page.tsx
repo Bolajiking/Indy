@@ -6,12 +6,14 @@ import {
   EMPTY_HOME_DATA,
   buildDashboardHomeModel,
   fetchDashboardHome,
+  shouldHydrateAgentConsole,
 } from "@/lib/dashboard-home";
 import { useAuthedQuery } from "@/lib/use-authed-query";
 
 export default function DashboardPage() {
   const { data, error, isLoading } = useAuthedQuery(fetchDashboardHome, EMPTY_HOME_DATA);
   const model = buildDashboardHomeModel(data);
+  const shouldHydrate = shouldHydrateAgentConsole({ isLoading, error });
 
   return (
     <DashboardAuthGate>
@@ -51,7 +53,10 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <AgentConsole initialState={data.agentState} isHydrated={!isLoading} />
+        <AgentConsole
+          initialState={shouldHydrate ? data.agentState : undefined}
+          isHydrated={shouldHydrate}
+        />
 
         <section className="grid gap-4 md:grid-cols-3">
         <article className="rounded-[28px] border border-black/10 bg-white/70 p-6 shadow-card">

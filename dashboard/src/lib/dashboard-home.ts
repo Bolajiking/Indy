@@ -164,6 +164,16 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
   };
 }
 
+export function shouldHydrateAgentConsole({
+  isLoading,
+  error,
+}: {
+  isLoading: boolean;
+  error: string | null;
+}) {
+  return !isLoading && error === null;
+}
+
 function describeCount(count: number, label: string) {
   return count === 0 ? `No ${label}s` : `${count} ${label}${count === 1 ? "" : "s"}`;
 }
