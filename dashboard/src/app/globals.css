@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --paper: #f5efe2;
+  --parchment: #efe4d2;
+  --ink: #1f1c17;
+  --fog: #7a6f61;
+  --moss: #476344;
+  --sand: #b88857;
+  --blush: #d38770;
+  --plum: #734b38;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background:
+    radial-gradient(circle at top left, rgba(211, 135, 112, 0.16), transparent 26rem),
+    radial-gradient(circle at top right, rgba(71, 99, 68, 0.12), transparent 24rem),
+    linear-gradient(180deg, #f7f1e5 0%, #f3ebdd 100%);
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: transparent;
+  font-family: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(115, 75, 56, 0.16);
+}
+
+.paper-panel {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.44), rgba(255, 255, 255, 0.1)),
+    var(--paper);
+  box-shadow: 0 24px 60px rgba(31, 28, 23, 0.1);
+}
+
+.surface-card {
+  @apply rounded-[28px] border border-black/10 bg-white/75 shadow-card;
+}
+
+.surface-muted {
+  @apply rounded-[22px] border border-black/10 bg-parchment;
+}
+
+.cta-primary {
+  @apply rounded-full bg-ink px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-paper transition hover:bg-plum;
+}
+
+.cta-secondary {
+  @apply rounded-full border border-black/10 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-ink transition hover:bg-white/70;
+}
+
+.eyebrow {
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.display-title {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+}
+
+.soft-grid {
+  background-image:
+    linear-gradient(rgba(31, 28, 23, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 28, 23, 0.05) 1px, transparent 1px);
+  background-size: 2rem 2rem;
+}
