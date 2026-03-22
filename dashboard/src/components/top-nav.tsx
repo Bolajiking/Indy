@@ -23,7 +23,7 @@ const navItems = [
 ];
 
 interface TopNavProps {
-  stage: "signed_out" | "registering" | "wallet_pending" | "active";
+  stage: "loading" | "signed_out" | "unregistered" | "registering" | "wallet_pending" | "active";
   displayName: string | null;
   onLogin: () => void;
   onLogout: () => void;
