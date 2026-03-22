@@ -1,19 +1,25 @@
 "use client";
 
+import React from "react";
+
 import { AgentConsole } from "@/components/agent-console";
 import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
 import {
   EMPTY_HOME_DATA,
   buildDashboardHomeModel,
   fetchDashboardHome,
-  shouldHydrateAgentConsole,
+  getAgentConsoleHomeState,
 } from "@/lib/dashboard-home";
 import { useAuthedQuery } from "@/lib/use-authed-query";
 
 export default function DashboardPage() {
   const { data, error, isLoading } = useAuthedQuery(fetchDashboardHome, EMPTY_HOME_DATA);
   const model = buildDashboardHomeModel(data);
-  const shouldHydrate = shouldHydrateAgentConsole({ isLoading, error });
+  const agentConsoleState = getAgentConsoleHomeState({
+    isLoading,
+    error,
+    agentState: data.agentState,
+  });
 
   return (
     <DashboardAuthGate>
@@ -53,10 +59,24 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <AgentConsole
-          initialState={shouldHydrate ? data.agentState : undefined}
-          isHydrated={shouldHydrate}
-        />
+        {agentConsoleState.showLoadingShell ? (
+          <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <article className="paper-panel rounded-card border border-black/10 p-6">
+              <p className="eyebrow text-[11px] text-fog">Agent console</p>
+              <h3 className="display-title mt-2 text-3xl text-ink">
+                Loading your shared conversation.
+              </h3>
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-fog">
+                We&apos;re collecting your latest messages, approvals, and agent context.
+              </p>
+            </article>
+          </section>
+        ) : (
+          <AgentConsole
+            initialState={agentConsoleState.initialState}
+            isHydrated={agentConsoleState.isHydrated}
+          />
+        )}
 
         <section className="grid gap-4 md:grid-cols-3">
         <article className="rounded-[28px] border border-black/10 bg-white/70 p-6 shadow-card">

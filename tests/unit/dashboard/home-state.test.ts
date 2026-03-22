@@ -26,7 +26,7 @@ import {
   EMPTY_HOME_DATA,
   buildDashboardHomeModel,
   fetchDashboardHome,
-  shouldHydrateAgentConsole,
+  getAgentConsoleHomeState,
 } from "../../../dashboard/src/lib/dashboard-home";
 
 describe("dashboard home state", () => {
@@ -153,26 +153,45 @@ describe("dashboard home state", () => {
     );
   });
 
-  it("hydrates the console only when the home query succeeds", () => {
+  it("keeps the console unmounted while the combined home query is still loading", () => {
     expect(
-      shouldHydrateAgentConsole({
-        isLoading: false,
-        error: null,
-      })
-    ).toBe(true);
-
-    expect(
-      shouldHydrateAgentConsole({
+      getAgentConsoleHomeState({
         isLoading: true,
         error: null,
+        agentState: EMPTY_HOME_DATA.agentState,
       })
-    ).toBe(false);
+    ).toEqual({
+      showLoadingShell: true,
+      initialState: undefined,
+      isHydrated: false,
+    });
+  });
 
+  it("hydrates the console from home-query data after a successful load", () => {
     expect(
-      shouldHydrateAgentConsole({
+      getAgentConsoleHomeState({
+        isLoading: false,
+        error: null,
+        agentState: EMPTY_HOME_DATA.agentState,
+      })
+    ).toEqual({
+      showLoadingShell: false,
+      initialState: EMPTY_HOME_DATA.agentState,
+      isHydrated: true,
+    });
+  });
+
+  it("lets the console self-fetch when the combined home query fails", () => {
+    expect(
+      getAgentConsoleHomeState({
         isLoading: false,
         error: "Request failed",
+        agentState: EMPTY_HOME_DATA.agentState,
       })
-    ).toBe(false);
+    ).toEqual({
+      showLoadingShell: false,
+      initialState: undefined,
+      isHydrated: false,
+    });
   });
 });

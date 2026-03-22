@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 
 import {
   approveAgentAction,
@@ -8,10 +8,10 @@ import {
   sendAgentMessage,
   skipAgentAction,
   type DashboardAgentState,
-} from "@/lib/api";
-import { canAccessCreatorData } from "@/lib/auth-state";
-import { formatDashboardDateTime } from "@/lib/datetime";
-import { useAuth } from "@/lib/privy";
+} from "../lib/api";
+import { canAccessCreatorData } from "../lib/auth-state";
+import { formatDashboardDateTime } from "../lib/datetime";
+import { useAuth } from "../lib/privy";
 
 const EMPTY_AGENT_STATE: DashboardAgentState = {
   messages: [],
@@ -55,15 +55,21 @@ export function AgentConsole({
         setError(
           loadError instanceof Error ? loadError.message : "Unable to load dashboard data"
         );
-        setData(initialState ?? EMPTY_AGENT_STATE);
       } finally {
         setIsLoading(false);
       }
     },
-    [initialState]
+    []
   );
 
   useEffect(() => {
+    if (!canAccessCreatorData(stage) || !accessToken) {
+      setIsLoading(false);
+      setError(null);
+      setData(EMPTY_AGENT_STATE);
+      return;
+    }
+
     if (isHydrated) {
       setData(initialState ?? EMPTY_AGENT_STATE);
       setError(null);
@@ -74,15 +80,6 @@ export function AgentConsole({
     if (initialState !== undefined) {
       setData(initialState);
       setError(null);
-      setIsLoading(true);
-      return;
-    }
-
-    if (!canAccessCreatorData(stage) || !accessToken) {
-      setIsLoading(false);
-      setError(null);
-      setData(EMPTY_AGENT_STATE);
-      return;
     }
 
     void load(accessToken);

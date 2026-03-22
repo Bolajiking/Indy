@@ -60,6 +60,12 @@ export interface DashboardHomeModel {
   };
 }
 
+export interface DashboardAgentConsoleHomeState {
+  showLoadingShell: boolean;
+  initialState?: DashboardAgentState;
+  isHydrated: boolean;
+}
+
 export const EMPTY_HOME_DATA: DashboardHomeData = {
   auth: {
     creator: null,
@@ -164,14 +170,36 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
   };
 }
 
-export function shouldHydrateAgentConsole({
+export function getAgentConsoleHomeState({
   isLoading,
   error,
+  agentState,
 }: {
   isLoading: boolean;
   error: string | null;
-}) {
-  return !isLoading && error === null;
+  agentState: DashboardAgentState;
+}): DashboardAgentConsoleHomeState {
+  if (isLoading) {
+    return {
+      showLoadingShell: true,
+      initialState: undefined,
+      isHydrated: false,
+    };
+  }
+
+  if (error) {
+    return {
+      showLoadingShell: false,
+      initialState: undefined,
+      isHydrated: false,
+    };
+  }
+
+  return {
+    showLoadingShell: false,
+    initialState: agentState,
+    isHydrated: true,
+  };
 }
 
 function describeCount(count: number, label: string) {
