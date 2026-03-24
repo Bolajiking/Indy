@@ -313,6 +313,7 @@ function HeroChatBox() {
           }}
           rows={3}
           placeholder="Ask Indyfren anything about your creator business..."
+          suppressHydrationWarning
           style={{
             width: "100%",
             resize: "none",
