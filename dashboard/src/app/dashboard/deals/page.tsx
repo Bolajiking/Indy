@@ -42,8 +42,8 @@ const STAGE_LABELS: Record<string, string> = {
 
 export default function DealsPage() {
   const { accessToken } = useAuth();
-  const { data: deals, error, isLoading, refresh } = useAuthedQuery(fetchDeals, []);
-  const { data: agentState, refresh: refreshAgentState } = useAuthedQuery(fetchAgentState, EMPTY_AGENT_STATE);
+  const { data: deals, error, isLoading, refresh } = useAuthedQuery(fetchDeals, [], "indyfren_deals_v1");
+  const { data: agentState, refresh: refreshAgentState } = useAuthedQuery(fetchAgentState, EMPTY_AGENT_STATE, "indyfren_agent_v1");
   const [actionWorking, setActionWorking] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 

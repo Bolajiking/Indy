@@ -19,6 +19,16 @@ const EMPTY_AGENT_STATE: DashboardAgentState = {
   pendingApprovals: [],
 };
 
+const AGENT_CACHE_KEY = "indyfren_agent_v1";
+
+function writeAgentCache(state: DashboardAgentState) {
+  try {
+    sessionStorage.setItem(AGENT_CACHE_KEY, JSON.stringify(state));
+  } catch {
+    // ignore quota/access errors
+  }
+}
+
 const QUICK_PROMPTS = [
   "Plan my day",
   "Check my deals",
@@ -44,11 +54,25 @@ export function AgentConsole({
   const initialStateRef = useRef(initialState);
   initialStateRef.current = initialState;
 
-  const [data, setData] = useState<DashboardAgentState>(
-    initialState ?? EMPTY_AGENT_STATE
-  );
+  const [data, setData] = useState<DashboardAgentState>(() => {
+    if (initialState) return initialState;
+    // Serve cached agent state immediately so conversation appears without a loading flash
+    try {
+      const raw = sessionStorage.getItem(AGENT_CACHE_KEY);
+      if (raw) return JSON.parse(raw) as DashboardAgentState;
+    } catch { /* ignore */ }
+    return EMPTY_AGENT_STATE;
+  });
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(!isHydrated);
+  // Only show loading shell if we have neither server-provided state nor a cache hit
+  const [isLoading, setIsLoading] = useState(() => {
+    if (isHydrated || initialState) return false;
+    try {
+      return !sessionStorage.getItem(AGENT_CACHE_KEY);
+    } catch {
+      return true;
+    }
+  });
   const [draft, setDraft] = useState(initialQuery ?? "");
   const [working, setWorking] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -73,6 +97,7 @@ export function AgentConsole({
       try {
         const next = await fetchAgentState(token);
         setData(next);
+        writeAgentCache(next);
       } catch (loadError) {
         setError(
           loadError instanceof Error ? loadError.message : "Unable to load dashboard data"
@@ -95,7 +120,9 @@ export function AgentConsole({
     if (isHydrated) {
       // Use ref to read latest initialState without making it a dep.
       // Avoids re-running when parent re-renders with the same data but new object ref.
-      setData(initialStateRef.current ?? EMPTY_AGENT_STATE);
+      const next = initialStateRef.current ?? EMPTY_AGENT_STATE;
+      setData(next);
+      writeAgentCache(next);
       setError(null);
       setIsLoading(false);
       return;
@@ -143,10 +170,9 @@ export function AgentConsole({
 
     try {
       const response = await sendAgentMessage(accessToken, text);
-      setData({
-        messages: response.messages,
-        pendingApprovals: response.pendingApprovals,
-      });
+      const nextState = { messages: response.messages, pendingApprovals: response.pendingApprovals };
+      setData(nextState);
+      writeAgentCache(nextState);
       // draft already cleared above
       setActionMessage(
         response.reply.requiresApproval

@@ -15,12 +15,12 @@ export default function ReportsPage() {
     data: financial,
     error: financialError,
     isLoading: financialLoading,
-  } = useAuthedQuery(fetchFinancial, null);
+  } = useAuthedQuery(fetchFinancial, null, "indyfren_financial_v1");
   const {
     data: analytics,
     error: analyticsError,
     isLoading: analyticsLoading,
-  } = useAuthedQuery(fetchAnalytics, null);
+  } = useAuthedQuery(fetchAnalytics, null, "indyfren_analytics_v1");
   const error = financialError ?? analyticsError;
   const isLoading = financialLoading || analyticsLoading;
 

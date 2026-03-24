@@ -20,9 +20,30 @@ interface AuthedQueryState<T> {
   refresh: () => Promise<void>;
 }
 
+// Stale-while-revalidate cache backed by sessionStorage.
+// Keyed per cacheKey — data is served instantly on mount, then refreshed in background.
+function readCache<T>(cacheKey: string): T | null {
+  try {
+    const raw = sessionStorage.getItem(cacheKey);
+    if (!raw) return null;
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache<T>(cacheKey: string, data: T): void {
+  try {
+    sessionStorage.setItem(cacheKey, JSON.stringify(data));
+  } catch {
+    // sessionStorage quota or access errors — silently ignore
+  }
+}
+
 export function useAuthedQuery<T>(
   loader: (accessToken: string) => Promise<T>,
-  fallback: T
+  fallback: T,
+  cacheKey?: string
 ): AuthedQueryState<T> {
   const { accessToken, stage } = useAuth();
   const fallbackRef = useRef(fallback);
@@ -31,9 +52,23 @@ export function useAuthedQuery<T>(
   const loaderRef = useRef(loader);
   loaderRef.current = loader;
 
-  const [data, setData] = useState<T>(fallbackRef.current);
+  // Pre-populate from sessionStorage cache so the UI renders instantly.
+  const [data, setData] = useState<T>(() => {
+    if (cacheKey) {
+      const cached = readCache<T>(cacheKey);
+      if (cached !== null) return cached;
+    }
+    return fallbackRef.current;
+  });
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  // If we have a cache hit, skip the loading state — data is already shown.
+  const [isLoading, setIsLoading] = useState(() => {
+    if (cacheKey) {
+      const cached = readCache<T>(cacheKey);
+      return cached === null; // only show loading shell when there's no cache
+    }
+    return false;
+  });
 
   // inflight guard — prevents two concurrent fetches from racing each other
   const inflightRef = useRef(false);
@@ -51,7 +86,8 @@ export function useAuthedQuery<T>(
     abortRef.current = controller;
     inflightRef.current = true;
 
-    setIsLoading(true);
+    // Don't set isLoading=true when revalidating stale data — keeps the existing
+    // cached content visible without a loading flash.
     setError(null);
 
     try {
@@ -59,6 +95,7 @@ export function useAuthedQuery<T>(
       // Ignore result if we were aborted (component unmounted or superseded)
       if (!controller.signal.aborted) {
         setData(next);
+        if (cacheKey) writeCache(cacheKey, next);
       }
     } catch (loadError) {
       if (!controller.signal.aborted) {
@@ -73,7 +110,7 @@ export function useAuthedQuery<T>(
       }
       inflightRef.current = false;
     }
-  }, []); // stable — never changes
+  }, [cacheKey]); // cacheKey is stable at call site
 
   // Cleanup on unmount
   useEffect(() => {

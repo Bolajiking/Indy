@@ -44,8 +44,8 @@ function DashboardPageInner() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data, error, isLoading, refresh } = useAuthedQuery(fetchDashboardHome, EMPTY_HOME_DATA);
-  const { data: liveDealsList, refresh: refreshDeals } = useAuthedQuery(fetchDeals, []);
+  const { data, error, isLoading, refresh } = useAuthedQuery(fetchDashboardHome, EMPTY_HOME_DATA, "indyfren_home_v1");
+  const { data: liveDealsList, refresh: refreshDeals } = useAuthedQuery(fetchDeals, [], "indyfren_deals_v1");
   const model = useMemo(
     () => buildDashboardHomeModel({ ...data, deals: liveDealsList.length > 0 ? liveDealsList : data.deals }),
     [data, liveDealsList]

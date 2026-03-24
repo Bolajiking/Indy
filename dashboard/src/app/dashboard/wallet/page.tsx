@@ -9,8 +9,8 @@ import { useAuthedQuery } from "@/lib/use-authed-query";
 const EMPTY_BALANCE: DashboardWalletBalance = { balanceCents: 0, balanceFormatted: "$0.00", walletAddress: null };
 
 export default function WalletPage() {
-  const { data: transactions, error, isLoading } = useAuthedQuery(fetchTransactions, []);
-  const { data: balance, isLoading: balanceLoading } = useAuthedQuery(fetchWalletBalance, EMPTY_BALANCE);
+  const { data: transactions, error, isLoading } = useAuthedQuery(fetchTransactions, [], "indyfren_txns_v1");
+  const { data: balance, isLoading: balanceLoading } = useAuthedQuery(fetchWalletBalance, EMPTY_BALANCE, "indyfren_balance_v1");
   const [copied, setCopied] = useState(false);
 
   const copyAddress = useCallback(() => {
