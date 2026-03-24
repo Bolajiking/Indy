@@ -6,4 +6,9 @@ dist/
 .DS_Store
 dashboard/.next/
 dashboard/node_modules/
+dashboard/tsconfig.tsbuildinfo
+*.tsbuildinfo
 .gstack/
+.claude/
+.superpowers/
+.vscode/
