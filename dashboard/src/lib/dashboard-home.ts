@@ -11,9 +11,12 @@ import {
   type DashboardAgentState,
   type DashboardAuthResponse,
   type DashboardDeal,
+  type DashboardPendingApproval,
   type DashboardPlatformConnection,
   type DashboardTransaction,
 } from "./api";
+
+export type { DashboardPendingApproval };
 
 const FOLLOW_UP_STAGES = new Set(["pitched", "responded", "negotiating"]);
 
@@ -35,6 +38,7 @@ export interface DashboardHomeHeroModel {
 
 export interface DashboardHomeSupportRailModel {
   opportunities: Array<{ id: string; title: string; stage: string; value: string; fitScore: number | null }>;
+  pendingActions: DashboardPendingApproval[];
   activity: Array<{ title: string; detail: string; timestamp: string }>;
   channels: Array<{
     label: string;
@@ -114,7 +118,7 @@ const EMPTY_AUTH: DashboardAuthResponse = {
   onboarding: { status: "unregistered", walletProvisioned: false },
 };
 
-const EMPTY_AGENT_STATE: DashboardAgentState = {
+export const EMPTY_AGENT_STATE: DashboardAgentState = {
   messages: [],
   pendingApprovals: [],
 };
@@ -211,6 +215,7 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
           fitScore: deal.fit_score,
         }))
       : [{ id: "", title: "No opportunities yet", stage: "", value: "", fitScore: null }],
+    pendingActions: data.agentState.pendingApprovals,
     activity: data.transactions.slice(0, 3).map((tx) => ({
       title: tx.description,
       detail: tx.service ?? tx.type,

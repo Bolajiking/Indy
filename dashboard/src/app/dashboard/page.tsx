@@ -8,7 +8,7 @@ import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
 import { DashboardHomeHero } from "@/components/dashboard-home-hero";
 import { DashboardSupportRail } from "@/components/dashboard-support-rail";
 import { IconBarChart, IconList } from "@/components/icons";
-import { fetchDeals } from "@/lib/api";
+import { approveAgentAction, fetchDeals, skipAgentAction } from "@/lib/api";
 import {
   EMPTY_HOME_DATA,
   buildDashboardHomeModel,
@@ -17,11 +17,14 @@ import {
 } from "@/lib/dashboard-home";
 import { subscribeDealsChanged } from "@/lib/deals-sync";
 import { useAuthedQuery } from "@/lib/use-authed-query";
+import { useAuth } from "@/lib/privy";
 
 function DashboardPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { accessToken } = useAuth();
   const [initialQuery, setInitialQuery] = useState<string | undefined>(undefined);
+  const [railWorking, setRailWorking] = useState(false);
 
   // Read ?q= param or sessionStorage pending query once on mount, then clear
   useEffect(() => {
@@ -63,10 +66,34 @@ function DashboardPageInner() {
   // Fast deals-only refresh when the agent surfaces new deals (same-tab via BroadcastChannel)
   const stableRefreshDeals = useCallback(() => { void refreshDeals(); }, [refreshDeals]);
   useEffect(() => subscribeDealsChanged(stableRefreshDeals), [stableRefreshDeals]);
+
   const agentConsoleState = useMemo(
     () => getAgentConsoleHomeState({ isLoading, error, agentState: data.agentState }),
     [isLoading, error, data.agentState]
   );
+
+  // Approve/skip handlers for the support rail — mirrors AgentConsole logic
+  const handleRailApprove = useCallback(async (actionId: string) => {
+    if (!accessToken) return;
+    setRailWorking(true);
+    try {
+      await approveAgentAction(accessToken, actionId);
+      void refresh();
+    } finally {
+      setRailWorking(false);
+    }
+  }, [accessToken, refresh]);
+
+  const handleRailSkip = useCallback(async (actionId: string) => {
+    if (!accessToken) return;
+    setRailWorking(true);
+    try {
+      await skipAgentAction(accessToken, actionId);
+      void refresh();
+    } finally {
+      setRailWorking(false);
+    }
+  }, [accessToken, refresh]);
 
   return (
     <DashboardAuthGate>
@@ -100,7 +127,12 @@ function DashboardPageInner() {
                 Collecting your latest messages, approvals, and agent context.
               </p>
             </article>
-            <DashboardSupportRail model={model.supportRail} />
+            <DashboardSupportRail
+              model={model.supportRail}
+              onApprove={(id) => { void handleRailApprove(id); }}
+              onSkip={(id) => { void handleRailSkip(id); }}
+              working={railWorking}
+            />
           </section>
         ) : (
           <section
@@ -114,7 +146,12 @@ function DashboardPageInner() {
               onDealsChanged={() => { void refresh(); }}
               initialQuery={initialQuery}
             />
-            <DashboardSupportRail model={model.supportRail} />
+            <DashboardSupportRail
+              model={model.supportRail}
+              onApprove={(id) => { void handleRailApprove(id); }}
+              onSkip={(id) => { void handleRailSkip(id); }}
+              working={railWorking}
+            />
           </section>
         )}
 

@@ -13,15 +13,145 @@ const STAGE_ACCENT: Record<string, { bg: string; text: string; border: string }>
   lost:       { bg: "var(--accent-pink-bg)", text: "var(--text-tertiary)", border: "var(--accent-pink-border)" },
 };
 import { formatDashboardDateTime } from "@/lib/datetime";
-import { IconCard, IconChevronRight, IconGrid, IconPulse } from "./icons";
+import { IconCard, IconChevronRight, IconGrid, IconPulse, IconCheck } from "./icons";
 
 export function DashboardSupportRail({
   model,
+  onApprove,
+  onSkip,
+  working,
 }: {
   model: DashboardHomeSupportRailModel;
+  onApprove?: (actionId: string) => void;
+  onSkip?: (actionId: string) => void;
+  working?: boolean;
 }) {
+  const hasPendingActions = model.pendingActions.length > 0;
+
   return (
     <aside className="space-y-0">
+      {/* Pending actions — shown at top when agent has surfaced actions */}
+      {hasPendingActions && (
+        <>
+          <section
+            style={{
+              paddingBottom: "var(--space-section)",
+              borderRadius: "var(--radius-card)",
+              background: "var(--gradient-approval)",
+              padding: 16,
+              marginBottom: 16,
+            }}
+          >
+            <div className="mb-3 flex items-center gap-2">
+              <IconCheck size={14} className="opacity-70" />
+              <p style={{ fontSize: 13, fontWeight: 600, color: "white", margin: 0 }}>
+                Actions waiting on you
+              </p>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  padding: "2px 7px",
+                  borderRadius: 99,
+                  background: "rgba(255,255,255,0.2)",
+                  color: "white",
+                }}
+              >
+                {model.pendingActions.length}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {model.pendingActions.map((action) => (
+                <div
+                  key={action.id}
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "var(--radius-input)",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    background: "rgba(255,255,255,0.08)",
+                  }}
+                >
+                  <p
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 600,
+                      color: "rgba(255,255,255,0.55)",
+                      margin: 0,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.4px",
+                    }}
+                  >
+                    {action.type}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 600,
+                      color: "white",
+                      margin: "4px 0 0",
+                    }}
+                  >
+                    {action.description}
+                  </p>
+                  {action.preview ? (
+                    <p
+                      style={{
+                        fontSize: 11,
+                        color: "rgba(255,255,255,0.65)",
+                        margin: "4px 0 0",
+                        lineHeight: 1.5,
+                        overflow: "hidden",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                      }}
+                    >
+                      {action.preview}
+                    </p>
+                  ) : null}
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => onApprove?.(action.actionId)}
+                      disabled={working}
+                      className="disabled:opacity-50 transition hover:opacity-90"
+                      style={{
+                        background: "var(--accent-green)",
+                        color: "white",
+                        borderRadius: "var(--radius-chip)",
+                        padding: "5px 12px",
+                        fontSize: 11,
+                        fontWeight: 600,
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => onSkip?.(action.actionId)}
+                      disabled={working}
+                      className="disabled:opacity-50 transition hover:opacity-90"
+                      style={{
+                        background: "rgba(255,255,255,0.12)",
+                        color: "white",
+                        borderRadius: "var(--radius-chip)",
+                        padding: "5px 12px",
+                        fontSize: 11,
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Skip
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+          <div style={{ height: 1, background: "var(--border-default)", marginBottom: 16 }} />
+        </>
+      )}
+
       {/* Opportunities */}
       <section style={{ paddingBottom: "var(--space-section)" }}>
         <div className="mb-3 flex items-center justify-between">
