@@ -33,7 +33,9 @@ export interface DashboardHomeHeroModel {
   summary: string;
   primaryCta: { label: string; href: string };
   secondaryCta: { label: string; href: string };
-  cards: Array<{ label: string; value: string; detail: string }>;
+  cards: Array<{ label: string; value: string; detail: string; urgent?: boolean }>;
+  /** Specific named action items the creator should act on today */
+  urgentItems: Array<{ icon: string; text: string; href: string; badge?: string }>;
 }
 
 export interface DashboardHomeSupportRailModel {
@@ -168,28 +170,97 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
       )} in motion, and the wallet is ${walletStatus}.`
     : "No creator activity yet. Approvals, follow-ups, and wallet events will show up here once the first signals land.";
 
+  // Build specific named action items for the "Here's what's happening" section
+  const urgentItems: DashboardHomeHeroModel["urgentItems"] = [];
+
+  // Pending agent approvals — highest priority
+  if (data.agentState.pendingApprovals.length > 0) {
+    for (const action of data.agentState.pendingApprovals.slice(0, 2)) {
+      urgentItems.push({
+        icon: "⚡",
+        text: action.description ?? `Agent action: ${action.type}`,
+        href: "#agent-workspace",
+        badge: "Approval needed",
+      });
+    }
+    if (data.agentState.pendingApprovals.length > 2) {
+      urgentItems.push({
+        icon: "⚡",
+        text: `+${data.agentState.pendingApprovals.length - 2} more actions waiting for approval`,
+        href: "#agent-workspace",
+        badge: "Approval needed",
+      });
+    }
+  }
+
+  // Deals that replied and need follow-up
+  const respondedDeals = data.deals.filter((d) => d.stage === "responded");
+  for (const deal of respondedDeals.slice(0, 2)) {
+    urgentItems.push({
+      icon: "📩",
+      text: `${deal.brand_name} responded — review their message`,
+      href: `/dashboard/deals#deal-${deal.id}`,
+      badge: "Responded",
+    });
+  }
+
+  // Deals in negotiation
+  const negotiatingDeals = data.deals.filter((d) => d.stage === "negotiating");
+  for (const deal of negotiatingDeals.slice(0, 1)) {
+    urgentItems.push({
+      icon: "🤝",
+      text: `${deal.brand_name} — negotiation in progress`,
+      href: `/dashboard/deals#deal-${deal.id}`,
+      badge: "Negotiating",
+    });
+  }
+
+  // Newly discovered opportunities
+  const discoveredDeals = data.deals.filter((d) => d.stage === "discovered");
+  for (const deal of discoveredDeals.slice(0, 2)) {
+    urgentItems.push({
+      icon: "✨",
+      text: `New opportunity: ${deal.brand_name}${deal.fit_score != null ? ` · ${deal.fit_score}% fit` : ""}`,
+      href: `/dashboard/deals#deal-${deal.id}`,
+      badge: "Discovered",
+    });
+  }
+
+  // Active deals (contracted / live)
+  const activeDeals = data.deals.filter((d) => d.stage === "active" || d.stage === "contracted");
+  for (const deal of activeDeals.slice(0, 1)) {
+    urgentItems.push({
+      icon: "🟢",
+      text: `${deal.brand_name} deal is ${deal.stage}${deal.estimated_value_cents ? ` · ~${formatCurrency(deal.estimated_value_cents)}` : ""}`,
+      href: `/dashboard/deals#deal-${deal.id}`,
+    });
+  }
+
   const hero: DashboardHomeHeroModel = {
     title: heroTitle,
     summary: heroSummary,
     primaryCta: approvalsCount > 0
       ? { label: "Review approvals", href: "#agent-workspace" }
       : { label: "Chat with Indyfren", href: "#agent-workspace" },
-    secondaryCta: { label: "See opportunities", href: "/dashboard/deals" },
+    secondaryCta: { label: "See pipeline", href: "/dashboard/deals" },
+    urgentItems,
     cards: [
       {
         label: "Approvals",
         value: String(approvalsCount),
         detail: approvalsCount === 0 ? "Nothing waiting" : "waiting on you",
+        urgent: approvalsCount > 0,
       },
       {
         label: "Follow-ups",
         value: String(followUpsCount),
         detail: followUpsCount === 0 ? "No active threads" : "deals in motion",
+        urgent: followUpsCount > 0,
       },
       {
-        label: "Wallet",
-        value: walletReady ? "Ready" : "Pending",
-        detail: walletReady ? "Funded and active" : "Setup in progress",
+        label: "Pipeline",
+        value: String(data.deals.length),
+        detail: data.deals.length === 0 ? "No deals yet" : `${formatCurrency(pipelineValueCents)} est. value`,
       },
     ],
   };
@@ -206,15 +277,13 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
   };
 
   const supportRail: DashboardHomeSupportRailModel = {
-    opportunities: data.deals.length > 0
-      ? data.deals.slice(0, 3).map((deal) => ({
-          id: deal.id,
-          title: deal.brand_name,
-          stage: deal.stage,
-          value: formatCurrency(deal.estimated_value_cents ?? 0),
-          fitScore: deal.fit_score,
-        }))
-      : [{ id: "", title: "No opportunities yet", stage: "", value: "", fitScore: null }],
+    opportunities: data.deals.slice(0, 5).map((deal) => ({
+      id: deal.id,
+      title: deal.brand_name,
+      stage: deal.stage,
+      value: deal.estimated_value_cents ? formatCurrency(deal.estimated_value_cents) : "",
+      fitScore: deal.fit_score,
+    })),
     pendingActions: data.agentState.pendingApprovals,
     activity: data.transactions.slice(0, 3).map((tx) => ({
       title: tx.description,

@@ -12,7 +12,7 @@ import type { DealStage } from "../../config/constants.js";
 registerTool({
   name: "create_deal",
   description:
-    "Save a brand deal opportunity to the creator's deal pipeline. Call this for EVERY brand opportunity discovered — it persists the deal so the creator can see and manage it in their dashboard. Required: brand_name, fit_score, estimated_value_cents. Optional: contact_email, contact_name, notes.",
+    "Save a NEW brand deal opportunity to the creator's deal pipeline. IMPORTANT: First check the Active Deals in context — if the brand is already listed there, call update_deal_stage instead (never create a duplicate). This tool is idempotent: if the same brand already exists in a non-terminal stage it will update rather than insert. Required: brand_name, fit_score, estimated_value_cents. Optional: contact_email, contact_name, notes.",
   autonomyLevel: "autonomous",
   costCategory: "free",
   maxCostPerUseCents: 0,

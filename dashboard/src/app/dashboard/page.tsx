@@ -24,7 +24,6 @@ function DashboardPageInner() {
   const searchParams = useSearchParams();
   const { accessToken } = useAuth();
   const [initialQuery, setInitialQuery] = useState<string | undefined>(undefined);
-  const [railWorking, setRailWorking] = useState(false);
 
   // Read ?q= param or sessionStorage pending query once on mount, then clear
   useEffect(() => {
@@ -72,27 +71,18 @@ function DashboardPageInner() {
     [isLoading, error, data.agentState]
   );
 
-  // Approve/skip handlers for the support rail — mirrors AgentConsole logic
+  // Approve/skip handlers — rail manages its own working/toast state
   const handleRailApprove = useCallback(async (actionId: string) => {
     if (!accessToken) return;
-    setRailWorking(true);
-    try {
-      await approveAgentAction(accessToken, actionId);
-      void refresh();
-    } finally {
-      setRailWorking(false);
-    }
-  }, [accessToken, refresh]);
+    await approveAgentAction(accessToken, actionId);
+    void refresh();
+    void refreshDeals();
+  }, [accessToken, refresh, refreshDeals]);
 
   const handleRailSkip = useCallback(async (actionId: string) => {
     if (!accessToken) return;
-    setRailWorking(true);
-    try {
-      await skipAgentAction(accessToken, actionId);
-      void refresh();
-    } finally {
-      setRailWorking(false);
-    }
+    await skipAgentAction(accessToken, actionId);
+    void refresh();
   }, [accessToken, refresh]);
 
   return (
@@ -131,7 +121,6 @@ function DashboardPageInner() {
               model={model.supportRail}
               onApprove={(id) => { void handleRailApprove(id); }}
               onSkip={(id) => { void handleRailSkip(id); }}
-              working={railWorking}
             />
           </section>
         ) : (
@@ -143,14 +132,13 @@ function DashboardPageInner() {
             <AgentConsole
               initialState={agentConsoleState.initialState}
               isHydrated={agentConsoleState.isHydrated}
-              onDealsChanged={() => { void refresh(); }}
+              onDealsChanged={() => { void refresh(); void refreshDeals(); }}
               initialQuery={initialQuery}
             />
             <DashboardSupportRail
               model={model.supportRail}
               onApprove={(id) => { void handleRailApprove(id); }}
               onSkip={(id) => { void handleRailSkip(id); }}
-              working={railWorking}
             />
           </section>
         )}

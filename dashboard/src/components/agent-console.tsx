@@ -91,7 +91,12 @@ export function AgentConsole({
 
   const load = useCallback(
     async (token: string) => {
-      setIsLoading(true);
+      // Stale-while-revalidate: only show loading shell when there's no data at all.
+      // If we already have messages, keep showing them while the refresh runs in background.
+      setData((current) => {
+        if (current.messages.length === 0) setIsLoading(true);
+        return current;
+      });
       setError(null);
 
       try {

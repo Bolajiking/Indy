@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getDealByIdForCreator, getDealsForCreator } from "../../db/queries/deals.js";
+import { getDealByIdForCreator, getDealsForCreator, updateDealStage } from "../../db/queries/deals.js";
 import type { DealStage } from "../../config/constants.js";
 import { getAuthContext, requireCreatorAuth } from "../middleware/auth.js";
 
@@ -22,4 +22,23 @@ deals.get("/:dealId", async (context) => {
   }
 
   return context.json(deal);
+});
+
+deals.patch("/:dealId/stage", async (context) => {
+  const { creatorId } = getAuthContext(context);
+  const dealId = context.req.param("dealId");
+
+  // Verify ownership before mutating
+  const existing = await getDealByIdForCreator(creatorId!, dealId);
+  if (!existing) {
+    return context.json({ error: "Not found" }, 404);
+  }
+
+  const body = await context.req.json<{ stage: DealStage }>();
+  if (!body.stage) {
+    return context.json({ error: "stage is required" }, 400);
+  }
+
+  const updated = await updateDealStage(dealId, body.stage);
+  return context.json(updated);
 });

@@ -48,7 +48,7 @@ ${dateTimeStr}
 ${connections.length > 0 ? connections.map((c: any) => `- ${c.platform}: @${c.platform_username}`).join("\n") : "- None connected yet"}
 
 ## Active Deals (${activeDeals.length})
-${activeDeals.length > 0 ? activeDeals.map((d) => `- ${d.brand_name} [${d.stage}] est. $${((d.estimated_value_cents ?? 0) / 100).toFixed(0)}`).join("\n") : "- No active deals"}
+${activeDeals.length > 0 ? activeDeals.map((d) => `- [ID: ${d.id}] ${d.brand_name} [${d.stage}] est. $${((d.estimated_value_cents ?? 0) / 100).toFixed(0)}${d.notes ? ` — ${d.notes.slice(0, 80)}` : ""}`).join("\n") : "- No active deals"}
 
 ## Recent Agent Spending
 ${transactions.length > 0 ? transactions.slice(0, 5).map((t) => `- ${t.description}: $${(t.amount_cents / 100).toFixed(2)}`).join("\n") : "- No spending yet"}

@@ -32,6 +32,8 @@ export interface AgentLoopResult {
   text: string;
   requiresApproval: boolean;
   skill?: string;
+  /** Names of every tool that was successfully called during the loop */
+  toolCallNames?: string[];
   pendingAction?: {
     id: string;
     type: string;
@@ -101,6 +103,7 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
   }
 
   let steps = 0;
+  const toolCallNames: string[] = [];
 
   while (response.stop_reason === "tool_use" && steps < maxSteps) {
     steps++;
@@ -163,6 +166,7 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
       try {
         const result = await tool.execute(toolUse.input as Record<string, unknown>, execContext);
         onToolUsed?.(toolUse.name, tool.maxCostPerUseCents);
+        toolCallNames.push(toolUse.name);
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
@@ -203,5 +207,6 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
   return {
     text: textBlocks.map((b) => b.text).join("\n") || "I couldn't generate a response. Please try again.",
     requiresApproval: false,
+    toolCallNames,
   };
 }

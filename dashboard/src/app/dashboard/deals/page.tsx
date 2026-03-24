@@ -9,11 +9,12 @@ import {
   fetchDeals,
   fetchAgentState,
   formatCurrency,
+  patchDealStage,
   skipAgentAction,
   type DashboardDeal,
 } from "@/lib/api";
 import { EMPTY_AGENT_STATE } from "@/lib/dashboard-home";
-import { subscribeDealsChanged } from "@/lib/deals-sync";
+import { broadcastDealsChanged, subscribeDealsChanged } from "@/lib/deals-sync";
 import { useAuthedQuery } from "@/lib/use-authed-query";
 import { formatDashboardDateTime } from "@/lib/datetime";
 import { useAuth } from "@/lib/privy";
@@ -316,7 +317,14 @@ export default function DealsPage() {
                   {/* Deal cards */}
                   <div className="space-y-3">
                     {stageDeals.map((deal) => (
-                      <DealCard key={deal.id} deal={deal} colors={colors} anchorId={`deal-${deal.id}`} />
+                      <DealCard
+                        key={deal.id}
+                        deal={deal}
+                        colors={colors}
+                        anchorId={`deal-${deal.id}`}
+                        accessToken={accessToken ?? ""}
+                        onStageChange={stableRefresh}
+                      />
                     ))}
 
                     {stageDeals.length === 0 ? (
@@ -352,16 +360,47 @@ export default function DealsPage() {
   );
 }
 
+// Per-stage CTAs: primary action moves the deal forward; secondary dismisses/archives it
+const STAGE_CTAS: Record<string, { primary?: { label: string; stage: string }; secondary?: { label: string; stage: string } }> = {
+  discovered:  { primary: { label: "Pitch now →",       stage: "pitched"     }, secondary: { label: "Dismiss",  stage: "lost"      } },
+  pitched:     { primary: { label: "Mark responded",    stage: "responded"   }, secondary: { label: "Not interested", stage: "lost" } },
+  responded:   { primary: { label: "Start negotiating", stage: "negotiating" }, secondary: { label: "Decline",  stage: "lost"      } },
+  negotiating: { primary: { label: "Contract signed",   stage: "contracted"  }, secondary: { label: "Walk away", stage: "lost"     } },
+  contracted:  { primary: { label: "Go live →",         stage: "active"      }, secondary: { label: "Cancel",   stage: "lost"      } },
+  active:      { primary: { label: "Mark completed ✓",  stage: "completed"   }, secondary: { label: "Cancel",   stage: "lost"      } },
+  completed:   {},
+  lost:        { primary: { label: "Reopen",            stage: "discovered"  } },
+};
+
 function DealCard({
   deal,
   colors,
   anchorId,
+  accessToken,
+  onStageChange,
 }: {
   deal: DashboardDeal;
   colors: { bg: string; text: string; border: string; dot: string };
   anchorId?: string;
+  accessToken: string;
+  onStageChange: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [working, setWorking] = useState(false);
+
+  const ctas = STAGE_CTAS[deal.stage] ?? {};
+
+  async function handleStage(stage: string) {
+    if (!accessToken || working) return;
+    setWorking(true);
+    try {
+      await patchDealStage(accessToken, deal.id, stage);
+      broadcastDealsChanged();
+      onStageChange();
+    } finally {
+      setWorking(false);
+    }
+  }
 
   const activeValue = deal.actual_value_cents ?? deal.estimated_value_cents;
   const isActual = deal.actual_value_cents != null;
@@ -505,6 +544,52 @@ function DealCard({
         >
           {expanded ? "Show less ↑" : "Show more ↓"}
         </button>
+      ) : null}
+
+      {/* Stage CTAs */}
+      {(ctas.primary || ctas.secondary) ? (
+        <div style={{ display: "flex", gap: 6, marginTop: 10, flexWrap: "wrap" }}>
+          {ctas.primary ? (
+            <button
+              onClick={() => { void handleStage(ctas.primary!.stage); }}
+              disabled={working}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: "4px 10px",
+                borderRadius: "var(--radius-chip)",
+                background: colors.bg,
+                color: colors.text,
+                border: `1px solid ${colors.border}`,
+                cursor: working ? "not-allowed" : "pointer",
+                opacity: working ? 0.6 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {working ? "…" : ctas.primary.label}
+            </button>
+          ) : null}
+          {ctas.secondary ? (
+            <button
+              onClick={() => { void handleStage(ctas.secondary!.stage); }}
+              disabled={working}
+              style={{
+                fontSize: 11,
+                fontWeight: 500,
+                padding: "4px 10px",
+                borderRadius: "var(--radius-chip)",
+                background: "transparent",
+                color: "var(--text-tertiary)",
+                border: "1px solid var(--border-default)",
+                cursor: working ? "not-allowed" : "pointer",
+                opacity: working ? 0.6 : 1,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {ctas.secondary.label}
+            </button>
+          ) : null}
+        </div>
       ) : null}
 
       {/* Updated timestamp */}

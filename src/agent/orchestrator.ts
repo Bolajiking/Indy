@@ -76,7 +76,8 @@ You also have direct tools:
 - When showing deals, include fit score and estimated value
 - Prefer run_skill for specialized tasks — skill sub-agents are better at their domain
 - ALWAYS call create_deal when you identify a brand opportunity — never just list deals as text without saving them
-- ALWAYS call update_deal_stage when a deal's status changes (pitch sent, response received, etc.)`;
+- ALWAYS call update_deal_stage when a deal's status changes (pitch sent, response received, etc.)
+- BEFORE calling create_deal, check the Active Deals list in context. If the brand name is already listed there (even with different casing), call update_deal_stage instead — NEVER create a duplicate entry for a brand already in the pipeline`;
 
 export interface AgentResponse {
   text: string;

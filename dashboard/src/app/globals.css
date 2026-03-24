@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 :root {
-  --bg-canvas: #FFFFFF;
-  --bg-surface: #FAFAFA;
+  --bg-canvas: #F6F6F8;
+  --bg-surface: #EFEFEF;
   --bg-input: #F5F5F5;
   --border-default: #EBEBEB;
   --border-light: #E0E0E0;

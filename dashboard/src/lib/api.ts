@@ -304,6 +304,17 @@ export async function fetchDeals(accessToken: string): Promise<DashboardDeal[]> 
   return fetchAuthedJson<DashboardDeal[]>("/api/deals", accessToken);
 }
 
+export async function patchDealStage(
+  accessToken: string,
+  dealId: string,
+  stage: string
+): Promise<DashboardDeal> {
+  return fetchAuthedJson<DashboardDeal>(`/api/deals/${dealId}/stage`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify({ stage }),
+  });
+}
+
 export async function fetchTransactions(accessToken: string): Promise<DashboardTransaction[]> {
   return fetchAuthedJson<DashboardTransaction[]>(
     "/api/wallet/transactions?limit=20",
