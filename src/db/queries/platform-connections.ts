@@ -1,4 +1,5 @@
 import { supabase } from "../client.js";
+import { decryptSecretValue } from "../../security/secrets.js";
 
 export interface PlatformConnection {
   id: string;
@@ -11,6 +12,14 @@ export interface PlatformConnection {
   metadata: Record<string, any>;
   expires_at: string | null;
   created_at: string;
+}
+
+function hydrateSecrets(connection: PlatformConnection): PlatformConnection {
+  return {
+    ...connection,
+    access_token: decryptSecretValue(connection.access_token) ?? "",
+    refresh_token: decryptSecretValue(connection.refresh_token),
+  };
 }
 
 export async function upsertConnection(
@@ -28,7 +37,7 @@ export async function upsertConnection(
     throw error;
   }
 
-  return data;
+  return hydrateSecrets(data);
 }
 
 export async function getConnectionsForCreator(
@@ -43,7 +52,7 @@ export async function getConnectionsForCreator(
     throw error;
   }
 
-  return data;
+  return data.map(hydrateSecrets);
 }
 
 export async function getConnection(
@@ -64,5 +73,13 @@ export async function getConnection(
     throw error;
   }
 
-  return data;
+  return hydrateSecrets(data);
+}
+
+export async function deleteConnectionById(id: string): Promise<void> {
+  const { error } = await supabase.from("platform_connections").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
 }

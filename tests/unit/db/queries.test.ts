@@ -11,6 +11,10 @@ vi.mock("../../../src/db/client.js", () => ({
 // Import after mocking
 import { findCreatorByTelegram, createCreator } from "../../../src/db/queries/creators.js";
 import { createDeal } from "../../../src/db/queries/deals.js";
+import {
+  getTransactionsForCreator,
+  logTransaction,
+} from "../../../src/db/queries/transactions.js";
 import { supabase } from "../../../src/db/client.js";
 
 describe("Database Queries", () => {
@@ -124,7 +128,88 @@ describe("Database Queries", () => {
         stage: "discovered",
         creator_id: "creator123",
         brand_name: "Test Brand",
+        metadata: {},
       });
+    });
+  });
+
+  describe("transactions", () => {
+    it("defaults metadata to an empty object when logging a transaction", async () => {
+      const mockTransaction = {
+        id: "tx123",
+        creator_id: "creator123",
+        type: "mpp_payment",
+        amount_cents: 250,
+        currency: "USD",
+        description: "MPP payment to example.com",
+        service: "example.com",
+        tx_hash: "0xabc",
+        metadata: {},
+        created_at: new Date().toISOString(),
+      };
+
+      const mockInsert = vi.fn().mockReturnThis();
+      const mockSelect = vi.fn().mockReturnThis();
+      const mockSingle = vi.fn().mockResolvedValue({
+        data: mockTransaction,
+        error: null,
+      });
+
+      (supabase.from as any).mockReturnValue({
+        insert: mockInsert,
+      });
+      mockInsert.mockReturnValue({
+        select: mockSelect,
+      });
+      mockSelect.mockReturnValue({
+        single: mockSingle,
+      });
+
+      await logTransaction({
+        creator_id: "creator123",
+        type: "mpp_payment",
+        amount_cents: 250,
+        description: "MPP payment to example.com",
+        service: "example.com",
+        tx_hash: "0xabc",
+      });
+
+      expect(mockInsert).toHaveBeenCalledWith({
+        creator_id: "creator123",
+        type: "mpp_payment",
+        amount_cents: 250,
+        currency: "USD",
+        description: "MPP payment to example.com",
+        service: "example.com",
+        tx_hash: "0xabc",
+        metadata: {},
+      });
+    });
+
+    it("applies the requested limit when fetching creator transactions", async () => {
+      const mockOrder = vi.fn().mockReturnThis();
+      const mockLimit = vi.fn().mockResolvedValue({
+        data: [],
+        error: null,
+      });
+      const mockEq = vi.fn().mockReturnValue({
+        order: mockOrder,
+      });
+
+      (supabase.from as any).mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          eq: mockEq,
+        }),
+      });
+      mockOrder.mockReturnValue({
+        limit: mockLimit,
+      });
+
+      await getTransactionsForCreator("creator123", 10);
+
+      expect(mockEq).toHaveBeenCalledWith("creator_id", "creator123");
+      expect(mockOrder).toHaveBeenCalledWith("created_at", { ascending: false });
+      expect(mockLimit).toHaveBeenCalledWith(10);
     });
   });
 });

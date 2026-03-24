@@ -5,22 +5,20 @@ import {
   findCreatorByTelegram,
   createCreator,
 } from "../../../src/db/queries/creators.js";
-import { getCalendarView } from "../../../src/agent/skills/calendar-manager.js";
-import { generateFinancialSnapshot } from "../../../src/agent/skills/financial-tracker.js";
-import { generateContentStrategy } from "../../../src/agent/skills/content-strategy.js";
+import { processCreatorMessage } from "../../../src/agent/conversation.js";
 
 // Mock dependencies
 vi.mock("../../../src/db/queries/creators.js");
 vi.mock("../../../src/db/queries/messages.js");
 vi.mock("../../../src/wallet/provisioning.js");
 vi.mock("../../../src/agent/orchestrator.js");
-vi.mock("../../../src/agent/skills/calendar-manager.js");
-vi.mock("../../../src/agent/skills/financial-tracker.js");
-vi.mock("../../../src/agent/skills/content-strategy.js");
-vi.mock("../../../src/bot/formatters.js", () => ({
-  formatFinancialSnapshot: () => "💰 Financial Snapshot formatted",
-  formatContentStrategy: () => "📅 Content Strategy formatted",
+vi.mock("../../../src/agent/conversation.js", () => ({
+  processCreatorMessage: vi.fn().mockResolvedValue({
+    text: "Here's what I found.",
+    requiresApproval: false,
+  }),
 }));
+vi.mock("../../../src/bot/formatters.js", () => ({}));
 
 const mockCreator = {
   id: "creator-123",
@@ -89,13 +87,9 @@ describe("Telegram Bot Improvements", () => {
     });
 
     it("should handle /calendar command", async () => {
-      vi.mocked(getCalendarView).mockResolvedValue({
-        overdue: [
-          { title: "Invoice #123 - OldBrand", date: "2026-03-15", type: "invoice" },
-        ],
-        upcoming: [
-          { title: "Follow-up call - FitnessBrand", date: "2026-03-25", type: "followup" },
-        ],
+      vi.mocked(processCreatorMessage).mockResolvedValue({
+        text: "*Upcoming Deadlines*\n\n🔴 overdue: Invoice #123 - OldBrand (2026-03-15)\n📅 Follow-up call - FitnessBrand (2026-03-25)",
+        requiresApproval: false,
       });
 
       const response = await handleMessage({
@@ -105,20 +99,18 @@ describe("Telegram Bot Improvements", () => {
         text: "/calendar",
       });
 
+      expect(processCreatorMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ text: "show my upcoming deadlines and calendar" })
+      );
       expect(response.text).toContain("Upcoming Deadlines");
       expect(response.text).toContain("Invoice #123");
       expect(response.text).toContain("overdue");
     });
 
     it("should handle /finances command", async () => {
-      vi.mocked(generateFinancialSnapshot).mockResolvedValue({
-        income_last_30_days: 5000,
-        expenses_last_30_days: 50,
-        net_last_30_days: 4950,
-        pipeline_value: 10000,
-        pipeline_count: 5,
-        income_by_source: { brand_deals: 4500, sponsorships: 500 },
-        expense_by_category: { agent_spend: 50 },
+      vi.mocked(processCreatorMessage).mockResolvedValue({
+        text: "*Financial Snapshot*\nNet: $4,950",
+        requiresApproval: false,
       });
 
       const response = await handleMessage({
@@ -128,16 +120,17 @@ describe("Telegram Bot Improvements", () => {
         text: "/finances",
       });
 
-      expect(response.text).toContain("Financial Snapshot formatted");
+      expect(processCreatorMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ text: "give me my financial snapshot" })
+      );
+      expect(response.text).toContain("Financial Snapshot");
       expect(response.parseMode).toBe("Markdown");
     });
 
     it("should handle /content command", async () => {
-      vi.mocked(generateContentStrategy).mockResolvedValue({
-        this_week: ["Tech review video (YouTube)", "Instagram Reel"],
-        next_week: ["Podcast episode", "TikTok series"],
-        recommended_topics: ["AI tools", "Productivity"],
-        platform_priorities: ["YouTube", "Instagram"],
+      vi.mocked(processCreatorMessage).mockResolvedValue({
+        text: "*Content Strategy*\nThis week: Tech review video",
+        requiresApproval: false,
       });
 
       const response = await handleMessage({
@@ -147,14 +140,17 @@ describe("Telegram Bot Improvements", () => {
         text: "/content",
       });
 
-      expect(response.text).toContain("Content Strategy formatted");
+      expect(processCreatorMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ text: "generate my content strategy" })
+      );
+      expect(response.text).toContain("Content Strategy");
       expect(response.parseMode).toBe("Markdown");
     });
 
     it("should handle empty calendar gracefully", async () => {
-      vi.mocked(getCalendarView).mockResolvedValue({
-        overdue: [],
-        upcoming: [],
+      vi.mocked(processCreatorMessage).mockResolvedValue({
+        text: "*Upcoming Deadlines*\n\nNo upcoming deadlines — your calendar is clear! 🎉",
+        requiresApproval: false,
       });
 
       const response = await handleMessage({
@@ -187,9 +183,9 @@ describe("Telegram Bot Improvements", () => {
     });
 
     it("should support both slash and text commands for calendar", async () => {
-      vi.mocked(getCalendarView).mockResolvedValue({
-        overdue: [],
-        upcoming: [],
+      vi.mocked(processCreatorMessage).mockResolvedValue({
+        text: "*Upcoming Deadlines*\n\nAll clear.",
+        requiresApproval: false,
       });
 
       const slashResponse = await handleMessage({

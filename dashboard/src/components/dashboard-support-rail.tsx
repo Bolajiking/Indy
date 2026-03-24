@@ -1,6 +1,17 @@
 "use client";
 
 import type { DashboardHomeSupportRailModel } from "@/lib/dashboard-home";
+
+const STAGE_ACCENT: Record<string, { bg: string; text: string; border: string }> = {
+  discovered: { bg: "var(--accent-pink-bg)", text: "var(--accent-pink)", border: "var(--accent-pink-border)" },
+  pitched:    { bg: "var(--accent-blue-bg)", text: "var(--accent-blue)", border: "var(--accent-blue-border)" },
+  responded:  { bg: "#fff8e1", text: "#e6a817", border: "#ffe082" },
+  negotiating:{ bg: "#fff3e0", text: "#e65100", border: "#ffcc80" },
+  contracted: { bg: "var(--accent-green-bg)", text: "var(--accent-green-text)", border: "var(--accent-green-border)" },
+  active:     { bg: "var(--accent-green-bg)", text: "var(--accent-green-text)", border: "var(--accent-green-border)" },
+  completed:  { bg: "var(--bg-input)", text: "var(--text-tertiary)", border: "var(--border-default)" },
+  lost:       { bg: "var(--accent-pink-bg)", text: "var(--text-tertiary)", border: "var(--accent-pink-border)" },
+};
 import { formatDashboardDateTime } from "@/lib/datetime";
 import { IconCard, IconChevronRight, IconGrid, IconPulse } from "./icons";
 
@@ -28,40 +39,64 @@ export function DashboardSupportRail({
           </a>
         </div>
         <div className="space-y-2">
-          {model.opportunities.map((opp, i) => (
-            <div
-              key={`${opp.title}-${i}`}
-              className="flex items-center justify-between transition-transform duration-150 hover:-translate-y-0.5"
-              style={{
-                padding: "12px 14px",
-                borderRadius: "var(--radius-button)",
-                background: i === 0 ? "var(--accent-blue-bg)" : "transparent",
-                border: i === 0 ? "1px solid var(--accent-blue-border)" : "1px solid var(--border-default)",
-              }}
-            >
-              <div className="min-w-0">
-                <p className="truncate" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", margin: 0 }}>
-                  {opp.title}
-                </p>
-                {opp.stage ? (
-                  <p style={{ fontSize: 12, color: "var(--text-tertiary)", margin: "2px 0 0" }}>
-                    {opp.stage}
+          {model.opportunities.map((opp, i) => {
+            const stageColor = STAGE_ACCENT[opp.stage] ?? STAGE_ACCENT.discovered;
+            const href = opp.id ? `/dashboard/deals#deal-${opp.id}` : "/dashboard/deals";
+            return (
+              <a
+                key={opp.id || `${opp.title}-${i}`}
+                href={href}
+                className="block transition-transform duration-150 hover:-translate-y-0.5"
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "var(--radius-button)",
+                  background: i === 0 ? "var(--accent-blue-bg)" : "transparent",
+                  border: i === 0 ? "1px solid var(--accent-blue-border)" : "1px solid var(--border-default)",
+                  textDecoration: "none",
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="truncate" style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", margin: 0 }}>
+                    {opp.title}
                   </p>
+                  {opp.value ? (
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 700,
+                        color: i === 0 ? "var(--accent-blue)" : "var(--text-primary)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {opp.value}
+                    </span>
+                  ) : null}
+                </div>
+                {opp.stage ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 600,
+                        padding: "2px 7px",
+                        borderRadius: 99,
+                        background: stageColor.bg,
+                        color: stageColor.text,
+                        border: `1px solid ${stageColor.border}`,
+                      }}
+                    >
+                      {opp.stage}
+                    </span>
+                    {opp.fitScore != null ? (
+                      <span style={{ fontSize: 11, color: "var(--text-tertiary)" }}>
+                        {opp.fitScore}% fit
+                      </span>
+                    ) : null}
+                  </div>
                 ) : null}
-              </div>
-              {opp.value ? (
-                <span
-                  style={{
-                    fontSize: 14,
-                    fontWeight: i === 0 ? 700 : 600,
-                    color: i === 0 ? "var(--accent-blue)" : "var(--text-primary)",
-                  }}
-                >
-                  {opp.value}
-                </span>
-              ) : null}
-            </div>
-          ))}
+              </a>
+            );
+          })}
         </div>
       </section>
 

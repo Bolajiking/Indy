@@ -3,27 +3,40 @@ import { Bot, InlineKeyboard } from "grammy";
 import { env } from "../config/env.js";
 import {
   getPendingApprovalByAction,
-  markApprovalApproved,
-  markApprovalExecuted,
   markApprovalSkipped,
 } from "./approval.js";
+import { saveCreatorFeedback } from "../agent/os/creator-memory.js";
 import { handleMessage, type OutgoingMessage } from "./handler.js";
-import { getTool, type ToolContext } from "../agent/tools/registry.js";
-import { createMppClient } from "../wallet/mpp.js";
-import { resolveWalletForCreator } from "../wallet/privy.js";
-import { getCreatorById } from "../db/queries/creators.js";
+import { ipv4Fetch } from "../network/ipv4-fetch.js";
+import {
+  ApprovalExecutionError,
+  executePendingApprovalAction,
+} from "../agent/approval-execution.js";
 
 const log = pino({ name: "bot:telegram" });
 let activeBot: Bot | null = null;
 
 function parseApprovalCallbackData(data: string) {
-  const [action, creatorId, actionId] = data.split(":");
+  const parts = data.split(":");
+  const [action, creatorId, actionId] = parts;
   if ((action !== "approve" && action !== "skip") || !creatorId || !actionId) {
     return null;
   }
 
   return { action, creatorId, actionId };
 }
+
+function parseFeedbackCallbackData(data: string) {
+  // format: feedback:up|down:creatorId:skill
+  const parts = data.split(":");
+  if (parts[0] !== "feedback" || parts.length < 4) return null;
+  const [, direction, creatorId, ...skillParts] = parts;
+  if (direction !== "up" && direction !== "down") return null;
+  return { direction, creatorId, skill: skillParts.join(":") };
+}
+
+// Track pending "tell me what was wrong" prompts: chatId → { creatorId, skill }
+const pendingFeedbackRequests = new Map<string, { creatorId: string; skill: string }>();
 
 function buildTelegramOptions(response: OutgoingMessage) {
   const options: Record<string, unknown> = {};
@@ -135,7 +148,11 @@ export function createTelegramBot(): Bot {
     throw new Error("TELEGRAM_BOT_TOKEN is not configured");
   }
 
-  const bot = new Bot(env.TELEGRAM_BOT_TOKEN);
+  const bot = new Bot(env.TELEGRAM_BOT_TOKEN, {
+    client: {
+      fetch: ipv4Fetch,
+    },
+  });
 
   // Set bot commands for Telegram menu
   bot.api.setMyCommands([
@@ -156,6 +173,20 @@ export function createTelegramBot(): Bot {
     const chatId = String(ctx.chat.id);
     const displayName = ctx.from?.first_name ?? ctx.from?.username ?? "Creator";
 
+    // Check if this is a pending feedback clarification
+    const pendingFeedback = pendingFeedbackRequests.get(chatId);
+    if (pendingFeedback) {
+      pendingFeedbackRequests.delete(chatId);
+      const { creatorId, skill } = pendingFeedback;
+      await saveCreatorFeedback(
+        creatorId,
+        skill,
+        `Creator correction (👎): ${ctx.message.text}`
+      ).catch(() => {});
+      await ctx.reply("Got it — I'll factor that in next time. 🙏");
+      return;
+    }
+
     try {
       // Show typing indicator for better UX
       await ctx.replyWithChatAction("typing");
@@ -175,7 +206,29 @@ export function createTelegramBot(): Bot {
   });
 
   bot.on("callback_query:data", async (ctx) => {
-    const parsed = parseApprovalCallbackData(ctx.callbackQuery.data);
+    const data = ctx.callbackQuery.data;
+
+    // Handle feedback callbacks
+    const feedbackParsed = parseFeedbackCallbackData(data);
+    if (feedbackParsed) {
+      const { direction, creatorId, skill } = feedbackParsed;
+      const chatId = String(ctx.chat?.id ?? ctx.from?.id);
+
+      if (direction === "up") {
+        await saveCreatorFeedback(creatorId, skill, "Creator rated this response positively (👍)").catch(() => {});
+        await ctx.answerCallbackQuery({ text: "👍 Got it, thanks!" });
+        await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+      } else {
+        // Ask for specifics
+        pendingFeedbackRequests.set(chatId, { creatorId, skill });
+        await ctx.answerCallbackQuery({ text: "Thanks for the feedback" });
+        await ctx.editMessageReplyMarkup({ reply_markup: undefined });
+        await ctx.reply("What was off? (e.g. rates too low, wrong tone, irrelevant brand) — I'll remember this.");
+      }
+      return;
+    }
+
+    const parsed = parseApprovalCallbackData(data);
     if (!parsed) {
       await ctx.answerCallbackQuery({ text: "❌ Unknown action" });
       return;
@@ -195,73 +248,27 @@ export function createTelegramBot(): Bot {
       return;
     }
 
-    // Execute the approved action
-    await markApprovalApproved(approval.actionId);
     await ctx.answerCallbackQuery({ text: "⚡ Approved — executing..." });
     await ctx.reply("⚡ *Approved.* Executing now...", { parse_mode: "Markdown" });
 
-    const tool = getTool(approval.type);
-    if (!tool) {
-      await ctx.reply(`❌ Could not find tool "${approval.type}". The action was not executed.`);
-      return;
-    }
-
     try {
-      const creator = await getCreatorById(approval.creatorId);
-      if (!creator) {
-        await ctx.reply("❌ Could not find your creator profile. Please contact support.");
-        return;
-      }
-
-      let toolContext: ToolContext | null = null;
-      if (creator.wallet_id && creator.wallet_address) {
-        const wallet = await resolveWalletForCreator(
-          creator.id,
-          creator.wallet_id,
-          creator.wallet_address
-        );
-        if (wallet) {
-          const mppClient = await createMppClient(
-            creator.id,
-            wallet.walletId,
-            wallet.address as `0x${string}`
-          );
-          toolContext = { creatorId: creator.id, mppFetch: mppClient.fetch };
-        }
-      }
-
-      if (!toolContext) {
-        await ctx.reply("👛 *No wallet configured.* Type /wallet to check your wallet status or contact support if this issue persists.", { parse_mode: "Markdown" });
-        return;
-      }
-
-      const result = await tool.execute(approval.input, toolContext);
-
-      if (result.success) {
-        const costMsg = result.costCents ? ` _(cost: $${(result.costCents / 100).toFixed(2)})_` : "";
-        await markApprovalExecuted(
-          approval.actionId,
-          {
-            success: true,
-            data:
-              typeof result.data === "string"
-                ? { message: result.data }
-                : (result.data as Record<string, unknown>),
-          },
-          result.costCents
-        );
-        const successMsg = typeof result.data === "string" ? result.data : "Action completed successfully.";
-        await ctx.reply(`✅ *Done!* ${successMsg}${costMsg}`, { parse_mode: "Markdown" });
-      } else {
-        await markApprovalExecuted(approval.actionId, {
-          success: false,
-          error: result.error ?? "Unknown error",
-        });
-        await ctx.reply(`❌ *Action failed:* ${result.error ?? "Unknown error"}`, { parse_mode: "Markdown" });
-      }
+      const result = await executePendingApprovalAction(
+        approval.creatorId,
+        approval.actionId
+      );
+      const costMsg = result.costCents
+        ? ` _(cost: $${(result.costCents / 100).toFixed(2)})_`
+        : "";
+      await ctx.reply(`✅ *Done!* ${result.message}${costMsg}`, {
+        parse_mode: "Markdown",
+      });
     } catch (error) {
       log.error({ error, approval }, "Failed to execute approved action");
-      await ctx.reply("❌ Something went wrong executing that action. Please try again or contact support if this persists.");
+      const message =
+        error instanceof ApprovalExecutionError
+          ? error.message
+          : "Something went wrong executing that action. Please try again or contact support if this persists.";
+      await ctx.reply(`❌ ${message}`);
     }
   });
 

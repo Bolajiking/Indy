@@ -11,6 +11,7 @@ import {
 } from "../lib/api";
 import { canAccessCreatorData } from "../lib/auth-state";
 import { formatDashboardDateTime } from "../lib/datetime";
+import { broadcastDealsChanged } from "../lib/deals-sync";
 import { useAuth } from "../lib/privy";
 
 const EMPTY_AGENT_STATE: DashboardAgentState = {
@@ -28,17 +29,27 @@ const QUICK_PROMPTS = [
 export function AgentConsole({
   initialState,
   isHydrated = false,
+  onDealsChanged,
+  initialQuery,
 }: {
   initialState?: DashboardAgentState;
   isHydrated?: boolean;
+  onDealsChanged?: () => void;
+  initialQuery?: string;
 }) {
   const { accessToken, creator, onboarding, stage } = useAuth();
+  // Keep a ref so the effect can read the latest initialState without it being a dep.
+  // This prevents parent re-renders (which may recreate initialState with the same
+  // data but a new object reference) from triggering a re-fetch.
+  const initialStateRef = useRef(initialState);
+  initialStateRef.current = initialState;
+
   const [data, setData] = useState<DashboardAgentState>(
     initialState ?? EMPTY_AGENT_STATE
   );
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(!isHydrated);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialQuery ?? "");
   const [working, setWorking] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -82,19 +93,16 @@ export function AgentConsole({
     }
 
     if (isHydrated) {
-      setData(initialState ?? EMPTY_AGENT_STATE);
+      // Use ref to read latest initialState without making it a dep.
+      // Avoids re-running when parent re-renders with the same data but new object ref.
+      setData(initialStateRef.current ?? EMPTY_AGENT_STATE);
       setError(null);
       setIsLoading(false);
       return;
     }
 
-    if (initialState !== undefined) {
-      setData(initialState);
-      setError(null);
-    }
-
     void load(accessToken);
-  }, [accessToken, initialState, isHydrated, load, stage]);
+  }, [accessToken, isHydrated, load, stage]); // initialState intentionally omitted — use ref
 
   const refresh = useCallback(async () => {
     if (!accessToken || !canAccessCreatorData(stage)) {
@@ -114,6 +122,24 @@ export function AgentConsole({
     setWorking(true);
     setActionError(null);
     setActionMessage(null);
+    setDraft("");
+
+    // Optimistically append the user message so it appears instantly
+    const optimisticId = `optimistic-${Date.now()}`;
+    setData((current) => ({
+      ...current,
+      messages: [
+        ...current.messages,
+        {
+          id: optimisticId,
+          creator_id: creator?.id ?? "",
+          role: "user",
+          content: text,
+          metadata: null,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    }));
 
     try {
       const response = await sendAgentMessage(accessToken, text);
@@ -121,13 +147,22 @@ export function AgentConsole({
         messages: response.messages,
         pendingApprovals: response.pendingApprovals,
       });
-      setDraft("");
+      // draft already cleared above
       setActionMessage(
         response.reply.requiresApproval
           ? "Indyfren drafted an action that needs your approval."
           : "Indyfren replied."
       );
+      // Broadcast so the deals page refreshes immediately, same-tab and cross-tab
+      broadcastDealsChanged();
+      onDealsChanged?.();
     } catch (sendError) {
+      // Roll back the optimistic message on failure
+      setData((current) => ({
+        ...current,
+        messages: current.messages.filter((m) => m.id !== optimisticId),
+      }));
+      setDraft(text); // restore draft so user doesn't lose their message
       setActionError(
         sendError instanceof Error
           ? sendError.message
@@ -158,6 +193,8 @@ export function AgentConsole({
           ? `${response.execution.message} ($${(response.execution.costCents / 100).toFixed(2)})`
           : response.execution?.message ?? "Approved and executed."
       );
+      broadcastDealsChanged();
+      onDealsChanged?.();
       await refresh();
     } catch (approveError) {
       setActionError(

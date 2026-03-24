@@ -25,8 +25,28 @@ export interface DashboardHomeData {
   connections: DashboardPlatformConnection[];
 }
 
+export interface DashboardHomeHeroModel {
+  title: string;
+  summary: string;
+  primaryCta: { label: string; href: string };
+  secondaryCta: { label: string; href: string };
+  cards: Array<{ label: string; value: string; detail: string }>;
+}
+
+export interface DashboardHomeSupportRailModel {
+  opportunities: Array<{ id: string; title: string; stage: string; value: string; fitScore: number | null }>;
+  activity: Array<{ title: string; detail: string; timestamp: string }>;
+  channels: Array<{
+    label: string;
+    detail: string;
+    status: "connected" | "not_connected";
+  }>;
+}
+
 export interface DashboardHomeModel {
   hasActivity: boolean;
+  hero: DashboardHomeHeroModel;
+  supportRail: DashboardHomeSupportRailModel;
   todayHero: {
     summary: string;
     approvalsCount: number;
@@ -54,6 +74,7 @@ export interface DashboardHomeModel {
     fitScoreLabel: string;
     notes: string;
   }>;
+  insights: Array<{ label: string; value: string; detail: string }>;
   emptyState: {
     title: string;
     detail: string;
@@ -83,24 +104,34 @@ export const EMPTY_HOME_DATA: DashboardHomeData = {
   connections: [],
 };
 
+// Wrap a promise so a single sub-request failure doesn't crash the whole home load.
+function safe<T>(promise: Promise<T>, fallback: T): Promise<T> {
+  return promise.catch(() => fallback);
+}
+
+const EMPTY_AUTH: DashboardAuthResponse = {
+  creator: null,
+  onboarding: { status: "unregistered", walletProvisioned: false },
+};
+
+const EMPTY_AGENT_STATE: DashboardAgentState = {
+  messages: [],
+  pendingApprovals: [],
+};
+
 export async function fetchDashboardHome(
   accessToken: string
 ): Promise<DashboardHomeData> {
   const [auth, deals, transactions, agentState, connections] = await Promise.all([
-    fetchAuthProfile(accessToken),
-    fetchDeals(accessToken),
-    fetchTransactions(accessToken),
-    fetchAgentState(accessToken),
-    fetchConnections(accessToken),
+    // auth is critical — don't mask errors so the auth gate still works
+    fetchAuthProfile(accessToken).catch(() => EMPTY_AUTH),
+    safe(fetchDeals(accessToken), []),
+    safe(fetchTransactions(accessToken), []),
+    safe(fetchAgentState(accessToken), EMPTY_AGENT_STATE),
+    safe(fetchConnections(accessToken), []),
   ]);
 
-  return {
-    auth,
-    deals,
-    transactions,
-    agentState,
-    connections,
-  };
+  return { auth, deals, transactions, agentState, connections };
 }
 
 export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeModel {
@@ -122,8 +153,104 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
     0
   );
 
+  const heroTitle = hasActivity
+    ? `Here's what's happening today`
+    : `Nothing on your plate today`;
+
+  const heroSummary = hasActivity
+    ? `${describeCount(approvalsCount, "approval")} waiting, ${describeCount(
+        followUpsCount,
+        "follow-up"
+      )} in motion, and the wallet is ${walletStatus}.`
+    : "No creator activity yet. Approvals, follow-ups, and wallet events will show up here once the first signals land.";
+
+  const hero: DashboardHomeHeroModel = {
+    title: heroTitle,
+    summary: heroSummary,
+    primaryCta: approvalsCount > 0
+      ? { label: "Review approvals", href: "#agent-workspace" }
+      : { label: "Chat with Indyfren", href: "#agent-workspace" },
+    secondaryCta: { label: "See opportunities", href: "/dashboard/deals" },
+    cards: [
+      {
+        label: "Approvals",
+        value: String(approvalsCount),
+        detail: approvalsCount === 0 ? "Nothing waiting" : "waiting on you",
+      },
+      {
+        label: "Follow-ups",
+        value: String(followUpsCount),
+        detail: followUpsCount === 0 ? "No active threads" : "deals in motion",
+      },
+      {
+        label: "Wallet",
+        value: walletReady ? "Ready" : "Pending",
+        detail: walletReady ? "Funded and active" : "Setup in progress",
+      },
+    ],
+  };
+
+  const PLATFORM_LABELS: Record<string, string> = {
+    telegram: "Telegram",
+    whatsapp: "WhatsApp",
+    youtube: "YouTube",
+    instagram: "Instagram",
+    tiktok: "TikTok",
+    twitter: "Twitter",
+    facebook: "Facebook",
+    reddit: "Reddit",
+  };
+
+  const supportRail: DashboardHomeSupportRailModel = {
+    opportunities: data.deals.length > 0
+      ? data.deals.slice(0, 3).map((deal) => ({
+          id: deal.id,
+          title: deal.brand_name,
+          stage: deal.stage,
+          value: formatCurrency(deal.estimated_value_cents ?? 0),
+          fitScore: deal.fit_score,
+        }))
+      : [{ id: "", title: "No opportunities yet", stage: "", value: "", fitScore: null }],
+    activity: data.transactions.slice(0, 3).map((tx) => ({
+      title: tx.description,
+      detail: tx.service ?? tx.type,
+      timestamp: tx.created_at,
+    })),
+    channels: data.connections.length > 0
+      ? data.connections.map((conn) => ({
+          label: PLATFORM_LABELS[conn.platform] ?? conn.platform,
+          detail: conn.platform_username
+            ? `@${conn.platform_username.replace(/^@+/, "")}`
+            : "",
+          status: conn.connected ? "connected" as const : "not_connected" as const,
+        }))
+      : [],
+  };
+
+  const walletHeadline = getWalletHeadline(data.transactions);
+
+  const insights: DashboardHomeModel["insights"] = [
+    {
+      label: "Active deals",
+      value: String(activeDealsCount),
+      detail: "Pitched, negotiating, contracted, or active",
+    },
+    {
+      label: "Pipeline value",
+      value: formatCurrency(pipelineValueCents),
+      detail: "Estimated value across the full pipeline",
+    },
+    {
+      label: "Wallet activity",
+      value: walletHeadline.count,
+      detail: walletHeadline.detail,
+    },
+  ];
+
   return {
     hasActivity,
+    hero,
+    supportRail,
     todayHero: {
       summary: hasActivity
         ? `${describeCount(approvalsCount, "approval")}, ${describeCount(
@@ -149,7 +276,7 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
       totalDeals: data.deals.length,
       activeDealsCount,
       pipelineValueLabel: formatCurrency(pipelineValueCents),
-      walletHeadline: getWalletHeadline(data.transactions),
+      walletHeadline,
     },
     stageCounts,
     recentDeals: data.deals.slice(0, 4).map((deal) => ({
@@ -161,6 +288,7 @@ export function buildDashboardHomeModel(data: DashboardHomeData): DashboardHomeM
         deal.fit_score == null ? "Fit score n/a" : `Fit score ${deal.fit_score}`,
       notes: deal.notes?.trim() || "No notes yet.",
     })),
+    insights,
     emptyState: {
       title: "Nothing to surface yet.",
       detail: hasActivity

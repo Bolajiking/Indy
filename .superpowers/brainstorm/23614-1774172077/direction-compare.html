@@ -1,0 +1,83 @@
+<h2>Which design direction fits Indyfren?</h2>
+<p class="subtitle">The current dashboard uses a warm editorial aesthetic. The UI spec you shared points toward "Playful Minimalism." Let's pick the right blend for a creator tool.</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px;background:#f5efe2;min-height:320px;">
+      <!-- Current: warm editorial -->
+      <div style="font-family:'Iowan Old Style',Georgia,serif;">
+        <p style="font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:#7a6f61;margin:0 0 12px;">INDYFREN</p>
+        <p style="font-size:28px;font-weight:700;color:#1f1c17;line-height:1.1;margin:0 0 8px;">Your workspace</p>
+        <p style="font-size:13px;color:#7a6f61;line-height:1.6;margin:0 0 20px;">Keep your deals, approvals, messages, and connected channels in one place.</p>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <div style="background:#1f1c17;color:#f5efe2;padding:8px 16px;border-radius:999px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;font-family:sans-serif;">Overview</div>
+          <div style="background:rgba(255,255,255,0.45);border:1px solid rgba(0,0,0,0.1);padding:8px 16px;border-radius:999px;font-size:11px;letter-spacing:0.18em;text-transform:uppercase;font-family:sans-serif;color:#1f1c17;">Deals</div>
+        </div>
+        <div style="background:rgba(255,255,255,0.44);border:1px solid rgba(0,0,0,0.1);border-radius:28px;padding:16px;box-shadow:0 24px 60px rgba(31,28,23,0.1);">
+          <p style="font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:#7a6f61;margin:0 0 8px;font-family:sans-serif;">TODAY</p>
+          <p style="font-size:20px;font-weight:600;color:#1f1c17;margin:0;">Here's what's happening today</p>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Keep Current (Warm Editorial)</h3>
+      <p>Paper/parchment tones, serif display type, rounded cards with shadows, uppercase eyebrows. Feels premium but can read as "admin dashboard" more than "creator tool."</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px;background:#FFFFFF;min-height:320px;border-bottom:1px solid #F0F0F0;">
+      <!-- Pure playful minimalism -->
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;">
+        <p style="font-size:34px;font-weight:700;color:#000;margin:0 0 24px;letter-spacing:-0.4px;">Home</p>
+        <div style="display:flex;gap:16px;margin-bottom:24px;">
+          <span style="font-size:16px;font-weight:700;color:#000;padding-bottom:6px;border-bottom:3px solid #FF2D78;">Overview</span>
+          <span style="font-size:16px;font-weight:400;color:#8E8E93;">Deals</span>
+          <span style="font-size:16px;font-weight:400;color:#8E8E93;">Wallet</span>
+          <span style="font-size:16px;font-weight:400;color:#8E8E93;">Settings</span>
+        </div>
+        <p style="font-size:16px;font-weight:600;color:#000;margin:0 0 4px;">Here's what's happening today</p>
+        <p style="font-size:14px;color:#8E8E93;margin:0 0 16px;">1 approval waiting, 2 follow-ups in motion</p>
+        <div style="display:flex;gap:8px;">
+          <span style="border:1px solid #E5E5EA;border-radius:16px;padding:8px 14px;font-size:14px;color:#000;">Review approvals</span>
+          <span style="background:#2D7CF6;color:#fff;border-radius:16px;padding:8px 14px;font-size:14px;">See opportunities</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Full Playful Minimalism</h3>
+      <p>Pure white canvas, system font, no cards or shadows, hot pink tab accent, blue for CTAs. Matches the spec exactly. Very iOS/native feeling — airy and clean but might feel too sparse for a business dashboard.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px;background:#FFFFFF;min-height:320px;border-bottom:1px solid #F0F0F0;">
+      <!-- Hybrid: playful minimalism + subtle warmth -->
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;">
+        <p style="font-size:13px;font-weight:600;color:#FF2D78;margin:0 0 6px;">indyfren</p>
+        <p style="font-size:30px;font-weight:700;color:#000;margin:0 0 6px;letter-spacing:-0.3px;">Good morning</p>
+        <p style="font-size:14px;color:#8E8E93;margin:0 0 20px;line-height:1.5;">1 approval waiting · 2 follow-ups · wallet ready</p>
+        <div style="display:flex;gap:16px;margin-bottom:20px;">
+          <span style="font-size:15px;font-weight:600;color:#000;padding-bottom:5px;border-bottom:2.5px solid #FF2D78;">Today</span>
+          <span style="font-size:15px;font-weight:400;color:#8E8E93;">Deals</span>
+          <span style="font-size:15px;font-weight:400;color:#8E8E93;">Wallet</span>
+          <span style="font-size:15px;font-weight:400;color:#8E8E93;">Reports</span>
+        </div>
+        <div style="display:flex;gap:10px;margin-bottom:16px;">
+          <div style="background:#2D7CF6;color:#fff;border-radius:12px;padding:8px 16px;font-size:13px;font-weight:500;">Review approvals</div>
+          <div style="border:1px solid #E5E5EA;border-radius:12px;padding:8px 16px;font-size:13px;color:#000;">See opportunities</div>
+        </div>
+        <div style="background:#F5F5F5;border-radius:12px;padding:14px;margin-top:8px;">
+          <p style="font-size:13px;font-weight:600;color:#000;margin:0 0 2px;">Chat with Indyfren</p>
+          <p style="font-size:13px;color:#8E8E93;margin:0;">Ask about deals, pitches, or planning your day...</p>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Creator Minimalism (Recommended)</h3>
+      <p>White canvas + system font from the spec, but adapted for a dashboard: hot pink as brand accent (logo + active tabs), blue for action CTAs, subtle #F5F5F5 surfaces for chat/inputs. Sentence case, weight-based hierarchy. Clean but not sterile — the pink gives it personality without clutter.</p>
+    </div>
+  </div>
+
+</div>

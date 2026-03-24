@@ -6,3 +6,4 @@ dist/
 .DS_Store
 dashboard/.next/
 dashboard/node_modules/
+.gstack/

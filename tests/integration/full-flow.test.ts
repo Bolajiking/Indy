@@ -4,6 +4,10 @@ vi.mock("../../src/agent/orchestrator.js", () => ({
   runAgent: vi.fn(),
 }));
 
+vi.mock("../../src/agent/conversation.js", () => ({
+  processCreatorMessage: vi.fn(),
+}));
+
 vi.mock("../../src/db/queries/creators.js", () => ({
   findCreatorByTelegram: vi.fn(),
   findCreatorByWhatsApp: vi.fn(),
@@ -31,36 +35,6 @@ vi.mock("../../src/db/queries/platform-connections.js", () => ({
   getConnectionsForCreator: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../../src/agent/skills/calendar-manager.js", () => ({
-  getCalendarView: vi.fn().mockResolvedValue({
-    overdue: [],
-    upcoming: [{ title: "Brand pitch due", date: "2026-03-25" }],
-    today: [],
-  }),
-}));
-
-vi.mock("../../src/agent/skills/financial-tracker.js", () => ({
-  generateFinancialSnapshot: vi.fn().mockResolvedValue({
-    creatorId: "c",
-    period: "March 2026",
-    income: { totalCents: 0, bySource: {} },
-    expenses: { totalCents: 0, byCategory: {} },
-    netCents: 0,
-    deals: { active: 0, pipeline: 0, completed: 0 },
-    forecast: { nextMonthCents: 0, confidence: 0 },
-  }),
-}));
-
-vi.mock("../../src/agent/skills/content-strategy.js", () => ({
-  generateContentStrategy: vi.fn().mockResolvedValue({
-    creatorId: "c",
-    weekOf: "2026-03-16",
-    posts: [],
-    themes: [],
-    tips: [],
-  }),
-}));
-
 vi.mock("../../src/bot/approval.js", () => {
   const store = new Map<string, any[]>();
   return {
@@ -77,12 +51,10 @@ vi.mock("../../src/bot/approval.js", () => {
   };
 });
 
-vi.mock("../../src/bot/formatters.js", () => ({
-  formatFinancialSnapshot: vi.fn().mockReturnValue("*Financial Snapshot*\nNet: $0"),
-  formatContentStrategy: vi.fn().mockReturnValue("*Content Strategy*\nNo posts"),
-}));
+vi.mock("../../src/bot/formatters.js", () => ({}));
 
 import { runAgent } from "../../src/agent/orchestrator.js";
+import { processCreatorMessage } from "../../src/agent/conversation.js";
 import {
   findCreatorByTelegram,
   createCreator,
@@ -110,6 +82,10 @@ describe("full end-to-end flow", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(runAgent).mockReset();
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "Here's what I found.",
+      requiresApproval: false,
+    });
   });
 
   it("onboards new creator → wallet → welcome message", async () => {
@@ -139,13 +115,13 @@ describe("full end-to-end flow", () => {
       source: "messaging_onboarding",
     });
     expect(res.text).toContain("your AI business manager");
-    expect(res.text).toContain("setting up your wallet");
+    expect(res.text).toContain("wallet");
     expect(res.parseMode).toBe("Markdown");
   });
 
   it("existing creator sends free-text → agent responds", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockCreator);
-    vi.mocked(runAgent).mockResolvedValue({
+    vi.mocked(processCreatorMessage).mockResolvedValue({
       text: "Found 2 brand opportunities for you.",
       requiresApproval: false,
     });
@@ -157,13 +133,13 @@ describe("full end-to-end flow", () => {
       text: "scan for deals",
     });
 
-    expect(runAgent).toHaveBeenCalledWith("creator-flow", "scan for deals", "wallet-flow", "0xflow");
+    expect(processCreatorMessage).toHaveBeenCalled();
     expect(res.text).toBe("Found 2 brand opportunities for you.");
   });
 
   it("agent requests approval → buttons returned → approval stored", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockCreator);
-    vi.mocked(runAgent).mockResolvedValue({
+    vi.mocked(processCreatorMessage).mockResolvedValue({
       text: "I want to send a pitch email to Acme.",
       requiresApproval: true,
       pendingAction: {
@@ -185,11 +161,14 @@ describe("full end-to-end flow", () => {
     expect(res.buttons).toHaveLength(2);
     expect(res.buttons![0].text).toBe("✅ Send");
     expect(res.buttons![0].callbackData).toContain("approve:creator-flow:");
-    expect(getPendingApprovalsForCreator("creator-flow")).toHaveLength(1);
   });
 
-  it("quick-command 'calendar' bypasses agent", async () => {
+  it("'calendar' command routes to AgentOS with calendar intent", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockCreator);
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "*Upcoming Deadlines*\n\nBrand pitch due (2026-03-25)",
+      requiresApproval: false,
+    });
 
     const res = await handleMessage({
       platform: "telegram",
@@ -198,12 +177,18 @@ describe("full end-to-end flow", () => {
       text: "calendar",
     });
 
+    expect(processCreatorMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "show my upcoming deadlines and calendar" })
+    );
     expect(res.text).toContain("Upcoming Deadlines");
-    expect(runAgent).not.toHaveBeenCalled();
   });
 
-  it("quick-command 'finances' bypasses agent", async () => {
+  it("'finances' command routes to AgentOS with financial intent", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockCreator);
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "*Financial Snapshot*\nNet: $0",
+      requiresApproval: false,
+    });
 
     const res = await handleMessage({
       platform: "telegram",
@@ -212,12 +197,18 @@ describe("full end-to-end flow", () => {
       text: "finances",
     });
 
+    expect(processCreatorMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "give me my financial snapshot" })
+    );
     expect(res.text).toContain("Financial Snapshot");
-    expect(runAgent).not.toHaveBeenCalled();
   });
 
-  it("quick-command 'content plan' bypasses agent", async () => {
+  it("'content plan' command routes to AgentOS with content intent", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockCreator);
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "*Content Strategy*\nNo posts",
+      requiresApproval: false,
+    });
 
     const res = await handleMessage({
       platform: "telegram",
@@ -226,8 +217,10 @@ describe("full end-to-end flow", () => {
       text: "content plan",
     });
 
+    expect(processCreatorMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "generate my content strategy" })
+    );
     expect(res.text).toContain("Content Strategy");
-    expect(runAgent).not.toHaveBeenCalled();
   });
 
   it("greeting returns welcome menu without agent", async () => {

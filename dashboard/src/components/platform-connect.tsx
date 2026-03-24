@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type {
   DashboardPlatformConnectionInput,
   DashboardPlatformOAuthProvider,
@@ -47,10 +47,16 @@ export function PlatformConnect({
   onOAuthConnect?: (platform: string) => Promise<void>;
   onDisconnect?: (platform: string) => Promise<void>;
 }) {
-  const connectedMap = new Map(connections.map((c) => [c.platform, c]));
-  const oauthProviderMap = new Map(
-    (oauthProviders ?? []).map((provider) => [provider.platform, provider])
+  // Memoized maps — prevent rebuilding on every render
+  const connectedMap = useMemo(
+    () => new Map(connections.map((c) => [c.platform, c])),
+    [connections]
   );
+  const oauthProviderMap = useMemo(
+    () => new Map((oauthProviders ?? []).map((provider) => [provider.platform, provider])),
+    [oauthProviders]
+  );
+
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
   const [tokenInput, setTokenInput] = useState("");
   const [usernameInput, setUsernameInput] = useState("");
@@ -221,14 +227,12 @@ export function PlatformConnect({
                       <button
                         onClick={() => handleDisconnect(connection.platform)}
                         disabled={isDisconnectBusy}
-                        className="rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-50"
+                        className="rounded-full px-3 py-1 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
                         style={{
                           border: '1px solid var(--accent-pink-border)',
                           background: 'white',
                           color: 'var(--accent-pink)'
                         }}
-                        onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
-                        onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
                       >
                         {isDisconnectBusy ? "Disconnecting..." : "Disconnect"}
                       </button>
@@ -241,7 +245,7 @@ export function PlatformConnect({
                         <button
                           onClick={() => void handleOAuthConnect(platform.id)}
                           disabled={isPlatformBusy}
-                          className="rounded-full px-4 py-2 text-xs font-semibold disabled:opacity-50 hover:opacity-90"
+                          className="rounded-full px-4 py-2 text-xs font-semibold transition hover:opacity-90 disabled:opacity-50"
                           style={{
                             background: 'var(--accent-blue)',
                             color: 'white'
@@ -253,23 +257,17 @@ export function PlatformConnect({
                       {onConnect ? (
                         <button
                           onClick={() => {
-                            if (isExpanded) {
-                              resetInputs();
-                              return;
-                            }
-
+                            if (isExpanded) { resetInputs(); return; }
                             setError(null);
                             resetInputs(platform.id);
                           }}
                           disabled={isPlatformBusy}
-                          className="rounded-full px-4 py-2 text-xs font-semibold"
+                          className="rounded-full px-4 py-2 text-xs font-semibold transition hover:opacity-80"
                           style={{
                             border: '1px solid var(--border-default)',
                             background: 'white',
                             color: 'var(--text-primary)'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'}
-                          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                         >
                           {isExpanded ? "Hide manual entry" : "Use manual token"}
                         </button>
@@ -278,23 +276,17 @@ export function PlatformConnect({
                   ) : onConnect ? (
                     <button
                       onClick={() => {
-                        if (isExpanded) {
-                          resetInputs();
-                          return;
-                        }
-
+                        if (isExpanded) { resetInputs(); return; }
                         setError(null);
                         resetInputs(platform.id);
                       }}
                       disabled={isPlatformBusy}
-                      className="rounded-full px-4 py-2 text-xs font-semibold"
+                      className="rounded-full px-4 py-2 text-xs font-semibold transition hover:opacity-80"
                       style={{
                         border: '1px solid var(--border-default)',
                         background: 'white',
                         color: 'var(--text-primary)'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0, 0, 0, 0.05)'}
-                      onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
                     >
                       {isExpanded ? "Cancel" : "Connect"}
                     </button>
@@ -370,10 +362,8 @@ export function PlatformConnect({
                   <button
                     type="button"
                     onClick={() => setShowAdvancedFields((current) => !current)}
-                    className="text-left text-xs font-semibold"
+                    className="text-left text-xs font-semibold transition hover:opacity-70"
                     style={{ color: 'var(--text-tertiary)' }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-primary)'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-tertiary)'}
                   >
                     {showAdvancedFields ? "Hide advanced fields" : "Add refresh token or expiry"}
                   </button>
@@ -429,7 +419,7 @@ export function PlatformConnect({
                   <button
                     onClick={() => handleConnect(platform.id)}
                     disabled={isManualBusy || !tokenInput.trim()}
-                    className="w-full px-4 py-2 text-sm font-semibold disabled:opacity-50 hover:opacity-90"
+                    className="w-full px-4 py-2 text-sm font-semibold transition hover:opacity-90 disabled:opacity-50"
                     style={{
                       borderRadius: '14px',
                       background: 'var(--accent-pink)',

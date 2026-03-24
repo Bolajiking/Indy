@@ -1,13 +1,8 @@
 "use client";
 
-import { useState } from "react";
-
 import { DebugAccessTokenPanel } from "@/components/debug-access-token-panel";
+import { OnboardingWizard } from "@/components/onboarding-wizard";
 import { shouldShowDebugAccessTokenPanel } from "@/lib/debug-auth";
-import {
-  getRegistrationErrorCopy,
-  isCreatorServiceOutage,
-} from "@/lib/onboarding-errors";
 import { useAuth } from "@/lib/privy";
 
 function StateCard({
@@ -118,13 +113,13 @@ function StateCard({
   );
 }
 
-function RegistrationForm() {
-  const { register, syncing, error, user, accessToken, authenticated, stage } = useAuth();
-  const [displayName, setDisplayName] = useState("");
-  const [niche, setNiche] = useState("");
-  const [localError, setLocalError] = useState<string | null>(null);
-  const surfacedError = getRegistrationErrorCopy(localError ?? error);
-  const retryingAfterServiceOutage = isCreatorServiceOutage(error);
+
+export function DashboardAuthGate({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { stage, login, refreshProfile, retryWalletProvisioning, onboarding, accessToken, authenticated } = useAuth();
   const showDebugAccessTokenPanel = shouldShowDebugAccessTokenPanel({
     nodeEnv: process.env.NODE_ENV,
     authenticated,
@@ -132,161 +127,18 @@ function RegistrationForm() {
     accessToken,
   });
 
-  return (
-    <div className="space-y-6">
-      <div
-        className="space-y-6"
-        style={{
-          borderRadius: "var(--radius-hero)",
-          border: "1px solid var(--border-default)",
-          background: "var(--bg-canvas)",
-          padding: 24,
-        }}
-      >
-        <div>
-          <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-tertiary)" }}>
-            Almost there
-          </p>
-          <h3
-            style={{
-              fontSize: 24,
-              fontWeight: 700,
-              marginTop: 8,
-              color: "var(--text-primary)",
-            }}
-          >
-            Create your profile
-          </h3>
-          <p
-            className="mt-4 max-w-2xl text-sm leading-7"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            You&apos;re signed in{user ? ` as ${user.id}` : ""}. Add your creator name
-            and optional niche so Indyfren can start working for you.
-          </p>
-        </div>
-
-        <form
-          className="grid gap-4 md:grid-cols-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setLocalError(null);
-
-            if (!displayName.trim()) {
-              setLocalError("Add a creator display name before continuing.");
-              return;
-            }
-
-            void register({
-              displayName: displayName.trim(),
-              niche: niche.trim() || undefined,
-            }).catch(() => {
-              // Context already stores the surfaced error.
-            });
-          }}
-        >
-          <label className="space-y-2">
-            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-tertiary)" }}>
-              Display name
-            </span>
-            <input
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-              disabled={syncing}
-              placeholder="Creator name or brand"
-              className="w-full px-4 py-3 text-sm outline-none transition focus:border-[var(--border-focus)]"
-              style={{
-                borderRadius: "var(--radius-input)",
-                border: "1.5px solid var(--border-light)",
-                background: "var(--bg-input)",
-                color: "var(--text-primary)",
-              }}
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span style={{ fontSize: 12, fontWeight: 500, color: "var(--text-tertiary)" }}>
-              Niche
-            </span>
-            <input
-              value={niche}
-              onChange={(event) => setNiche(event.target.value)}
-              disabled={syncing}
-              placeholder="Finance, beauty, gaming..."
-              className="w-full px-4 py-3 text-sm outline-none transition focus:border-[var(--border-focus)]"
-              style={{
-                borderRadius: "var(--radius-input)",
-                border: "1.5px solid var(--border-light)",
-                background: "var(--bg-input)",
-                color: "var(--text-primary)",
-              }}
-            />
-          </label>
-
-          <div className="md:col-span-2">
-            <button
-              type="submit"
-              disabled={syncing}
-              className="transition hover:opacity-90 disabled:opacity-50"
-              style={{
-                background: "var(--accent-blue)",
-                color: "white",
-                borderRadius: "var(--radius-button)",
-                padding: "10px 24px",
-                fontSize: 13,
-                fontWeight: 600,
-              }}
-            >
-              {syncing
-                ? "Creating profile..."
-                : retryingAfterServiceOutage
-                  ? "Retry profile creation"
-                  : "Create profile"}
-            </button>
-          </div>
-        </form>
-
-        {surfacedError ? (
-          <p
-            className="px-4 py-3 text-sm"
-            style={{
-              border: "1px solid var(--accent-pink-border)",
-              background: "var(--accent-pink-subtle)",
-              color: "var(--text-primary)",
-              borderRadius: "var(--radius-input)",
-            }}
-          >
-            {surfacedError}
-          </p>
-        ) : null}
-      </div>
-
-      {showDebugAccessTokenPanel && accessToken ? (
-        <DebugAccessTokenPanel accessToken={accessToken} />
-      ) : null}
-    </div>
-  );
-}
-
-export function DashboardAuthGate({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { stage, login, refreshProfile, retryWalletProvisioning, onboarding } = useAuth();
-
 const walletPendingDetail = onboarding.walletProvisioningInProgress
-    ? "Wallet setup is running in the background. You can keep using the app while that finishes."
+    ? "Your wallet is being set up in the background — this only takes a moment. You can explore the app while it finishes."
     : onboarding.walletProvisioningLastError
-      ? `Your profile is ready, but wallet setup hit a snag: ${onboarding.walletProvisioningLastError}. Retry when you're ready.`
-      : "Your profile is ready and the workspace is available. Wallet setup is still finishing up — paid actions will unlock once that completes.";
+      ? "Your profile is ready, but wallet setup hit a snag. Hit retry and it'll try again automatically."
+      : "Your profile is ready. Wallet setup is finishing up — paid actions like brand research and email outreach will unlock once complete.";
 
   if (stage === "loading") {
     return (
       <StateCard
         eyebrow="Loading"
-        title="Opening your workspace."
-        detail="Restoring your session so we can show your deals, messages, and approvals."
+        title="Opening your workspace…"
+        detail="Just a moment while we restore your session."
       />
     );
   }
@@ -295,36 +147,43 @@ const walletPendingDetail = onboarding.walletProvisioningInProgress
     return (
       <StateCard
         eyebrow="Sign in required"
-        title="Sign in to open your workspace"
-        detail="Sign in with Privy to access your deals, messages, wallet activity, and approvals."
-        actionLabel="Sign in with Privy"
+        title="Sign in to open your dashboard"
+        detail="Sign in to access your deals, messages, wallet, and approvals."
+        actionLabel="Sign in"
         onAction={login}
       />
     );
   }
 
-  if (stage === "unregistered") {
-    return <RegistrationForm />;
+  if (stage === "unregistered" || stage === "onboarding") {
+    return (
+      <div className="space-y-6">
+        <OnboardingWizard />
+        {showDebugAccessTokenPanel && accessToken ? (
+          <DebugAccessTokenPanel accessToken={accessToken} />
+        ) : null}
+      </div>
+    );
   }
 
   return (
     <div className="space-y-6">
       {stage === "wallet_pending" ? (
         <StateCard
-          eyebrow="Wallet setup"
-          title="Your profile is ready — wallet is finishing up"
+          eyebrow="Almost ready"
+          title="One last step — setting up your wallet"
           detail={walletPendingDetail}
           actionLabel={
             onboarding.walletProvisioningInProgress
-              ? "Refresh status"
-              : "Retry wallet setup"
+              ? "Check status"
+              : "Retry"
           }
           onAction={
             onboarding.walletProvisioningInProgress
               ? refreshProfile
               : retryWalletProvisioning
           }
-          secondaryLabel="Refresh status"
+          secondaryLabel="Refresh"
           onSecondaryAction={refreshProfile}
           tone="ink"
         />

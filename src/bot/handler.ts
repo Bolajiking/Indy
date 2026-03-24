@@ -1,23 +1,27 @@
 import pino from "pino";
-import { runAgent } from "../agent/orchestrator.js";
 import {
   createCreator,
   findCreatorByTelegram,
   findCreatorByWhatsApp,
+  updateCreator,
   type Creator,
 } from "../db/queries/creators.js";
-import { saveMessage } from "../db/queries/messages.js";
-import { storePendingApproval } from "./approval.js";
+import { processCreatorMessage } from "../agent/conversation.js";
 import { ensureCreatorWalletProvisioning } from "../wallet/provisioning.js";
-import { getCalendarView } from "../agent/skills/calendar-manager.js";
-import { generateFinancialSnapshot } from "../agent/skills/financial-tracker.js";
-import { generateContentStrategy } from "../agent/skills/content-strategy.js";
-import {
-  formatFinancialSnapshot,
-  formatContentStrategy,
-} from "./formatters.js";
+import { connectMessagingChannelFromToken } from "../messaging/linking.js";
+import { upsertCreatorMemory } from "../db/queries/creator-memories.js";
 
 const log = pino({ name: "bot:handler" });
+
+// Skills that produce advice worth rating with thumbs up/down
+const FEEDBACK_ELIGIBLE_SKILLS = new Set([
+  "rate-calculator",
+  "pitch-generator",
+  "brand-deal-scanner",
+  "contract-reviewer",
+  "revenue-advisor",
+  "content-strategy",
+]);
 
 export type Platform = "telegram" | "whatsapp";
 
@@ -44,6 +48,21 @@ async function findCreatorForMessage(
   return findCreatorByWhatsApp(message.platformUserId);
 }
 
+function extractMessagingLinkToken(text: string): string | null {
+  const trimmed = text.trim();
+  const telegramMatch = trimmed.match(/^\/start(?:@\w+)?\s+link_([A-Za-z0-9\-_]+)$/i);
+  if (telegramMatch) {
+    return telegramMatch[1];
+  }
+
+  const genericMatch = trimmed.match(/^link(?:[_\s-]+)([A-Za-z0-9\-_]+)$/i);
+  if (genericMatch) {
+    return genericMatch[1];
+  }
+
+  return null;
+}
+
 export async function handleMessage(
   message: IncomingMessage
 ): Promise<OutgoingMessage> {
@@ -58,6 +77,99 @@ export async function handleMessage(
   }
 }
 
+async function handleBotOnboardingStep(
+  creator: Creator,
+  text: string,
+  step: number
+): Promise<OutgoingMessage> {
+  const answer = text.trim();
+
+  if (step === 1) {
+    // Got niche answer — save and ask about platforms
+    await upsertCreatorMemory(creator.id, {
+      memory_type: "context",
+      skill: null,
+      key: "onboarding.niche",
+      content: `Content niche: ${answer}`,
+      confidence: 1.0,
+    });
+    await updateCreator(creator.id, {
+      niche: answer,
+      settings: { ...(creator.settings ?? {}), bot_onboarding_step: 2 },
+    } as any);
+
+    return {
+      text: `Great — *${answer}* creator, noted! 🎯\n\n📱 Which platforms are you most active on?\n_(e.g. Instagram, TikTok, YouTube, Twitter/X, LinkedIn — list as many as you like)_`,
+      parseMode: "Markdown",
+    };
+  }
+
+  if (step === 2) {
+    // Got platforms — save and ask about follower count
+    await upsertCreatorMemory(creator.id, {
+      memory_type: "context",
+      skill: null,
+      key: "onboarding.platforms",
+      content: `Active platforms: ${answer}`,
+      confidence: 1.0,
+    });
+    await updateCreator(creator.id, {
+      settings: { ...(creator.settings ?? {}), bot_onboarding_step: 3 },
+    } as any);
+
+    return {
+      text: `Got it — ${answer}. 📱\n\n👥 What's your approximate total follower count across all platforms?\n_(e.g. "50K on Instagram", "200K total", "about 10K")_`,
+      parseMode: "Markdown",
+    };
+  }
+
+  if (step === 3) {
+    // Got follower count — save everything, mark onboarding complete, run first scan
+    await upsertCreatorMemory(creator.id, {
+      memory_type: "context",
+      skill: null,
+      key: "onboarding.follower_count",
+      content: `Follower count: ${answer}`,
+      confidence: 1.0,
+    });
+    await updateCreator(creator.id, {
+      settings: {
+        ...(creator.settings ?? {}),
+        bot_onboarding_step: "complete",
+        onboarding_complete: true,
+      },
+    } as any);
+
+    log.info({ creatorId: creator.id }, "Bot onboarding complete — running first brand scan");
+
+    // Run first brand opportunity scan via the agent
+    try {
+      const scanResult = await processCreatorMessage({
+        creatorId: creator.id,
+        text: `My profile is complete: I'm a ${creator.niche ?? "content creator"} with ${answer} followers. Can you quickly scan for 2-3 brand deals that would be a great fit for me, and tell me what my recommended rate should be for a sponsored post? Keep it concise.`,
+      });
+
+      return {
+        text:
+          `✅ *Profile complete!* Here's your first opportunity scan:\n\n${scanResult.text}\n\n---\n💬 You can now chat with me anytime. Try:\n• "scan for deals"\n• "what's my rate?"\n• /help for all commands`,
+        parseMode: "Markdown",
+      };
+    } catch (err) {
+      log.error({ creatorId: creator.id, err }, "First scan failed during bot onboarding");
+      return {
+        text: `✅ *You're all set, ${creator.display_name}!*\n\nI've saved your profile. Here's what I can do for you:\n\n💼 "scan for deals" — Find brand opportunities\n📊 "my rates" — Get your recommended rate card\n💰 "wallet" — Check your balance\n\nType /help anytime to see all commands!`,
+        parseMode: "Markdown",
+      };
+    }
+  }
+
+  // Fallback — unknown step, reset to agent
+  await updateCreator(creator.id, {
+    settings: { ...(creator.settings ?? {}), bot_onboarding_step: "complete", onboarding_complete: true },
+  } as any);
+  return { text: "You're all set! What would you like to work on?", parseMode: "Markdown" };
+}
+
 async function handleMessageInner(
   message: IncomingMessage
 ): Promise<OutgoingMessage> {
@@ -65,6 +177,39 @@ async function handleMessageInner(
     { platform: message.platform, user: message.platformUserId },
     "Incoming message"
   );
+
+  const linkToken = extractMessagingLinkToken(message.text);
+  if (linkToken) {
+    const linkResult = await connectMessagingChannelFromToken({
+      platform: message.platform,
+      token: linkToken,
+      platformUserId: message.platformUserId,
+    });
+
+    if (linkResult.status === "linked" || linkResult.status === "already_linked") {
+      return {
+        text:
+          `✅ Your ${message.platform === "telegram" ? "Telegram" : "WhatsApp"} is now connected to *${linkResult.creator.display_name}*.\n\n` +
+          `You can message me here anytime to scan deals, check your wallet, review approvals, and manage your creator business.`,
+        parseMode: "Markdown",
+      };
+    }
+
+    if (linkResult.status === "channel_in_use") {
+      return {
+        text:
+          `⚠️ This ${message.platform === "telegram" ? "Telegram account" : "WhatsApp number"} is already connected to another Indyfren creator profile.\n\n` +
+          "Sign into the matching dashboard account or contact support if you need help moving it.",
+        parseMode: "Markdown",
+      };
+    }
+
+    return {
+      text:
+        "⏰ That connect code is invalid or expired. Generate a fresh Telegram or WhatsApp link from your dashboard settings and try again.",
+      parseMode: "Markdown",
+    };
+  }
 
   let creator = await findCreatorForMessage(message);
 
@@ -75,6 +220,7 @@ async function handleMessageInner(
         message.platform === "telegram" ? message.platformUserId : undefined,
       whatsapp_phone:
         message.platform === "whatsapp" ? message.platformUserId : undefined,
+      settings: { bot_onboarding_step: 1 },
     });
 
     await ensureCreatorWalletProvisioning(creator.id, {
@@ -88,9 +234,15 @@ async function handleMessageInner(
     });
 
     return {
-      text: `👋 Hey ${message.displayName}! I'm *Indyfren* — your AI business manager.\n\n🔐 I'm setting up your wallet on Tempo Network in the background so you can get started right away.\n\n*Tell me about yourself:*\n📱 What platforms are you on?\n👥 What's your follower count?\n🎯 What's your niche? (e.g., tech, fitness, finance)\n\n*Or just say:*\n💼 "scan for deals" — I'll find brand opportunities\n📊 "my rates" — See your rate card\n💰 "wallet" — Check your balance\n\nType /help anytime to see all commands!`,
+      text: `👋 Hey ${message.displayName}! I'm *Indyfren* — your AI business manager for creators.\n\nI help you find brand deals, negotiate better rates, review contracts, and track your revenue — all on autopilot.\n\n🔐 Setting up your wallet in the background...\n\n*Quick question to get started:*\n\n🎯 What's your main content niche?\n_(e.g. fitness, tech, finance, beauty, gaming)_`,
       parseMode: "Markdown",
     };
+  }
+
+  // Bot onboarding interview — runs for new creators before full agent access
+  const onboardingStep = creator.settings?.bot_onboarding_step;
+  if (onboardingStep && onboardingStep !== "complete") {
+    return await handleBotOnboardingStep(creator, message.text, onboardingStep as number);
   }
 
   const normalizedText = message.text.toLowerCase().trim();
@@ -102,55 +254,14 @@ async function handleMessageInner(
     };
   }
 
+  // Rewrite slash commands to natural language for AgentOS routing
   if (normalizedText === "/calendar" || normalizedText === "calendar" || normalizedText === "deadlines") {
-    try {
-      const calendar = await getCalendarView(creator.id);
-      let text = "*Upcoming Deadlines*\n\n";
-      if (calendar.overdue.length > 0) {
-        text += `⚠️ *${calendar.overdue.length} overdue:*\n`;
-        for (const e of calendar.overdue.slice(0, 5)) {
-          text += `• ${e.title} (${e.date})\n`;
-        }
-        text += "\n";
-      }
-      if (calendar.upcoming.length > 0) {
-        text += `📅 *${calendar.upcoming.length} upcoming:*\n`;
-        for (const e of calendar.upcoming.slice(0, 5)) {
-          text += `• ${e.title} (${e.date})\n`;
-        }
-      }
-      if (calendar.overdue.length === 0 && calendar.upcoming.length === 0) {
-        text += "No upcoming deadlines. Your calendar is clear!";
-      }
-      return { text, parseMode: "Markdown" };
-    } catch (err) {
-      log.error({ creatorId: creator.id, error: err }, "Calendar command failed");
-      return { text: "Sorry, I couldn't load your calendar right now. Try again in a moment.", parseMode: "Markdown" };
-    }
-  }
-
-  if (normalizedText === "/finances" || normalizedText === "finances" || normalizedText === "financial" || normalizedText === "money") {
-    try {
-      const snapshot = await generateFinancialSnapshot(creator.id);
-      return { text: formatFinancialSnapshot(snapshot), parseMode: "Markdown" };
-    } catch (err) {
-      log.error({ creatorId: creator.id, error: err }, "Financial snapshot command failed");
-      return { text: "Sorry, I couldn't pull your financial data right now. Try again in a moment.", parseMode: "Markdown" };
-    }
-  }
-
-  if (normalizedText === "/content" || normalizedText === "content plan" || normalizedText === "content strategy" || normalizedText === "content") {
-    try {
-      const strategy = await generateContentStrategy(creator.id);
-      return { text: formatContentStrategy(strategy), parseMode: "Markdown" };
-    } catch (err) {
-      log.error({ creatorId: creator.id, error: err }, "Content strategy command failed");
-      return { text: "Sorry, I couldn't generate your content plan right now. Try again in a moment.", parseMode: "Markdown" };
-    }
-  }
-
-  // Handle other slash commands by rewriting them to natural language
-  if (normalizedText === "/scan") {
+    message.text = "show my upcoming deadlines and calendar";
+  } else if (normalizedText === "/finances" || normalizedText === "finances" || normalizedText === "financial" || normalizedText === "money") {
+    message.text = "give me my financial snapshot";
+  } else if (normalizedText === "/content" || normalizedText === "content plan" || normalizedText === "content strategy" || normalizedText === "content") {
+    message.text = "generate my content strategy";
+  } else if (normalizedText === "/scan") {
     message.text = "scan for brand deals";
   } else if (normalizedText === "/deals") {
     message.text = "show my deal pipeline";
@@ -160,40 +271,15 @@ async function handleMessageInner(
     message.text = "give me my morning brief";
   }
 
-  // Save user message
-  await saveMessage({
-    creator_id: creator.id,
-    role: "user",
-    content: message.text,
+  const agentResponse = await processCreatorMessage({
+    creatorId: creator.id,
+    text: message.text,
     metadata: { platform: message.platform },
-  }).catch((err) => log.warn({ error: err.message }, "Failed to save user message"));
-
-  const agentResponse = await runAgent(
-    creator.id,
-    message.text,
-    creator.wallet_id ?? undefined,
-    creator.wallet_address ?? undefined
-  );
-
-  // Save agent response
-  await saveMessage({
-    creator_id: creator.id,
-    role: "assistant",
-    content: agentResponse.text,
-    metadata: { requiresApproval: agentResponse.requiresApproval },
-  }).catch((err) => log.warn({ error: err.message }, "Failed to save agent message"));
+    walletId: creator.wallet_id,
+    walletAddress: creator.wallet_address,
+  });
 
   if (agentResponse.requiresApproval && agentResponse.pendingAction) {
-    await storePendingApproval({
-      id: agentResponse.pendingAction.id,
-      creatorId: creator.id,
-      actionId: agentResponse.pendingAction.id,
-      type: agentResponse.pendingAction.type,
-      description: agentResponse.pendingAction.description,
-      preview: agentResponse.text,
-      input: agentResponse.pendingAction.input,
-    });
-
     return {
       text: `${agentResponse.text}\n\n⚡ _This action needs your approval._`,
       parseMode: "Markdown",
@@ -205,6 +291,24 @@ async function handleMessageInner(
         {
           text: "❌ Skip",
           callbackData: `skip:${creator.id}:${agentResponse.pendingAction.id}`,
+        },
+      ],
+    };
+  }
+
+  // Add feedback buttons for advice-producing skills
+  if (agentResponse.skill && FEEDBACK_ELIGIBLE_SKILLS.has(agentResponse.skill)) {
+    return {
+      text: agentResponse.text,
+      parseMode: "Markdown",
+      buttons: [
+        {
+          text: "👍",
+          callbackData: `feedback:up:${creator.id}:${agentResponse.skill}`,
+        },
+        {
+          text: "👎 Not quite",
+          callbackData: `feedback:down:${creator.id}:${agentResponse.skill}`,
         },
       ],
     };

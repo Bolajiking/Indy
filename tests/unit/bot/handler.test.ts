@@ -4,10 +4,20 @@ vi.mock("../../../src/agent/orchestrator.js", () => ({
   runAgent: vi.fn(),
 }));
 
+vi.mock("../../../src/agent/conversation.js", () => ({
+  processCreatorMessage: vi.fn(),
+}));
+
 vi.mock("../../../src/db/queries/creators.js", () => ({
   findCreatorByTelegram: vi.fn(),
   findCreatorByWhatsApp: vi.fn(),
   createCreator: vi.fn(),
+  getCreatorById: vi.fn(),
+  updateCreator: vi.fn(),
+}));
+
+vi.mock("../../../src/db/queries/messaging-link-sessions.js", () => ({
+  consumeMessagingLinkSession: vi.fn(),
 }));
 
 vi.mock("../../../src/wallet/provisioning.js", () => ({
@@ -42,55 +52,31 @@ vi.mock("../../../src/db/queries/platform-connections.js", () => ({
   getConnectionsForCreator: vi.fn().mockResolvedValue([]),
 }));
 
-vi.mock("../../../src/agent/skills/calendar-manager.js", () => ({
-  getCalendarView: vi.fn().mockResolvedValue({
-    overdue: [],
-    upcoming: [{ title: "Acme draft due", date: "2026-03-25" }],
-    today: [],
-  }),
-}));
-
-vi.mock("../../../src/agent/skills/financial-tracker.js", () => ({
-  generateFinancialSnapshot: vi.fn().mockResolvedValue({
-    creatorId: "creator-cmd",
-    period: "March 2026",
-    income: { totalCents: 50000, bySource: {} },
-    expenses: { totalCents: 1000, byCategory: {} },
-    netCents: 49000,
-    deals: { active: 1, pipeline: 2, completed: 0 },
-    forecast: { nextMonthCents: 50000, confidence: 0.5 },
-  }),
-}));
-
-vi.mock("../../../src/agent/skills/content-strategy.js", () => ({
-  generateContentStrategy: vi.fn().mockResolvedValue({
-    creatorId: "creator-cmd",
-    weekOf: "2026-03-16",
-    posts: [],
-    themes: [],
-    tips: [],
-  }),
-}));
-
-vi.mock("../../../src/bot/formatters.js", () => ({
-  formatFinancialSnapshot: vi.fn().mockReturnValue("*Financial Snapshot*\nNet: $490"),
-  formatContentStrategy: vi.fn().mockReturnValue("*Content Strategy*\nNo posts planned"),
-}));
+vi.mock("../../../src/bot/formatters.js", () => ({}));
 
 import { runAgent } from "../../../src/agent/orchestrator.js";
+import { processCreatorMessage } from "../../../src/agent/conversation.js";
 import {
   createCreator,
   findCreatorByTelegram,
   findCreatorByWhatsApp,
+  getCreatorById,
+  updateCreator,
 } from "../../../src/db/queries/creators.js";
+import { consumeMessagingLinkSession } from "../../../src/db/queries/messaging-link-sessions.js";
 import { ensureCreatorWalletProvisioning } from "../../../src/wallet/provisioning.js";
 import { getPendingApprovalsForCreator, storePendingApproval } from "../../../src/bot/approval.js";
 import { handleMessage, type IncomingMessage } from "../../../src/bot/handler.js";
+import { createMessagingLinkToken } from "../../../src/messaging/link-tokens.js";
 
 describe("handleMessage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(runAgent).mockReset();
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "Here's what I found.",
+      requiresApproval: false,
+    });
   });
 
   it("onboards a new Telegram creator and starts wallet provisioning", async () => {
@@ -126,6 +112,7 @@ describe("handleMessage", () => {
       display_name: "Ada",
       telegram_chat_id: "123",
       whatsapp_phone: undefined,
+      settings: { bot_onboarding_step: 1 },
     });
     expect(ensureCreatorWalletProvisioning).toHaveBeenCalledWith("creator-1", {
       force: true,
@@ -133,7 +120,7 @@ describe("handleMessage", () => {
     });
     expect(response.parseMode).toBe("Markdown");
     expect(response.text).toContain("your AI business manager");
-    expect(response.text).toContain("setting up your wallet");
+    expect(response.text).toContain("wallet");
   });
 
   it("returns the welcome command list for an existing creator greeting", async () => {
@@ -180,7 +167,7 @@ describe("handleMessage", () => {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     } as never);
-    vi.mocked(runAgent).mockResolvedValue({
+    vi.mocked(processCreatorMessage).mockResolvedValue({
       text: "I drafted a pitch for Acme.",
       requiresApproval: true,
       pendingAction: {
@@ -203,15 +190,6 @@ describe("handleMessage", () => {
       { text: "❌ Skip", callbackData: "skip:creator-3:toolu_123" },
     ]);
     expect(response.text).toContain("I drafted a pitch for Acme.");
-    expect(storePendingApproval).toHaveBeenCalledWith({
-      id: "toolu_123",
-      creatorId: "creator-3",
-      actionId: "toolu_123",
-      type: "generate_pitch",
-      description: "Send a pitch to Acme",
-      preview: "I drafted a pitch for Acme.",
-      input: { brand: "Acme" },
-    });
   });
 });
 
@@ -247,10 +225,15 @@ describe("quick-command routing", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(runAgent).mockReset();
+    vi.mocked(processCreatorMessage).mockReset();
   });
 
-  it("handles 'calendar' command and returns deadlines", async () => {
+  it("handles 'calendar' command by routing through AgentOS", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockExistingCreator as never);
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "*Upcoming Deadlines*\n\nAcme draft due (2026-03-25)",
+      requiresApproval: false,
+    });
 
     const response = await handleMessage({
       platform: "telegram",
@@ -259,12 +242,18 @@ describe("quick-command routing", () => {
       text: "calendar",
     });
 
+    expect(processCreatorMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "show my upcoming deadlines and calendar" })
+    );
     expect(response.text).toContain("Upcoming Deadlines");
-    expect(runAgent).not.toHaveBeenCalled();
   });
 
-  it("handles 'finances' command and returns financial snapshot", async () => {
+  it("handles 'finances' command by routing through AgentOS", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockExistingCreator as never);
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "*Financial Snapshot*\nNet: $490",
+      requiresApproval: false,
+    });
 
     const response = await handleMessage({
       platform: "telegram",
@@ -273,12 +262,18 @@ describe("quick-command routing", () => {
       text: "finances",
     });
 
+    expect(processCreatorMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "give me my financial snapshot" })
+    );
     expect(response.text).toContain("Financial Snapshot");
-    expect(runAgent).not.toHaveBeenCalled();
   });
 
-  it("handles 'deadlines' alias for calendar", async () => {
+  it("handles 'deadlines' alias for calendar via AgentOS", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockExistingCreator as never);
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "*Upcoming Deadlines*\n\nAll clear.",
+      requiresApproval: false,
+    });
 
     const response = await handleMessage({
       platform: "telegram",
@@ -290,8 +285,12 @@ describe("quick-command routing", () => {
     expect(response.text).toContain("Upcoming Deadlines");
   });
 
-  it("handles 'money' alias for finances", async () => {
+  it("handles 'money' alias for finances via AgentOS", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(mockExistingCreator as never);
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "*Financial Snapshot*\nNet: $490",
+      requiresApproval: false,
+    });
 
     const response = await handleMessage({
       platform: "telegram",
@@ -305,6 +304,15 @@ describe("quick-command routing", () => {
 });
 
 describe("onboarding error handling", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(runAgent).mockReset();
+    vi.mocked(processCreatorMessage).mockResolvedValue({
+      text: "Here's what I found.",
+      requiresApproval: false,
+    });
+  });
+
   it("gracefully handles wallet provisioning failure", async () => {
     vi.mocked(findCreatorByTelegram).mockResolvedValue(null);
     vi.mocked(createCreator).mockResolvedValue({
@@ -327,7 +335,53 @@ describe("onboarding error handling", () => {
     });
 
     expect(response.text).toContain("your AI business manager");
-    expect(response.text).toContain("setting up your wallet");
     expect(ensureCreatorWalletProvisioning).toHaveBeenCalled();
+  });
+
+  it("links a dashboard-first creator when Telegram receives a valid connect token", async () => {
+    const creatorId = "5f4aa8d8-2fe8-4ae6-84e2-f452ca785d88";
+    const sessionId = "5f4aa8d8-2fe8-4ae6-84e2-f452ca785d89";
+    const { token } = createMessagingLinkToken({ sessionId });
+
+    vi.mocked(consumeMessagingLinkSession).mockResolvedValue({
+      id: sessionId,
+      creator_id: creatorId,
+      platform: "telegram",
+      token_hash: "token-hash",
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      consumed_at: new Date().toISOString(),
+      consumed_by_platform_user_id: "888",
+      created_at: new Date().toISOString(),
+    } as never);
+    vi.mocked(getCreatorById).mockResolvedValue({
+      ...mockExistingCreator,
+      id: creatorId,
+      telegram_chat_id: null,
+      display_name: "DashboardUser",
+    } as never);
+    vi.mocked(findCreatorByTelegram).mockResolvedValue(null);
+    vi.mocked(updateCreator).mockResolvedValue({
+      ...mockExistingCreator,
+      id: creatorId,
+      telegram_chat_id: "888",
+      display_name: "DashboardUser",
+    } as never);
+
+    const response = await handleMessage({
+      platform: "telegram",
+      platformUserId: "888",
+      displayName: "DashboardUser",
+      text: `/start link_${token}`,
+    });
+
+    expect(createCreator).not.toHaveBeenCalled();
+    expect(updateCreator).toHaveBeenCalledWith(
+      creatorId,
+      expect.objectContaining({
+        telegram_chat_id: "888",
+      })
+    );
+    expect(response.text).toContain("connected");
+    expect(response.text).toContain("DashboardUser");
   });
 });

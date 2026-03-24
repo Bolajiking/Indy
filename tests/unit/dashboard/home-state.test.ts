@@ -138,6 +138,22 @@ describe("dashboard home state", () => {
     expect(model.todayHero.followUpsCount).toBe(2);
     expect(model.todayHero.walletReady).toBe(true);
     expect(model.emptyState.title).toBe("Nothing to surface yet.");
+
+    // Hero model
+    expect(model.hero.primaryCta.label).toBe("Review approvals");
+    expect(model.hero.cards[0]?.value).toBe("1");
+    expect(model.hero.cards[1]?.value).toBe("2");
+    expect(model.hero.cards[2]?.value).toBe("Ready");
+
+    // Support rail
+    expect(model.supportRail.opportunities[0]?.title).toBe("Acme");
+    expect(model.supportRail.channels[0]?.label).toBe("Instagram");
+    expect(model.supportRail.channels[0]?.status).toBe("connected");
+    expect(model.supportRail.activity[0]?.title).toBe("Research brief");
+
+    // Insights
+    expect(model.insights).toHaveLength(3);
+    expect(model.insights[0]?.label).toBe("Active deals");
   });
 
   it("keeps the empty state calm when there is no creator activity yet", () => {
@@ -151,6 +167,15 @@ describe("dashboard home state", () => {
     expect(model.emptyState.detail).toBe(
       "The desk stays quiet until a creator starts a conversation, sends a pitch, or uses the wallet."
     );
+
+    // Empty hero
+    expect(model.hero.title).toContain("today");
+    expect(model.hero.primaryCta.label).toBe("Chat with Indyfren");
+
+    // Empty support rail
+    expect(model.supportRail.opportunities[0]?.title).toContain("No opportunities yet");
+    expect(model.supportRail.channels).toHaveLength(0);
+    expect(model.supportRail.activity).toHaveLength(0);
   });
 
   it("keeps the console unmounted while the combined home query is still loading", () => {

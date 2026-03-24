@@ -20,7 +20,7 @@ import {
 } from "@/lib/api";
 import { useAuth } from "@/lib/privy";
 import { useAuthedQuery } from "@/lib/use-authed-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 const DEFAULT_DAILY_LIMIT_CENTS = 5000;
 const DEFAULT_MONTHLY_LIMIT_CENTS = 50000;
@@ -48,38 +48,41 @@ interface SettingsPlatformData {
 export default function SettingsPage() {
   const { creator, onboarding, stage, accessToken, updateProfile, syncing, error: authError } =
     useAuth();
+  const settingsFallback = useMemo<SettingsPlatformData>(() => ({
+    connections: [],
+    oauthProviders: [],
+    oauthProviderDiscoveryStatus: "loading",
+  }), []);
+
+  // Stable loader — useAuthedQuery uses a ref internally so this only needs to be
+  // stable enough not to trigger re-mounts. useCallback with [] gives us that.
+  const loadPlatformData = useCallback(async (token: string): Promise<SettingsPlatformData> => {
+    const [connections, oauthProvidersResult] = await Promise.all([
+      fetchConnections(token),
+      fetchPlatformOAuthProviders(token)
+        .then((oauthProviders) => ({
+          oauthProviders,
+          oauthProviderDiscoveryStatus: "loaded" as const,
+        }))
+        .catch(() => ({
+          oauthProviders: [],
+          oauthProviderDiscoveryStatus: "failed" as const,
+        })),
+    ]);
+
+    return {
+      connections,
+      oauthProviders: oauthProvidersResult.oauthProviders,
+      oauthProviderDiscoveryStatus: oauthProvidersResult.oauthProviderDiscoveryStatus,
+    };
+  }, []);
+
   const {
     data: platformData,
     error,
     isLoading: platformDataLoading,
     refresh: refreshPlatformData,
-  } = useAuthedQuery<SettingsPlatformData>(
-    async (token) => {
-      const [connections, oauthProvidersResult] = await Promise.all([
-        fetchConnections(token),
-        fetchPlatformOAuthProviders(token)
-          .then((oauthProviders) => ({
-            oauthProviders,
-            oauthProviderDiscoveryStatus: "loaded" as const,
-          }))
-          .catch(() => ({
-            oauthProviders: [],
-            oauthProviderDiscoveryStatus: "failed" as const,
-          })),
-      ]);
-
-      return {
-        connections,
-        oauthProviders: oauthProvidersResult.oauthProviders,
-        oauthProviderDiscoveryStatus: oauthProvidersResult.oauthProviderDiscoveryStatus,
-      };
-    },
-    {
-      connections: [],
-      oauthProviders: [],
-      oauthProviderDiscoveryStatus: "loading",
-    }
-  );
+  } = useAuthedQuery<SettingsPlatformData>(loadPlatformData, settingsFallback);
   const [perTransactionLimit, setPerTransactionLimit] = useState(
     centsToUsdInput(DEFAULT_PER_TRANSACTION_LIMIT_CENTS)
   );
@@ -256,11 +259,11 @@ export default function SettingsPage() {
         <section style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "24px 32px" }}>
         <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Settings</p>
         <h2 style={{ fontSize: 24, fontWeight: 700, marginTop: 12, lineHeight: 1, color: "var(--text-primary)" }}>
-          Manage your workspace
+          Your workspace
         </h2>
         <p className="mt-4 max-w-3xl text-sm leading-7" style={{ color: "var(--text-tertiary)" }}>
-          Connect platforms, update your profile, and control how Indyfren
-          spends on your behalf.
+          Connect your social platforms, set spending limits so Indyfren stays within budget,
+          and link Telegram or WhatsApp to manage deals on the go.
         </p>
         {error ? (
           <p className="mt-4 rounded-[18px] px-4 py-3 text-sm" style={{ border: "1px solid var(--accent-pink-border)", background: "var(--accent-pink-bg)", color: "var(--text-primary)" }}>
@@ -387,12 +390,12 @@ export default function SettingsPage() {
           <article style={{ borderRadius: "var(--radius-card)", border: "1px solid var(--border-default)", background: "var(--bg-canvas)", padding: 24 }}>
             <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Chat channels</p>
             <h3 style={{ fontSize: 24, fontWeight: 700, marginTop: 8, color: "var(--text-primary)" }}>
-              Connect Telegram or WhatsApp
+              Manage deals from your phone
             </h3>
             <p className="mt-4 text-sm leading-7" style={{ color: "var(--text-tertiary)" }}>
-              Link your messaging apps so you can chat with Indyfren on the go.
-              Everything stays in sync — messages and approvals work the same across
-              all channels.
+              Connect Telegram or WhatsApp to get deal alerts, approve pitches, and
+              chat with Indyfren wherever you are. Everything syncs instantly with
+              your dashboard.
             </p>
 
             <div className="mt-6 space-y-4">
@@ -403,10 +406,10 @@ export default function SettingsPage() {
                       Telegram
                     </p>
                     <p className="mt-2 text-sm" style={{ color: "var(--text-primary)" }}>
-                  {creator?.telegram_chat_id
-                    ? `Connected chat ID: ${creator.telegram_chat_id}`
-                    : "No Telegram chat has been attached to this creator yet."}
-                    </p>
+                    {creator?.telegram_chat_id
+                      ? "Telegram is connected. You can chat with Indyfren directly from the app."
+                      : "Not connected yet. Link your Telegram account to manage deals on the go."}
+                  </p>
                   </div>
                   <button
                     type="button"
@@ -423,7 +426,7 @@ export default function SettingsPage() {
                   <div className="mt-4 rounded-[18px] p-4 text-sm" style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)" }}>
                     <p className="font-semibold">Next step</p>
                     <p className="mt-2 leading-7">
-                      Open your Indyfren Telegram bot and send:
+                      Open the Indyfren Telegram bot and send this command:
                     </p>
                     <code className="mt-2 block rounded-[14px] px-3 py-2 text-xs" style={{ background: "var(--bg-input)" }}>
                       {messagingLinks.telegram.command}
@@ -453,10 +456,10 @@ export default function SettingsPage() {
                       WhatsApp
                     </p>
                     <p className="mt-2 text-sm" style={{ color: "var(--text-primary)" }}>
-                  {creator?.whatsapp_phone
-                    ? `Connected phone: ${creator.whatsapp_phone}`
-                    : "WhatsApp is not attached to this creator yet."}
-                    </p>
+                    {creator?.whatsapp_phone
+                      ? "WhatsApp is connected. Reply to approvals and get deal alerts from your phone."
+                      : "Not connected yet. Link WhatsApp to get deal alerts and approve actions from any device."}
+                  </p>
                   </div>
                   <button
                     type="button"
@@ -473,7 +476,7 @@ export default function SettingsPage() {
                   <div className="mt-4 rounded-[18px] p-4 text-sm" style={{ border: "1px solid var(--border-default)", background: "var(--bg-surface)", color: "var(--text-primary)" }}>
                     <p className="font-semibold">Next step</p>
                     <p className="mt-2 leading-7">
-                      Send this message to your Indyfren WhatsApp number:
+                      Send this message to the Indyfren WhatsApp number:
                     </p>
                     <code className="mt-2 block rounded-[14px] px-3 py-2 text-xs" style={{ background: "var(--bg-input)" }}>
                       {messagingLinks.whatsapp.command}
@@ -506,18 +509,28 @@ export default function SettingsPage() {
           <article style={{ borderRadius: "var(--radius-card)", border: "1px solid var(--border-default)", background: "var(--bg-canvas)", padding: 24 }}>
             <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>How it works</p>
             <h3 style={{ fontSize: 24, fontWeight: 700, marginTop: 8, color: "var(--text-primary)" }}>
-              One conversation, every channel
+              One agent, every channel
             </h3>
             <p className="mt-4 text-sm leading-7" style={{ color: "var(--text-tertiary)" }}>
-              Your messages and approvals stay in sync across the dashboard,
-              Telegram, and WhatsApp. Approve a deal here and it disappears
-              from Telegram too.
+              Indyfren works the same whether you message it on Telegram, WhatsApp,
+              or through this dashboard. Approve a deal on your phone and it updates
+              everywhere instantly.
             </p>
 
-            <div className="mt-6 p-4 text-sm leading-7" style={{ borderRadius: "var(--radius-card)", border: "1px solid var(--border-default)", background: "var(--bg-input)", color: "var(--text-primary)" }}>
-              Use Telegram or WhatsApp for quick replies on the go.
-              <br />
-              Use the dashboard for longer conversations, approvals, and settings.
+            <div className="mt-6 space-y-3">
+              {[
+                { icon: "📱", label: "Telegram & WhatsApp", detail: "Quick approvals and deal alerts while you're on the go" },
+                { icon: "💻", label: "Dashboard", detail: "Full deal pipeline, reports, wallet, and settings" },
+                { icon: "⚡", label: "Always in sync", detail: "Everything updates in real time across all channels" },
+              ].map((item) => (
+                <div key={item.label} className="flex items-start gap-3 p-3" style={{ borderRadius: "var(--radius-chip)", border: "1px solid var(--border-default)", background: "var(--bg-input)" }}>
+                  <span style={{ fontSize: 18 }}>{item.icon}</span>
+                  <div>
+                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{item.label}</p>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>{item.detail}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           </article>
         </section>
@@ -526,43 +539,41 @@ export default function SettingsPage() {
           <DebugAccessTokenPanel accessToken={accessToken} />
         ) : null}
 
-        <section style={{ borderRadius: "var(--radius-card)", border: "1px solid var(--border-default)", background: "var(--accent-blue)", padding: 24, color: "white" }}>
-          <p style={{ fontSize: 11, color: "white", opacity: 0.55 }}>Account status</p>
+        <section style={{ borderRadius: "var(--radius-card)", border: "1px solid var(--border-default)", background: "var(--gradient-approval)", padding: 24, color: "white" }}>
+          <p style={{ fontSize: 11, color: "white", opacity: 0.55 }}>Account</p>
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-          <div>
-            <p className="text-sm" style={{ color: "white", opacity: 0.6 }}>Account</p>
-            <p className="mt-1 text-sm">
-              {creator ? creator.display_name : "No profile created yet."}
-            </p>
+            <div>
+              <p className="text-sm" style={{ color: "white", opacity: 0.6 }}>Name</p>
+              <p className="mt-1 text-sm font-semibold">
+                {creator ? creator.display_name : "—"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm" style={{ color: "white", opacity: 0.6 }}>Status</p>
+              <p className="mt-1 text-sm font-semibold">
+                {stage === "active"
+                  ? "Active — all systems ready"
+                  : stage === "wallet_pending"
+                    ? "Setting up wallet in the background"
+                    : "Getting started"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm" style={{ color: "white", opacity: 0.6 }}>Connected platforms</p>
+              <p className="mt-1 text-sm font-semibold">
+                {connections.length > 0
+                  ? `${connections.length} platform${connections.length === 1 ? "" : "s"} connected`
+                  : "No platforms connected yet"}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm" style={{ color: "white", opacity: 0.6 }}>Chat channels</p>
+              <p className="mt-1 text-sm font-semibold">
+                {[creator?.telegram_chat_id && "Telegram", creator?.whatsapp_phone && "WhatsApp"].filter(Boolean).join(" & ") || "None connected yet"}
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-sm" style={{ color: "white", opacity: 0.6 }}>Workspace</p>
-            <p className="mt-1 text-sm">
-              {onboarding.status === "active"
-                ? "Profile and wallet are both ready."
-                : onboarding.status === "wallet_pending"
-                  ? onboarding.walletProvisioningInProgress
-                    ? "Profile ready. Wallet is setting up in the background."
-                    : onboarding.walletProvisioningLastError
-                      ? `Profile ready. Wallet setup needs a retry.`
-                      : "Profile ready. Wallet is still being set up."
-                  : "Profile setup is needed to get started."}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm" style={{ color: "white", opacity: 0.6 }}>Platform connections</p>
-            <p className="mt-1 text-sm">
-              YouTube supports Google sign-in. Other platforms use manual token entry.
-            </p>
-          </div>
-          <div>
-            <p className="text-sm" style={{ color: "white", opacity: 0.6 }}>Chat channels</p>
-            <p className="mt-1 text-sm">
-              Telegram and WhatsApp can be linked to your profile for on-the-go access.
-            </p>
-          </div>
-        </div>
-      </section>
+        </section>
       </div>
     </DashboardAuthGate>
   );

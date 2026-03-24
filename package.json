@@ -1,6 +1,7 @@
 {
   "name": "indyfren",
   "version": "1.0.0",
+  "type": "module",
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -11,7 +12,16 @@
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:seed": "tsx scripts/seed-db.ts"
+    "db:init": "tsx scripts/init-db.ts",
+    "db:seed": "tsx scripts/seed-db.ts",
+    "migrate:platform-secrets": "tsx scripts/migrate-platform-secrets.ts",
+    "smoke:preflight": "node --import tsx scripts/preflight.ts",
+    "smoke:auth": "node --import tsx scripts/smoke-auth.ts",
+    "test:mpp": "tsx scripts/test-mpp.ts",
+    "dev:all": "npx concurrently -n api,dash -c blue,magenta \"npm run dev\" \"npm run dashboard:dev\"",
+    "dashboard:dev": "npm run dev --prefix dashboard",
+    "dashboard:build": "npm run build --prefix dashboard",
+    "dashboard:start": "npm run start --prefix dashboard"
   },
   "keywords": [],
   "author": "",
@@ -20,6 +30,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
     "@hono/node-server": "^1.19.11",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "@privy-io/node": "^0.11.0",
     "@supabase/supabase-js": "^2.99.2",
     "@types/node": "^25.5.0",
@@ -38,7 +49,11 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "eslint": "^9.39.4",
-    "prettier": "^3.8.1"
+    "jsdom": "^29.0.1",
+    "prettier": "^3.8.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   }
 }

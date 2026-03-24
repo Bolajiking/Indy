@@ -1,75 +1,359 @@
 "use client";
 
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
 import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
-import { DEAL_STAGE_ORDER, fetchDeals, formatCurrency } from "@/lib/api";
+import { DEAL_STAGE_ORDER, fetchDeals, formatCurrency, type DashboardDeal } from "@/lib/api";
+import { subscribeDealsChanged } from "@/lib/deals-sync";
 import { useAuthedQuery } from "@/lib/use-authed-query";
+import { formatDashboardDateTime } from "@/lib/datetime";
+
+const STAGE_COLORS: Record<string, { bg: string; text: string; border: string; dot: string }> = {
+  discovered: { bg: "var(--accent-pink-bg)", text: "var(--accent-pink)", border: "var(--accent-pink-border)", dot: "var(--accent-pink)" },
+  pitched:    { bg: "var(--accent-blue-bg)", text: "var(--accent-blue)", border: "var(--accent-blue-border)", dot: "var(--accent-blue)" },
+  responded:  { bg: "#fff8e1", text: "#e6a817", border: "#ffe082", dot: "#e6a817" },
+  negotiating:{ bg: "#fff3e0", text: "#e65100", border: "#ffcc80", dot: "#e65100" },
+  contracted: { bg: "var(--accent-green-bg)", text: "var(--accent-green-text)", border: "var(--accent-green-border)", dot: "var(--accent-green)" },
+  active:     { bg: "var(--accent-green-bg)", text: "var(--accent-green-text)", border: "var(--accent-green-border)", dot: "var(--accent-green)" },
+  completed:  { bg: "var(--bg-input)", text: "var(--text-tertiary)", border: "var(--border-default)", dot: "var(--text-muted)" },
+  lost:       { bg: "var(--accent-pink-bg)", text: "var(--text-tertiary)", border: "var(--accent-pink-border)", dot: "var(--text-muted)" },
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  discovered: "Discovered",
+  pitched: "Pitched",
+  responded: "Responded",
+  negotiating: "Negotiating",
+  contracted: "Contracted",
+  active: "Active",
+  completed: "Completed",
+  lost: "Lost",
+};
 
 export default function DealsPage() {
-  const { data: deals, error, isLoading } = useAuthedQuery(fetchDeals, []);
+  const { data: deals, error, isLoading, refresh } = useAuthedQuery(fetchDeals, []);
+
+  // Auto-refresh every 10s so new deals from the agent appear quickly
+  const stableRefresh = useCallback(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    const id = setInterval(stableRefresh, 10_000);
+    return () => clearInterval(id);
+  }, [stableRefresh]);
+
+  // Cross-context sync: refresh immediately when agent surfaces deals (same-tab + cross-tab)
+  useEffect(() => subscribeDealsChanged(stableRefresh), [stableRefresh]);
+
+  // Refresh when user returns to this tab after being away
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        stableRefresh();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [stableRefresh]);
+
+  const totalDeals = deals.length;
+  const pipelineValue = deals.reduce((sum, d) => sum + (d.estimated_value_cents ?? 0), 0);
 
   return (
     <DashboardAuthGate>
       <div className="space-y-6">
+        {/* Header */}
         <section style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-default)", borderRadius: "var(--radius-card)", padding: "24px 32px" }}>
-        <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Deal pipeline</p>
-        <h2 style={{ fontSize: 24, fontWeight: 700, marginTop: 12, lineHeight: 1, color: "var(--text-primary)" }}>Every conversation, staged like a sales floor.</h2>
-        <p className="mt-4 max-w-3xl text-sm leading-7" style={{ color: "var(--text-tertiary)" }}>
-          Sponsor opportunities are grouped by momentum, so it&apos;s obvious what needs a pitch,
-          what needs follow-up, and what is already moving money.
-        </p>
-        {error ? (
-          <p className="mt-4 rounded-[18px] px-4 py-3 text-sm" style={{ border: "1px solid var(--accent-pink-border)", background: "var(--accent-pink-bg)", color: "var(--text-primary)" }}>
-            {error}
-          </p>
-        ) : null}
-      </section>
-
-        <section className="grid gap-4 xl:grid-cols-4">
-        {DEAL_STAGE_ORDER.map((stage) => {
-          const stageDeals = deals.filter((deal) => deal.stage === stage);
-
-          return (
-            <article
-              key={stage}
-              style={{ borderRadius: "var(--radius-card)", border: "1px solid var(--border-default)", background: "var(--bg-canvas)", padding: 20 }}
-            >
-              <div className="flex items-center justify-between">
-                <h3 style={{ fontSize: 11, color: "var(--text-tertiary)" }}>{stage}</h3>
-                <span className="rounded-full px-3 py-1 text-xs font-semibold" style={{ background: "var(--accent-blue)", color: "white" }}>
-                  {stageDeals.length}
-                </span>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>Deal pipeline</p>
+              <h2 style={{ fontSize: 24, fontWeight: 700, marginTop: 12, lineHeight: 1, color: "var(--text-primary)" }}>Your brand deal pipeline</h2>
+              <p className="mt-4 max-w-3xl text-sm leading-7" style={{ color: "var(--text-tertiary)" }}>
+                Sponsor opportunities move through stages automatically as Indyfren scouts,
+                pitches, and closes deals on your behalf. Every live opportunity is tracked here.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>{totalDeals}</p>
+                <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>total deals</p>
               </div>
-
-              <div className="mt-5 space-y-4">
-                {stageDeals.map((deal) => (
-                  <div
-                    key={deal.id}
-                    style={{ borderRadius: "var(--radius-card)", border: "1px solid var(--border-default)", background: "var(--bg-input)", padding: 16 }}
-                  >
-                    <p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{deal.brand_name}</p>
-                    <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
-                      {formatCurrency(deal.estimated_value_cents ?? 0)} estimated
-                    </p>
-                    <p className="mt-3 text-sm leading-7" style={{ color: "var(--text-primary)", opacity: 0.78 }}>
-                      Fit score {deal.fit_score ?? "n/a"}
-                      {deal.notes ? ` • ${deal.notes}` : ""}
-                    </p>
-                  </div>
-                ))}
-
-                {stageDeals.length === 0 ? (
-                  <div className="border border-dashed p-4 text-sm leading-7" style={{ borderRadius: "var(--radius-card)", borderColor: "var(--border-default)", color: "var(--text-tertiary)" }}>
-                    {isLoading
-                      ? "Loading the latest deals for this stage..."
-                      : "No deals in this lane yet for this creator."}
-                  </div>
-                ) : null}
+              <div style={{ textAlign: "right" }}>
+                <p style={{ fontSize: 22, fontWeight: 700, color: "var(--accent-blue)" }}>{formatCurrency(pipelineValue)}</p>
+                <p style={{ fontSize: 11, color: "var(--text-tertiary)" }}>pipeline value</p>
               </div>
-            </article>
-          );
-        })}
+              <button
+                onClick={stableRefresh}
+                disabled={isLoading}
+                style={{
+                  border: "1.5px solid var(--border-default)",
+                  borderRadius: "var(--radius-button)",
+                  padding: "8px 16px",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  color: "var(--text-primary)",
+                  background: "var(--bg-input)",
+                  cursor: "pointer",
+                  opacity: isLoading ? 0.5 : 1,
+                }}
+              >
+                {isLoading ? "Refreshing…" : "Refresh"}
+              </button>
+            </div>
+          </div>
+          {error ? (
+            <p className="mt-4 rounded-[18px] px-4 py-3 text-sm" style={{ border: "1px solid var(--accent-pink-border)", background: "var(--accent-pink-bg)", color: "var(--text-primary)" }}>
+              {error}
+            </p>
+          ) : null}
         </section>
+
+        {/* Kanban board — horizontal scroll for all 8 stages */}
+        <div style={{ overflowX: "auto", paddingBottom: 8 }}>
+          <div style={{ display: "flex", gap: 16, minWidth: "max-content" }}>
+            {DEAL_STAGE_ORDER.map((stage) => {
+              const stageDeals = deals.filter((deal) => deal.stage === stage);
+              const colors = STAGE_COLORS[stage] ?? STAGE_COLORS.discovered;
+              const label = STAGE_LABELS[stage] ?? stage;
+
+              return (
+                <article
+                  key={stage}
+                  style={{
+                    width: 240,
+                    flexShrink: 0,
+                    borderRadius: "var(--radius-card)",
+                    border: "1px solid var(--border-default)",
+                    background: "var(--bg-canvas)",
+                    padding: 16,
+                  }}
+                >
+                  {/* Stage header */}
+                  <div className="flex items-center justify-between" style={{ marginBottom: 12 }}>
+                    <div className="flex items-center gap-2">
+                      <span
+                        style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          background: colors.dot,
+                          display: "inline-block",
+                          flexShrink: 0,
+                        }}
+                      />
+                      <h3 style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", margin: 0 }}>{label}</h3>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        padding: "2px 8px",
+                        borderRadius: 99,
+                        background: stageDeals.length > 0 ? colors.bg : "var(--bg-input)",
+                        color: stageDeals.length > 0 ? colors.text : "var(--text-tertiary)",
+                        border: `1px solid ${stageDeals.length > 0 ? colors.border : "var(--border-default)"}`,
+                      }}
+                    >
+                      {stageDeals.length}
+                    </span>
+                  </div>
+
+                  {/* Deal cards */}
+                  <div className="space-y-3">
+                    {stageDeals.map((deal) => (
+                      <DealCard key={deal.id} deal={deal} colors={colors} anchorId={`deal-${deal.id}`} />
+                    ))}
+
+                    {stageDeals.length === 0 ? (
+                      <div
+                        style={{
+                          border: "1px dashed var(--border-default)",
+                          borderRadius: "var(--radius-button)",
+                          padding: "14px 12px",
+                          fontSize: 12,
+                          color: "var(--text-tertiary)",
+                          lineHeight: 1.6,
+                        }}
+                      >
+                        {isLoading ? (
+                          "Loading…"
+                        ) : stage === "discovered" ? (
+                          <Link href="/dashboard" style={{ color: "var(--accent-blue)", fontWeight: 600 }}>
+                            Ask Indyfren to scan →
+                          </Link>
+                        ) : (
+                          "Nothing here yet."
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </DashboardAuthGate>
+  );
+}
+
+function DealCard({
+  deal,
+  colors,
+  anchorId,
+}: {
+  deal: DashboardDeal;
+  colors: { bg: string; text: string; border: string; dot: string };
+  anchorId?: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  const activeValue = deal.actual_value_cents ?? deal.estimated_value_cents;
+  const isActual = deal.actual_value_cents != null;
+
+  return (
+    <div
+      id={anchorId}
+      style={{
+        borderRadius: "var(--radius-button)",
+        border: `1px solid ${colors.border}`,
+        background: "var(--bg-surface)",
+        padding: 12,
+        scrollMarginTop: 80,
+      }}
+    >
+      {/* Header row */}
+      <div className="flex items-start justify-between gap-2">
+        <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", margin: 0, flex: 1 }}>
+          {deal.brand_name}
+        </p>
+        {activeValue ? (
+          <p style={{ fontSize: 13, fontWeight: 700, color: colors.text, flexShrink: 0 }}>
+            {isActual ? "" : "~"}{formatCurrency(activeValue)}
+          </p>
+        ) : null}
+      </div>
+
+      {/* Brand contact */}
+      {deal.brand_contact_name ? (
+        <p style={{ fontSize: 11, color: "var(--text-tertiary)", margin: "3px 0 0" }}>
+          {deal.brand_contact_name}
+          {deal.brand_contact_email ? ` · ${deal.brand_contact_email}` : ""}
+        </p>
+      ) : null}
+
+      {/* Fit score */}
+      {deal.fit_score != null ? (
+        <div style={{ marginTop: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 3 }}>
+            <span style={{ fontSize: 10, color: "var(--text-tertiary)" }}>Fit</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: colors.text }}>{deal.fit_score}%</span>
+          </div>
+          <div style={{ height: 3, borderRadius: 99, background: "var(--border-default)", overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${deal.fit_score}%`,
+                borderRadius: 99,
+                background: colors.dot,
+                transition: "width 0.4s ease",
+              }}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {/* Notes */}
+      {deal.notes ? (
+        <p
+          style={{
+            fontSize: 11,
+            color: "var(--text-tertiary)",
+            margin: "6px 0 0",
+            overflow: "hidden",
+            display: "-webkit-box",
+            WebkitLineClamp: expanded ? undefined : 2,
+            WebkitBoxOrient: "vertical",
+          }}
+        >
+          {deal.notes}
+        </p>
+      ) : null}
+
+      {/* Response text */}
+      {deal.response_text ? (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "8px 10px",
+            borderRadius: "var(--radius-chip)",
+            background: "var(--accent-green-bg)",
+            border: "1px solid var(--accent-green-border)",
+          }}
+        >
+          <p style={{ fontSize: 10, fontWeight: 600, color: "var(--accent-green-text)", marginBottom: 3 }}>
+            Brand replied{deal.responded_at ? ` · ${formatDashboardDateTime(deal.responded_at)}` : ""}
+          </p>
+          <p
+            style={{
+              fontSize: 11,
+              color: "var(--text-primary)",
+              margin: 0,
+              overflow: "hidden",
+              display: "-webkit-box",
+              WebkitLineClamp: expanded ? undefined : 3,
+              WebkitBoxOrient: "vertical",
+            }}
+          >
+            {deal.response_text}
+          </p>
+        </div>
+      ) : null}
+
+      {/* Contract notes */}
+      {deal.contract_notes && expanded ? (
+        <div
+          style={{
+            marginTop: 8,
+            padding: "8px 10px",
+            borderRadius: "var(--radius-chip)",
+            background: "var(--bg-canvas)",
+            border: "1px solid var(--border-default)",
+          }}
+        >
+          <p style={{ fontSize: 10, fontWeight: 600, color: "var(--text-tertiary)", marginBottom: 3 }}>Contract notes</p>
+          <p style={{ fontSize: 11, color: "var(--text-primary)", margin: 0 }}>{deal.contract_notes}</p>
+        </div>
+      ) : null}
+
+      {/* Pitch status */}
+      {deal.pitch_sent_at && expanded ? (
+        <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
+          Pitch sent {formatDashboardDateTime(deal.pitch_sent_at)}
+        </p>
+      ) : null}
+
+      {/* Expand toggle */}
+      {(deal.pitch_text || deal.contract_notes || deal.pitch_sent_at || (deal.notes?.length ?? 0) > 80 || (deal.response_text?.length ?? 0) > 100) ? (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          style={{
+            marginTop: 6,
+            fontSize: 10,
+            color: colors.text,
+            background: "none",
+            border: "none",
+            cursor: "pointer",
+            padding: 0,
+            fontWeight: 500,
+          }}
+        >
+          {expanded ? "Show less ↑" : "Show more ↓"}
+        </button>
+      ) : null}
+
+      {/* Updated timestamp */}
+      <p style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 6 }}>
+        Updated {formatDashboardDateTime(deal.updated_at)}
+      </p>
+    </div>
   );
 }

@@ -1,3 +1,6 @@
+import type { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index.js";
+import type { findService as FindServiceFn } from "./x402-registry.js";
+
 export type AutonomyLevel = "autonomous" | "hybrid";
 export type CostCategory = "free" | "mpp" | "platform-api";
 
@@ -14,6 +17,10 @@ export interface AgentTool {
 export interface ToolContext {
   creatorId: string;
   mppFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  /** MCP client for calling tools on connected MCP servers (optional) */
+  mcpClient?: MCPClient;
+  /** Discover x402 services by capability category (optional) */
+  findService?: typeof FindServiceFn;
 }
 
 export interface ToolResult {

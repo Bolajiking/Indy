@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif; background:#f5f5f5; padding:32px; }
+
+  .mockup-frame { background:#fff; border-radius:16px; overflow:hidden; max-width:1000px; margin:0 auto 32px; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+
+  /* Tooltip system */
+  .icon-btn { position:relative; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; transition:background 0.15s,transform 0.1s; }
+  .icon-btn:hover { transform:scale(1.05); }
+  .icon-btn .tip { position:absolute; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%) translateY(4px); background:#1a1a2e; color:#fff; font-size:11px; font-weight:500; padding:5px 10px; border-radius:6px; white-space:nowrap; opacity:0; pointer-events:none; transition:opacity 0.15s,transform 0.15s; z-index:10; }
+  .icon-btn .tip::after { content:''; position:absolute; top:100%; left:50%; transform:translateX(-50%); border:4px solid transparent; border-top-color:#1a1a2e; }
+  .icon-btn:hover .tip { opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* Nav tab hover */
+  .nav-tab { font-size:13px; font-weight:500; color:#555; padding:6px 16px; border-radius:8px; cursor:pointer; transition:background 0.15s,color 0.15s; position:relative; }
+  .nav-tab:hover { background:#F5F5F5; color:#000; }
+  .nav-tab.active { font-weight:600; color:#FF2D78; background:rgba(255,45,120,0.08); }
+
+  /* Quick prompt hover */
+  .qp { background:#fff; border-radius:8px; padding:6px 12px; font-size:12px; font-weight:500; cursor:pointer; transition:background 0.15s,border-color 0.15s,transform 0.1s; display:inline-flex; align-items:center; gap:5px; }
+  .qp:hover { transform:translateY(-1px); }
+  .qp.pink { border:1.5px solid rgba(255,45,120,0.2); color:#FF2D78; }
+  .qp.pink:hover { background:rgba(255,45,120,0.05); border-color:rgba(255,45,120,0.35); }
+  .qp.blue { border:1.5px solid rgba(45,124,246,0.2); color:#2D7CF6; }
+  .qp.blue:hover { background:rgba(45,124,246,0.05); border-color:rgba(45,124,246,0.35); }
+
+  /* CTA buttons */
+  .btn-primary { background:#2D7CF6; color:#fff; border:none; border-radius:10px; padding:10px 20px; font-size:13px; font-weight:600; cursor:pointer; transition:background 0.15s,transform 0.1s; display:inline-flex; align-items:center; gap:6px; }
+  .btn-primary:hover { background:#1B6AE0; transform:translateY(-1px); }
+  .btn-secondary { border:1.5px solid #DCDCDC; background:transparent; border-radius:10px; padding:10px 20px; font-size:13px; font-weight:500; color:#000; cursor:pointer; transition:border-color 0.15s,background 0.15s,transform 0.1s; display:inline-flex; align-items:center; gap:6px; }
+  .btn-secondary:hover { border-color:#aaa; background:#FAFAFA; transform:translateY(-1px); }
+
+  /* Link hover */
+  .link-action { font-size:12px; color:#2D7CF6; font-weight:500; cursor:pointer; transition:color 0.15s; }
+  .link-action:hover { color:#1B6AE0; text-decoration:underline; }
+
+  /* Opp card hover */
+  .opp-card { padding:12px 14px; border-radius:10px; margin-bottom:8px; cursor:pointer; transition:background 0.15s,transform 0.1s; }
+  .opp-card:hover { transform:translateY(-1px); }
+  .opp-card.featured { background:rgba(45,124,246,0.04); border:1px solid rgba(45,124,246,0.1); }
+  .opp-card.featured:hover { background:rgba(45,124,246,0.08); }
+  .opp-card.default { border:1px solid #EBEBEB; }
+  .opp-card.default:hover { background:#FAFAFA; }
+
+  /* Activity row hover */
+  .activity-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid #EBEBEB; cursor:pointer; transition:background 0.15s; }
+  .activity-row:last-child { border-bottom:none; }
+  .activity-row:hover { background:rgba(0,0,0,0.015); margin:0 -8px; padding:10px 8px; border-radius:8px; border-bottom-color:transparent; }
+
+  /* Insight card hover */
+  .insight-card { flex:1; padding:20px; border-radius:14px; cursor:pointer; transition:transform 0.15s,box-shadow 0.15s; }
+  .insight-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,0.06); }
+
+  /* Channel tag hover */
+  .channel-tag { border-radius:8px; padding:6px 14px; font-size:12px; font-weight:500; cursor:pointer; transition:transform 0.1s,filter 0.15s; }
+  .channel-tag:hover { transform:scale(1.04); filter:brightness(0.95); }
+
+  /* Approve / revise cards (for the companion selection) */
+  h2.page-title { font-size:20px; font-weight:700; color:#000; margin-bottom:6px; text-align:center; }
+  p.page-sub { font-size:14px; color:#666; margin-bottom:24px; text-align:center; }
+  .actions { display:flex; gap:12px; justify-content:center; margin-top:24px; }
+  .action-card { padding:16px 24px; border-radius:12px; border:1.5px solid #EBEBEB; cursor:pointer; text-align:center; transition:border-color 0.15s,background 0.15s; }
+  .action-card:hover { border-color:#2D7CF6; background:rgba(45,124,246,0.03); }
+  .action-card.selected { border-color:#2D7CF6; background:rgba(45,124,246,0.06); }
+  .action-card h4 { font-size:14px; font-weight:600; margin-bottom:4px; }
+  .action-card p { font-size:12px; color:#666; }
+
+  /* SVG icons */
+  .ico { width:16px; height:16px; display:inline-block; vertical-align:middle; }
+  .ico-sm { width:14px; height:14px; }
+</style>
+</head>
+<body>
+
+<h2 class="page-title">Dashboard — Icon System & Hover States</h2>
+<p class="page-sub">Minimal SVG icons on buttons and nav. Every interactive element shows info on hover via tooltips or state changes.</p>
+
+<div class="mockup-frame">
+  <!-- TOP NAV -->
+  <div style="height:56px;padding:0 32px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #EBEBEB;">
+    <div style="display:flex;align-items:center;gap:32px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <div style="width:28px;height:28px;border-radius:8px;background:linear-gradient(135deg,#FF2D78,#FF6B9D);display:flex;align-items:center;justify-content:center;">
+          <span style="color:#fff;font-size:13px;font-weight:700;">i</span>
+        </div>
+        <span style="font-size:15px;font-weight:700;color:#000;letter-spacing:-0.3px;">indyfren</span>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;">
+        <div class="nav-tab active">
+          <svg class="ico-sm" style="margin-right:4px;vertical-align:-2px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5v3.5l2.5 1.5"/></svg>
+          Today
+        </div>
+        <div class="nav-tab">
+          <svg class="ico-sm" style="margin-right:4px;vertical-align:-2px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12"/></svg>
+          Deals
+        </div>
+        <div class="nav-tab">
+          <svg class="ico-sm" style="margin-right:4px;vertical-align:-2px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2.5" width="10" height="11" rx="1.5"/><path d="M6 6h4M6 8.5h4M6 11h2"/></svg>
+          Wallet
+        </div>
+        <div class="nav-tab">
+          <svg class="ico-sm" style="margin-right:4px;vertical-align:-2px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5V7M8 12.5V3.5M12 12.5V5.5"/></svg>
+          Reports
+        </div>
+        <div class="nav-tab">
+          <svg class="ico-sm" style="margin-right:4px;vertical-align:-2px;" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="2.5"/><path d="M13.5 8a5.5 5.5 0 01-.4 2l.9 1.5-1.5.9-1.2-.7a5.5 5.5 0 01-1.8.8L9 14H7l-.5-1.5a5.5 5.5 0 01-1.8-.8l-1.2.7-1.5-.9.9-1.5A5.5 5.5 0 012.5 8c0-.7.1-1.4.4-2L2 4.5 3.5 3.6l1.2.7a5.5 5.5 0 011.8-.8L7 2h2l.5 1.5a5.5 5.5 0 011.8.8l1.2-.7 1.5.9-.9 1.5c.3.6.4 1.3.4 2z"/></svg>
+          Settings
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <!-- Notification bell with tooltip -->
+      <div class="icon-btn" style="width:36px;height:36px;border-radius:10px;background:#F5F5F5;">
+        <span class="tip">Notifications</span>
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#555" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6a4 4 0 018 0c0 4 2 5 2 5H2s2-1 2-5"/><path d="M6.5 13a1.5 1.5 0 003 0"/></svg>
+      </div>
+      <!-- Search with tooltip -->
+      <div class="icon-btn" style="width:36px;height:36px;border-radius:10px;background:#F5F5F5;">
+        <span class="tip">Search ⌘K</span>
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#555" stroke-width="1.5" stroke-linecap="round"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14"/></svg>
+      </div>
+      <!-- Avatar with tooltip -->
+      <div class="icon-btn" style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#2D7CF6,#6BA3FF);">
+        <span class="tip">Bolaji — Profile</span>
+        <span style="color:#fff;font-size:12px;font-weight:600;">B</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE CONTENT -->
+  <div style="padding:32px;">
+
+    <!-- HERO -->
+    <div style="background:linear-gradient(135deg,rgba(255,45,120,0.05),rgba(45,124,246,0.05));border-radius:16px;padding:24px;margin-bottom:24px;">
+      <p style="font-size:28px;font-weight:700;color:#000;margin:0 0 8px;letter-spacing:-0.4px;line-height:1.15;">Good morning, Bolaji</p>
+      <p style="font-size:14px;color:#666;margin:0 0 20px;line-height:1.5;">
+        <span style="color:#FF2D78;font-weight:600;">1 approval</span> waiting ·
+        <span style="color:#2D7CF6;font-weight:600;">2 follow-ups</span> in motion ·
+        wallet ready
+      </p>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-primary">
+          <svg class="ico-sm" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5l4 4L13.5 3.5"/></svg>
+          Review approvals
+        </button>
+        <button class="btn-secondary">
+          <svg class="ico-sm" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3l2 2"/></svg>
+          See opportunities
+        </button>
+      </div>
+    </div>
+
+    <!-- COMMAND BAR -->
+    <div style="background:#F5F5F5;border-radius:12px;height:46px;margin-bottom:24px;display:flex;align-items:center;padding:0 16px;cursor:pointer;border:1.5px solid transparent;transition:border-color 0.15s;" onmouseover="this.style.borderColor='#DCDCDC'" onmouseout="this.style.borderColor='transparent'">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#AEAEB2" stroke-width="1.5" style="margin-right:8px;"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
+      <span style="color:#AEAEB2;font-size:13px;flex:1;">Search or ask Indyfren anything...</span>
+      <span style="background:rgba(255,45,120,0.1);color:#FF2D78;font-size:11px;font-weight:600;padding:4px 10px;border-radius:6px;">⌘K</span>
+    </div>
+
+    <!-- WORKSPACE LABEL + DIVIDER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <p style="font-size:13px;font-weight:600;color:#000;margin:0;">Workspace</p>
+    </div>
+    <div style="height:1px;background:#EBEBEB;margin-bottom:20px;"></div>
+
+    <!-- TWO COLUMN -->
+    <div style="display:flex;gap:24px;">
+
+      <!-- CHAT -->
+      <div style="flex:1;">
+        <div style="background:#FAFAFA;border-radius:14px;padding:20px;min-height:380px;border:1px solid #EBEBEB;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="width:8px;height:8px;border-radius:50%;background:#34C759;"></div>
+              <p style="font-size:14px;font-weight:600;color:#000;margin:0;">Chat with Indyfren</p>
+            </div>
+            <!-- Thread icon-btn with tooltip -->
+            <div class="icon-btn" style="width:28px;height:28px;border-radius:7px;background:#EBEBEB;">
+              <span class="tip">View thread history</span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="#777" stroke-width="1.5" stroke-linecap="round"><path d="M3 4h10M3 8h6M3 12h8"/></svg>
+            </div>
+          </div>
+
+          <!-- Quick prompts with icons -->
+          <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <div class="qp pink">
+              <svg class="ico-sm" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5v3.5l2.5 1.5"/></svg>
+              Plan my day
+            </div>
+            <div class="qp blue">
+              <svg class="ico-sm" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12"/></svg>
+              Check deals
+            </div>
+            <div class="qp blue">
+              <svg class="ico-sm" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2.5" width="10" height="11" rx="1.5"/><path d="M6 6h4M6 8.5h4"/></svg>
+              Wallet activity
+            </div>
+            <div class="qp pink">
+              <svg class="ico-sm" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2L7 9M14 2l-4 12-3-5-5-3z"/></svg>
+              Draft reply
+            </div>
+          </div>
+
+          <!-- Message -->
+          <div style="background:#fff;border-radius:12px;padding:14px;border:1px solid #EBEBEB;margin-bottom:12px;">
+            <p style="font-size:13px;color:#000;margin:0 0 6px;line-height:1.55;">You have a <span style="color:#2D7CF6;font-weight:600;">$2,400 deal from Nike</span> waiting for review. I've flagged the deliverable timeline — it's tight but doable if you start content planning this week.</p>
+            <span style="font-size:11px;color:#AEAEB2;">Indyfren · 2 min ago</span>
+          </div>
+
+          <!-- Approval -->
+          <div style="background:linear-gradient(135deg,#1a1a2e,#16213e);border-radius:12px;padding:14px;margin-bottom:12px;">
+            <p style="font-size:11px;color:rgba(255,255,255,0.45);margin:0 0 6px;letter-spacing:0.3px;">APPROVAL NEEDED</p>
+            <p style="font-size:13px;color:#fff;margin:0 0 12px;font-weight:500;">Send follow-up to Nike contact</p>
+            <div style="display:flex;gap:8px;">
+              <button style="background:#34C759;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:5px;transition:background 0.15s;" onmouseover="this.style.background='#2DB84E'" onmouseout="this.style.background='#34C759'">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5l4 4L13.5 3.5"/></svg>
+                Approve
+              </button>
+              <button style="background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.7);border:none;border-radius:8px;padding:7px 16px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.15)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+                Skip
+              </button>
+            </div>
+          </div>
+
+          <!-- Input -->
+          <div style="background:#fff;border:1.5px solid #E0E0E0;border-radius:12px;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;transition:border-color 0.15s;" onmouseover="this.style.borderColor='#2D7CF6'" onmouseout="this.style.borderColor='#E0E0E0'">
+            <span style="font-size:13px;color:#C7C7CC;">Ask Indyfren...</span>
+            <div class="icon-btn" style="width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#2D7CF6,#5B9BFF);">
+              <span class="tip">Send message</span>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M8 12V4M5 7l3-3 3 3"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SUPPORT RAIL -->
+      <div style="flex:1;">
+        <!-- Opportunities -->
+        <div style="margin-bottom:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12"/></svg>
+              <p style="font-size:13px;font-weight:600;color:#000;margin:0;">Opportunities</p>
+            </div>
+            <span class="link-action">View all →</span>
+          </div>
+          <div class="opp-card featured">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <p style="font-size:13px;font-weight:500;color:#000;margin:0;">Nike — Content series</p>
+                <p style="font-size:12px;color:#8E8E93;margin:3px 0 0;">Review stage</p>
+              </div>
+              <span style="font-size:14px;font-weight:700;color:#2D7CF6;">$2,400</span>
+            </div>
+          </div>
+          <div class="opp-card default">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div>
+                <p style="font-size:13px;font-weight:500;color:#000;margin:0;">Spotify — Playlist feature</p>
+                <p style="font-size:12px;color:#8E8E93;margin:3px 0 0;">Outreach</p>
+              </div>
+              <span style="font-size:14px;font-weight:600;color:#000;">$800</span>
+            </div>
+          </div>
+        </div>
+
+        <div style="height:1px;background:#EBEBEB;margin-bottom:24px;"></div>
+
+        <!-- Activity -->
+        <div style="margin-bottom:24px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 8h3l2-5 2 10 2-5h3"/></svg>
+              <p style="font-size:13px;font-weight:600;color:#000;margin:0;">Recent activity</p>
+            </div>
+            <span class="link-action">View all →</span>
+          </div>
+          <div class="activity-row">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(52,199,89,0.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#34C759" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 8.5l4 4L13.5 3.5"/></svg>
+            </div>
+            <div style="flex:1;">
+              <p style="font-size:13px;color:#000;margin:0;">Deal payment received</p>
+              <p style="font-size:12px;color:#8E8E93;margin:3px 0 0;">$1,200 · 3h ago</p>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#AEAEB2" stroke-width="1.5" stroke-linecap="round"><path d="M6 4l4 4-4 4"/></svg>
+          </div>
+          <div class="activity-row">
+            <div style="width:32px;height:32px;border-radius:8px;background:rgba(255,45,120,0.08);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#FF2D78" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3v4h-4"/><path d="M3 8a5 5 0 019-2l1 1"/><path d="M3 13V9h4"/><path d="M13 8a5 5 0 01-9 2l-1-1"/></svg>
+            </div>
+            <div style="flex:1;">
+              <p style="font-size:13px;color:#000;margin:0;">YouTube connected</p>
+              <p style="font-size:12px;color:#8E8E93;margin:3px 0 0;">5h ago</p>
+            </div>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#AEAEB2" stroke-width="1.5" stroke-linecap="round"><path d="M6 4l4 4-4 4"/></svg>
+          </div>
+        </div>
+
+        <div style="height:1px;background:#EBEBEB;margin-bottom:24px;"></div>
+
+        <!-- Channels -->
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v12M10 2v12M2 6h12M2 10h12"/></svg>
+              <p style="font-size:13px;font-weight:600;color:#000;margin:0;">Connected channels</p>
+            </div>
+            <span class="link-action">Manage →</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span class="channel-tag" style="background:rgba(52,199,89,0.1);color:#2E7D32;">YouTube</span>
+            <span class="channel-tag" style="background:rgba(255,45,120,0.08);color:#FF2D78;">Instagram</span>
+            <span class="channel-tag" style="background:#F5F5F5;color:#8E8E93;">+ TikTok</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- AT A GLANCE LABEL + DIVIDER -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:32px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5V7M8 12.5V3.5M12 12.5V5.5"/></svg>
+        <p style="font-size:13px;font-weight:600;color:#000;margin:0;">At a glance</p>
+      </div>
+    </div>
+    <div style="height:1px;background:#EBEBEB;margin-bottom:20px;"></div>
+
+    <!-- INSIGHT CARDS -->
+    <div style="display:flex;gap:16px;">
+      <div class="insight-card" style="background:rgba(52,199,89,0.04);border:1px solid rgba(52,199,89,0.1);">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#34C759" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 1v14M4.5 4L8 1l3.5 3"/></svg>
+          <p style="font-size:12px;color:#8E8E93;margin:0;">Total earned</p>
+        </div>
+        <p style="font-size:26px;font-weight:700;color:#000;margin:0;letter-spacing:-0.3px;">$4,200</p>
+        <p style="font-size:12px;color:#34C759;font-weight:600;margin:6px 0 0;">+12% this month</p>
+      </div>
+      <div class="insight-card" style="background:rgba(255,45,120,0.04);border:1px solid rgba(255,45,120,0.1);">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#FF2D78" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="10" rx="1.5"/><path d="M2 6.5h12"/></svg>
+          <p style="font-size:12px;color:#8E8E93;margin:0;">Active deals</p>
+        </div>
+        <p style="font-size:26px;font-weight:700;color:#000;margin:0;letter-spacing:-0.3px;">3</p>
+        <p style="font-size:12px;color:#FF2D78;font-weight:500;margin:6px 0 0;">1 needs review</p>
+      </div>
+      <div class="insight-card" style="background:rgba(45,124,246,0.04);border:1px solid rgba(45,124,246,0.1);">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px;">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#2D7CF6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="2.5" width="10" height="11" rx="1.5"/><path d="M6 6h4M6 8.5h4M6 11h2"/></svg>
+          <p style="font-size:12px;color:#8E8E93;margin:0;">Wallet balance</p>
+        </div>
+        <p style="font-size:26px;font-weight:700;color:#000;margin:0;letter-spacing:-0.3px;">$820</p>
+        <p style="font-size:12px;color:#2D7CF6;font-weight:500;margin:6px 0 0;">USDC on Base</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Approval actions -->
+<div class="actions">
+  <div class="action-card" onclick="this.classList.toggle('selected');window.__superpowers?.recordChoice?.('approve')">
+    <h4>Approve this design</h4>
+    <p>Icons, tooltips, hover states, spacing — all good</p>
+  </div>
+  <div class="action-card" onclick="this.classList.toggle('selected');window.__superpowers?.recordChoice?.('revise')">
+    <h4>Request changes</h4>
+    <p>Tell me what to adjust in the terminal</p>
+  </div>
+</div>
+
+</body>
+</html>

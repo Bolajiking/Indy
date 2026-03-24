@@ -2,6 +2,7 @@ import { supabase } from "../client.js";
 
 export interface Creator {
   id: string;
+  privy_user_id: string | null;
   telegram_chat_id: string | null;
   whatsapp_phone: string | null;
   display_name: string;
@@ -69,6 +70,72 @@ export async function createCreator(
   }
 
   return data;
+}
+
+export async function getCreatorById(id: string): Promise<Creator | null> {
+  const { data, error } = await supabase
+    .from("creators")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return null;
+    }
+    throw error;
+  }
+
+  return data;
+}
+
+export async function getCreatorByPrivyUserId(
+  privyUserId: string
+): Promise<Creator | null> {
+  const { data, error } = await supabase
+    .from("creators")
+    .select("*")
+    .eq("privy_user_id", privyUserId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") {
+      return null;
+    }
+    throw error;
+  }
+
+  return data;
+}
+
+export async function listCreatorsForMorningScans(): Promise<
+  Array<Pick<Creator, "id" | "niche">>
+> {
+  const { data, error } = await supabase
+    .from("creators")
+    .select("id, niche")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function listCreatorsForMorningBriefs(): Promise<
+  Array<Pick<Creator, "id" | "telegram_chat_id" | "whatsapp_phone">>
+> {
+  const { data, error } = await supabase
+    .from("creators")
+    .select("id, telegram_chat_id, whatsapp_phone")
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
 }
 
 export async function updateCreator(

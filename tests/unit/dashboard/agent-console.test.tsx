@@ -131,7 +131,7 @@ describe("AgentConsole hydration", () => {
     await flushEffects();
 
     const refreshButton = Array.from(container.querySelectorAll("button")).find((button) =>
-      button.textContent?.includes("Refresh thread")
+      button.textContent?.includes("Refresh")
     );
 
     expect(refreshButton).toBeTruthy();

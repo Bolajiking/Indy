@@ -1,29 +1,72 @@
 "use client";
 
-import React from "react";
-
+import React, { useCallback, useEffect, useMemo, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AgentConsole } from "@/components/agent-console";
 import { CommandBar } from "@/components/command-bar";
 import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
 import { DashboardHomeHero } from "@/components/dashboard-home-hero";
 import { DashboardSupportRail } from "@/components/dashboard-support-rail";
 import { IconBarChart, IconList } from "@/components/icons";
+import { fetchDeals } from "@/lib/api";
 import {
   EMPTY_HOME_DATA,
   buildDashboardHomeModel,
   fetchDashboardHome,
   getAgentConsoleHomeState,
 } from "@/lib/dashboard-home";
+import { subscribeDealsChanged } from "@/lib/deals-sync";
 import { useAuthedQuery } from "@/lib/use-authed-query";
 
-export default function DashboardPage() {
-  const { data, error, isLoading } = useAuthedQuery(fetchDashboardHome, EMPTY_HOME_DATA);
-  const model = buildDashboardHomeModel(data);
-  const agentConsoleState = getAgentConsoleHomeState({
-    isLoading,
-    error,
-    agentState: data.agentState,
-  });
+function DashboardPageInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [initialQuery, setInitialQuery] = useState<string | undefined>(undefined);
+
+  // Read ?q= param or sessionStorage pending query once on mount, then clear
+  useEffect(() => {
+    const qParam = searchParams.get("q");
+    if (qParam) {
+      setInitialQuery(decodeURIComponent(qParam));
+      router.replace("/dashboard");
+      return;
+    }
+    try {
+      const pending = sessionStorage.getItem("indyfren_pending_query");
+      if (pending) {
+        setInitialQuery(pending);
+        sessionStorage.removeItem("indyfren_pending_query");
+      }
+    } catch {}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const { data, error, isLoading, refresh } = useAuthedQuery(fetchDashboardHome, EMPTY_HOME_DATA);
+  const { data: liveDealsList, refresh: refreshDeals } = useAuthedQuery(fetchDeals, []);
+  const model = useMemo(
+    () => buildDashboardHomeModel({ ...data, deals: liveDealsList.length > 0 ? liveDealsList : data.deals }),
+    [data, liveDealsList]
+  );
+
+  // Refresh when user returns to this tab after being away
+  const stableRefresh = useCallback(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        stableRefresh();
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [stableRefresh]);
+
+  // Fast deals-only refresh when the agent surfaces new deals (same-tab via BroadcastChannel)
+  const stableRefreshDeals = useCallback(() => { void refreshDeals(); }, [refreshDeals]);
+  useEffect(() => subscribeDealsChanged(stableRefreshDeals), [stableRefreshDeals]);
+  const agentConsoleState = useMemo(
+    () => getAgentConsoleHomeState({ isLoading, error, agentState: data.agentState }),
+    [isLoading, error, data.agentState]
+  );
 
   return (
     <DashboardAuthGate>
@@ -68,6 +111,8 @@ export default function DashboardPage() {
             <AgentConsole
               initialState={agentConsoleState.initialState}
               isHydrated={agentConsoleState.isHydrated}
+              onDealsChanged={() => { void refresh(); }}
+              initialQuery={initialQuery}
             />
             <DashboardSupportRail model={model.supportRail} />
           </section>
@@ -99,5 +144,13 @@ export default function DashboardPage() {
         </section>
       </div>
     </DashboardAuthGate>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <DashboardPageInner />
+    </Suspense>
   );
 }
