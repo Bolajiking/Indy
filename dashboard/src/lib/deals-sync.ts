@@ -9,6 +9,14 @@ const CHANNEL_NAME = "indyfren_deals";
 const STORAGE_KEY = "deals_last_updated";
 
 export function broadcastDealsChanged(): void {
+  // Bust sessionStorage caches so the next read fetches fresh data
+  try {
+    sessionStorage.removeItem("indyfren_deals_v1");
+    sessionStorage.removeItem("indyfren_home_v1");
+    sessionStorage.removeItem("indyfren_agent_v1");
+  } catch {
+    // ignore
+  }
   try {
     const channel = new BroadcastChannel(CHANNEL_NAME);
     channel.postMessage({ type: "deals_changed", ts: Date.now() });

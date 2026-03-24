@@ -21,6 +21,8 @@ export interface AgentLoopConfig {
   systemPrompt: string;
   messages: Anthropic.MessageParam[];
   toolContext: ToolContext | null;
+  /** Creator ID — required so free tools (create_deal, etc.) can run even without a wallet */
+  creatorId?: string;
   maxSteps?: number;
   /** Called after every successful autonomous tool use so callers can track cost. */
   onToolUsed?: (toolName: string, costCents: number) => void;
@@ -66,6 +68,20 @@ async function callClaude(
 
 export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopResult> {
   const { systemPrompt, toolContext, maxSteps = AGENT.MAX_STEPS_PER_TASK, onToolUsed } = config;
+
+  // Build a minimal context for free tools when no wallet is configured.
+  // Free tools (create_deal, update_deal_stage, web search, etc.) only need creatorId —
+  // they never call mppFetch. This lets deal persistence work even before wallet setup.
+  const freeToolContext: ToolContext | null = toolContext ?? (
+    config.creatorId
+      ? {
+          creatorId: config.creatorId,
+          mppFetch: async () => {
+            throw new Error("No wallet configured for paid tool");
+          },
+        }
+      : null
+  );
 
   const tools = getToolsForLLM();
   const messages = [...config.messages];
@@ -131,7 +147,10 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
         };
       }
 
-      if (!toolContext) {
+      // For paid tools, require a full wallet context.
+      // For free tools, use the minimal freeToolContext (only needs creatorId).
+      const execContext = tool.costCategory === "free" ? freeToolContext : toolContext;
+      if (!execContext) {
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
@@ -142,7 +161,7 @@ export async function runAgentLoop(config: AgentLoopConfig): Promise<AgentLoopRe
       }
 
       try {
-        const result = await tool.execute(toolUse.input as Record<string, unknown>, toolContext);
+        const result = await tool.execute(toolUse.input as Record<string, unknown>, execContext);
         onToolUsed?.(toolUse.name, tool.maxCostPerUseCents);
         toolResults.push({
           type: "tool_result",

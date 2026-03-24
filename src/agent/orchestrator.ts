@@ -16,6 +16,7 @@ import "./tools/platform-analytics.js";
 import "./tools/media-kit-generator.js";
 import "./tools/browser.js";
 import "./tools/run-skill.js";
+import "./tools/deal-manager.js";
 import { findService } from "./tools/x402-registry.js";
 
 const log = pino({ name: "agent:orchestrator" });
@@ -58,6 +59,8 @@ You also have direct tools:
 - generate_media_kit: Create visual media kits
 - send_email: Send pitches/emails (requires approval)
 - enrich_brand_data: Enrich brand data via x402
+- create_deal: Save a brand opportunity to the creator's pipeline (use whenever a deal/opportunity is identified)
+- update_deal_stage: Move a deal to a new stage and record pitch text, responses, or contract notes
 
 ## Your Personality
 - Direct, no-BS, results-oriented
@@ -71,7 +74,9 @@ You also have direct tools:
 - Always explain what you're doing and why
 - If a task costs money (uses paid APIs), mention the cost
 - When showing deals, include fit score and estimated value
-- Prefer run_skill for specialized tasks — skill sub-agents are better at their domain`;
+- Prefer run_skill for specialized tasks — skill sub-agents are better at their domain
+- ALWAYS call create_deal when you identify a brand opportunity — never just list deals as text without saving them
+- ALWAYS call update_deal_stage when a deal's status changes (pitch sent, response received, etc.)`;
 
 export interface AgentResponse {
   text: string;
@@ -183,6 +188,7 @@ export async function runAgent(
     systemPrompt: SYSTEM_PROMPT,
     messages,
     toolContext,
+    creatorId,
     maxSteps: AGENT.MAX_STEPS_PER_TASK,
     onToolUsed: (_toolName, costCents) => {
       totalCostCents += costCents;

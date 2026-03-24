@@ -102,6 +102,7 @@ export async function runSkill(input: SkillRunInput): Promise<AgentResponse> {
         },
       ],
       toolContext,
+      creatorId,
       maxSteps: 10,
     });
 
