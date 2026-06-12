@@ -1,36 +1,141 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState, Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AgentConsole } from "@/components/agent-console";
-import { CommandBar } from "@/components/command-bar";
-import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
-import { DashboardHomeHero } from "@/components/dashboard-home-hero";
-import { DashboardSupportRail } from "@/components/dashboard-support-rail";
-import { IconBarChart, IconList } from "@/components/icons";
-import { approveAgentAction, fetchDeals, skipAgentAction } from "@/lib/api";
-import {
-  EMPTY_HOME_DATA,
-  buildDashboardHomeModel,
-  fetchDashboardHome,
-  getAgentConsoleHomeState,
-} from "@/lib/dashboard-home";
-import { subscribeDealsChanged } from "@/lib/deals-sync";
-import { useAuthedQuery } from "@/lib/use-authed-query";
-import { useAuth } from "@/lib/privy";
 
-function DashboardPageInner() {
+import { AgentHome } from "@/components/cf/agent-home";
+import { useShell } from "@/components/cf/shell";
+import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
+import { useAuth } from "@/lib/auth-context";
+import {
+  clearPendingConnectionToolkit,
+  readPendingConnection,
+  writeRecentConnectionSuccess,
+  type ConnectionOrigin,
+} from "@/lib/connection-success";
+import type { SettingsPane } from "@/components/cf/shell-context";
+
+const SETTINGS_PANES: SettingsPane[] = [
+  "account",
+  "subscription",
+  "wallet",
+  "reports",
+  "connections",
+  "channels",
+  "appearance",
+  "referrals",
+  "usage",
+];
+
+function isSettingsPane(value: string): value is SettingsPane {
+  return SETTINGS_PANES.includes(value as SettingsPane);
+}
+
+function TodayInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { accessToken } = useAuth();
-  const [initialQuery, setInitialQuery] = useState<string | undefined>(undefined);
+  const { stage } = useAuth();
+  const { openSettings } = useShell();
+  const [initialQuery, setInitialQuery] = useState<string | undefined>(
+    undefined,
+  );
+  const [resetKey, setResetKey] = useState(0);
 
-  // Read ?q= param or sessionStorage pending query once on mount, then clear
+  // Process the OAuth return synchronously on first render — before AgentHome
+  // mounts — so chat connect cards pick up the success hint immediately.
+  // Covers both callback shapes: Composio (?connected= / ?status=success /
+  // ?connected_account_id=) and native platform OAuth (?oauth=success&platform=).
+  const [oauthReturn] = useState<{
+    connectedToolkit: string | null;
+    origin: ConnectionOrigin;
+    callbackPresent: boolean;
+  }>(() => {
+    const callbackSucceeded =
+      searchParams.get("status") === "success" ||
+      searchParams.has("connected_account_id") ||
+      searchParams.get("oauth") === "success";
+    const callbackPresent =
+      callbackSucceeded ||
+      searchParams.has("connected") ||
+      searchParams.has("oauth");
+    const pending = readPendingConnection();
+    const connectedToolkit =
+      searchParams.get("connected") ??
+      (searchParams.get("oauth") === "success"
+        ? searchParams.get("platform")
+        : null) ??
+      (callbackSucceeded ? (pending?.toolkit ?? null) : null);
+    if (connectedToolkit) {
+      writeRecentConnectionSuccess(connectedToolkit);
+      clearPendingConnectionToolkit(connectedToolkit);
+    }
+    return {
+      connectedToolkit,
+      origin: pending?.origin ?? "settings",
+      callbackPresent,
+    };
+  });
+
   useEffect(() => {
-    const qParam = searchParams.get("q");
-    if (qParam) {
-      setInitialQuery(decodeURIComponent(qParam));
-      router.replace("/dashboard");
+    const pane =
+      searchParams.get("settings") ??
+      (oauthReturn.callbackPresent ? "connections" : null);
+    if (!pane || stage === "loading") {
+      return;
+    }
+
+    if (
+      (stage === "active" || stage === "wallet_pending") &&
+      isSettingsPane(pane)
+    ) {
+      // Chat-initiated connects show success inline in the chat — don't yank
+      // the creator into the Settings modal. Explicit ?settings= deep links
+      // always open it.
+      const implicitFromChat =
+        !searchParams.get("settings") && oauthReturn.origin === "chat";
+      if (!implicitFromChat) {
+        openSettings(pane);
+      }
+    }
+
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("settings");
+    next.delete("connected");
+    next.delete("status");
+    next.delete("connected_account_id");
+    next.delete("oauth");
+    next.delete("platform");
+    next.delete("error");
+    const query = next.toString();
+    router.replace(`/dashboard${query ? `?${query}` : ""}`);
+  }, [oauthReturn, openSettings, router, searchParams, stage]);
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    const isNew = searchParams.get("new");
+    if (q) {
+      setInitialQuery(decodeURIComponent(q));
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("q");
+      const query = next.toString();
+      router.replace(`/dashboard${query ? `?${query}` : ""}`);
+      return;
+    }
+    if (isNew) {
+      // Clear every creator-scoped chat cache (key form: indyfren_agent_cf_v1:<id>).
+      try {
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+          const key = sessionStorage.key(i);
+          if (key && key.startsWith("indyfren_agent_cf_v1")) {
+            sessionStorage.removeItem(key);
+          }
+        }
+      } catch {}
+      setResetKey((k) => k + 1);
+      const next = new URLSearchParams(searchParams.toString());
+      next.delete("new");
+      const query = next.toString();
+      router.replace(`/dashboard${query ? `?${query}` : ""}`);
       return;
     }
     try {
@@ -40,134 +145,12 @@ function DashboardPageInner() {
         sessionStorage.removeItem("indyfren_pending_query");
       }
     } catch {}
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const { data, error, isLoading, refresh } = useAuthedQuery(fetchDashboardHome, EMPTY_HOME_DATA, "indyfren_home_v1");
-  const { data: liveDealsList, refresh: refreshDeals } = useAuthedQuery(fetchDeals, [], "indyfren_deals_v1");
-  const model = useMemo(
-    () => buildDashboardHomeModel({ ...data, deals: liveDealsList.length > 0 ? liveDealsList : data.deals }),
-    [data, liveDealsList]
-  );
-
-  // Refresh when user returns to this tab after being away
-  const stableRefresh = useCallback(() => { void refresh(); }, [refresh]);
-  useEffect(() => {
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        stableRefresh();
-      }
-    }
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [stableRefresh]);
-
-  // Fast deals-only refresh when the agent surfaces new deals (same-tab via BroadcastChannel)
-  const stableRefreshDeals = useCallback(() => { void refreshDeals(); }, [refreshDeals]);
-  useEffect(() => subscribeDealsChanged(stableRefreshDeals), [stableRefreshDeals]);
-
-  const agentConsoleState = useMemo(
-    () => getAgentConsoleHomeState({ isLoading, error, agentState: data.agentState }),
-    [isLoading, error, data.agentState]
-  );
-
-  // Approve/skip handlers — rail manages its own working/toast state
-  const handleRailApprove = useCallback(async (actionId: string) => {
-    if (!accessToken) return;
-    await approveAgentAction(accessToken, actionId);
-    void refresh();
-    void refreshDeals();
-  }, [accessToken, refresh, refreshDeals]);
-
-  const handleRailSkip = useCallback(async (actionId: string) => {
-    if (!accessToken) return;
-    await skipAgentAction(accessToken, actionId);
-    void refresh();
-  }, [accessToken, refresh]);
 
   return (
     <DashboardAuthGate>
-      <div className="space-y-6">
-        <DashboardHomeHero model={model.hero} />
-
-        <CommandBar />
-
-        <div style={{ height: 1, background: "var(--border-default)", margin: "var(--space-section) 0" }} />
-
-        <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
-          <IconList size={14} className="text-text-tertiary" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Workspace</span>
-        </div>
-
-        {agentConsoleState.showLoadingShell ? (
-          <section className="grid lg:grid-cols-2" style={{ gap: "var(--column-gap)" }}>
-            <article
-              style={{
-                background: "var(--bg-surface)",
-                borderRadius: "var(--radius-card)",
-                border: "1px solid var(--border-default)",
-                padding: 24
-              }}
-            >
-              <p style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Agent workspace</p>
-              <h3 style={{ fontSize: 20, fontWeight: 600, color: "var(--text-primary)", marginTop: 8 }}>
-                Loading your conversation.
-              </h3>
-              <p className="mt-4 max-w-2xl text-sm leading-7" style={{ color: "var(--text-tertiary)" }}>
-                Collecting your latest messages, approvals, and agent context.
-              </p>
-            </article>
-            <DashboardSupportRail
-              model={model.supportRail}
-              onApprove={(id) => { void handleRailApprove(id); }}
-              onSkip={(id) => { void handleRailSkip(id); }}
-            />
-          </section>
-        ) : (
-          <section
-            id="agent-workspace"
-            className="grid lg:grid-cols-2"
-            style={{ gap: "var(--column-gap)" }}
-          >
-            <AgentConsole
-              initialState={agentConsoleState.initialState}
-              isHydrated={agentConsoleState.isHydrated}
-              onDealsChanged={() => { void refresh(); void refreshDeals(); }}
-              initialQuery={initialQuery}
-            />
-            <DashboardSupportRail
-              model={model.supportRail}
-              onApprove={(id) => { void handleRailApprove(id); }}
-              onSkip={(id) => { void handleRailSkip(id); }}
-            />
-          </section>
-        )}
-
-        <div style={{ height: 1, background: "var(--border-default)", margin: "var(--space-section) 0" }} />
-
-        <div className="flex items-center gap-2" style={{ marginBottom: 12 }}>
-          <IconBarChart size={14} className="text-text-tertiary" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>At a glance</span>
-        </div>
-
-        <section className="grid gap-4 md:grid-cols-3">
-          {model.insights.map((insight) => (
-            <article
-              key={insight.label}
-              style={{
-                padding: 18,
-                borderRadius: "var(--radius-card)",
-                border: "1px solid var(--border-default)",
-                background: "var(--bg-canvas)"
-              }}
-            >
-              <p style={{ fontSize: 12, color: "var(--text-tertiary)" }}>{insight.label}</p>
-              <p style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.3px", color: "var(--text-primary)", marginTop: 4 }}>{insight.value}</p>
-              <p style={{ fontSize: 12, color: "var(--text-tertiary)", marginTop: 4 }}>{insight.detail}</p>
-            </article>
-          ))}
-        </section>
-      </div>
+      <AgentHome key={resetKey} initialQuery={initialQuery} />
     </DashboardAuthGate>
   );
 }
@@ -175,7 +158,7 @@ function DashboardPageInner() {
 export default function DashboardPage() {
   return (
     <Suspense fallback={null}>
-      <DashboardPageInner />
+      <TodayInner />
     </Suspense>
   );
 }

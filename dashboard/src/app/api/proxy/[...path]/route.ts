@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+function isTrustedProxyOrigin(req: NextRequest): boolean {
+  if (!MUTATING_METHODS.has(req.method)) {
+    return true;
+  }
+
+  const origin = req.headers.get("Origin");
+  if (!origin) {
+    return true;
+  }
+
+  return origin === req.nextUrl.origin;
+}
 
 /**
  * Proxy all requests from the dashboard to the backend API.
@@ -8,30 +22,41 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
  */
 async function proxyRequest(
   req: NextRequest,
-  { params }: { params: Promise<{ path: string[] }> }
+  { params }: { params: Promise<{ path: string[] }> },
 ) {
+  if (!isTrustedProxyOrigin(req)) {
+    return NextResponse.json(
+      { error: "Untrusted request origin" },
+      { status: 403 },
+    );
+  }
+
   const { path } = await params;
   const targetPath = `/${path.join("/")}`;
   const url = new URL(targetPath, API_BASE);
 
-  // Forward query params
   req.nextUrl.searchParams.forEach((value, key) => {
     url.searchParams.set(key, value);
   });
 
   const headers = new Headers();
-  // Forward auth header if present
   const authHeader = req.headers.get("Authorization");
   if (authHeader) {
     headers.set("Authorization", authHeader);
   }
-  headers.set("Content-Type", req.headers.get("Content-Type") ?? "application/json");
+  headers.set(
+    "Content-Type",
+    req.headers.get("Content-Type") ?? "application/json",
+  );
 
   try {
     const response = await fetch(url.toString(), {
       method: req.method,
       headers,
-      body: req.method !== "GET" && req.method !== "HEAD" ? await req.text() : undefined,
+      body:
+        req.method !== "GET" && req.method !== "HEAD"
+          ? await req.text()
+          : undefined,
     });
 
     const data = await response.text();
@@ -39,14 +64,12 @@ async function proxyRequest(
     return new NextResponse(data, {
       status: response.status,
       headers: {
-        "Content-Type": response.headers.get("Content-Type") ?? "application/json",
+        "Content-Type":
+          response.headers.get("Content-Type") ?? "application/json",
       },
     });
   } catch {
-    return NextResponse.json(
-      { error: "Backend unavailable" },
-      { status: 502 }
-    );
+    return NextResponse.json({ error: "Backend unavailable" }, { status: 502 });
   }
 }
 

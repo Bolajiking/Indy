@@ -51,7 +51,11 @@ export function subscribeDealsChanged(callback: () => void): () => void {
 
   return () => {
     clearTimeout(debounceId);
-    try { channel?.close(); } catch { /* ignore */ }
+    try {
+      channel?.close();
+    } catch {
+      /* ignore */
+    }
     window.removeEventListener("storage", onStorage);
   };
 }

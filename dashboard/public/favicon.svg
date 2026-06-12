@@ -1,10 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <defs>
-    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#FF2D78"/>
-      <stop offset="100%" stop-color="#FF6B9D"/>
-    </linearGradient>
-  </defs>
-  <rect width="32" height="32" rx="8" fill="url(#g)"/>
-  <text x="16" y="22" font-family="system-ui,sans-serif" font-size="18" font-weight="700" fill="white" text-anchor="middle">i</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="32" height="32">
+  <rect width="512" height="512" rx="116" fill="#08153C"/>
+  <g transform="translate(256 256) scale(2.4) translate(-34 -75)">
+    <g stroke="#FFFFFF" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <line x1="12" y1="26" x2="12" y2="86"/>
+      <line x1="12" y1="52" x2="56" y2="52"/>
+      <line x1="12" y1="86" x2="4" y2="132"/>
+      <line x1="12" y1="86" x2="20" y2="132"/>
+    </g>
+    <circle cx="12" cy="18" r="7" fill="#FFFFFF"/>
+    <g stroke="#40ACFF" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <line x1="56" y1="26" x2="56" y2="86"/>
+      <line x1="56" y1="86" x2="48" y2="132"/>
+      <line x1="56" y1="86" x2="64" y2="132"/>
+    </g>
+    <circle cx="56" cy="18" r="7" fill="#40ACFF"/>
+  </g>
 </svg>

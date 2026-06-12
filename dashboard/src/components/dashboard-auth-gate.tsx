@@ -1,195 +1,150 @@
 "use client";
 
-import { DebugAccessTokenPanel } from "@/components/debug-access-token-panel";
-import { OnboardingWizard } from "@/components/onboarding-wizard";
-import { shouldShowDebugAccessTokenPanel } from "@/lib/debug-auth";
-import { useAuth } from "@/lib/privy";
+import { useEffect, useRef, type ReactNode } from "react";
 
-function StateCard({
+import { useAuth } from "@/lib/auth-context";
+import { OnboardingWizard } from "@/components/onboarding-wizard";
+import { Fren, Logo } from "@/components/cf/primitives";
+
+function CenteredGlass({
   eyebrow,
   title,
   detail,
   actionLabel,
   onAction,
-  secondaryLabel,
-  onSecondaryAction,
-  tone = "paper",
+  pose,
 }: {
   eyebrow: string;
   title: string;
   detail: string;
   actionLabel?: string;
   onAction?: () => void | Promise<void>;
-  secondaryLabel?: string;
-  onSecondaryAction?: () => void | Promise<void>;
-  tone?: "paper" | "ink";
+  pose?: string;
 }) {
-  const dark = tone === "ink";
-
   return (
-    <div
-      style={{
-        borderRadius: "var(--radius-hero)",
-        border: "1px solid var(--border-default)",
-        padding: 24,
-        ...(dark
-          ? { background: "var(--gradient-approval)", color: "white" }
-          : { background: "var(--bg-canvas)", color: "var(--text-primary)" }),
-      }}
-    >
-      <p
+    <>
+      <div className="float-tr">
+        <div className="pill-btn" style={{ paddingRight: 18 }}>
+          <Logo size={15} />
+        </div>
+      </div>
+      <div
         style={{
-          fontSize: 12,
-          fontWeight: 600,
-          color: dark ? "rgba(255,255,255,0.5)" : "var(--text-tertiary)",
+          position: "fixed",
+          inset: 0,
+          zIndex: 1,
+          display: "grid",
+          placeItems: "center",
+          padding: 20,
         }}
       >
-        {eyebrow}
-      </p>
-      <h3 style={{ fontSize: 24, fontWeight: 700, marginTop: 8 }}>{title}</h3>
-      <p
-        className="mt-4 max-w-2xl text-sm leading-7"
-        style={{
-          color: dark ? "rgba(255,255,255,0.72)" : "var(--text-tertiary)",
-        }}
-      >
-        {detail}
-      </p>
-
-      {actionLabel || secondaryLabel ? (
-        <div className="mt-6 flex flex-wrap gap-3">
-          {actionLabel ? (
-            <button
-              onClick={() => {
-                void onAction?.();
-              }}
-              className="transition hover:opacity-90"
+        <div
+          className="glass rise"
+          style={{
+            width: "min(440px, 94vw)",
+            padding: "40px 36px",
+            textAlign: "center",
+          }}
+        >
+          {pose && (
+            <div
               style={{
-                background: "var(--accent-blue)",
-                color: "white",
-                borderRadius: "var(--radius-button)",
-                padding: "10px 20px",
-                fontSize: 13,
-                fontWeight: 600,
+                display: "grid",
+                placeItems: "center",
+                marginBottom: 18,
+                height: 92,
               }}
             >
+              <Fren
+                pose={pose}
+                size={96}
+                color="rgb(var(--ink))"
+                colorB="var(--cf-secondary)"
+                sw={20}
+              />
+            </div>
+          )}
+          <div className="eyebrow" style={{ marginBottom: 10 }}>
+            {eyebrow}
+          </div>
+          <h1 className="h-title" style={{ marginBottom: 10 }}>
+            {title}
+          </h1>
+          <p className="h-sub" style={{ maxWidth: 340, margin: "0 auto 26px" }}>
+            {detail}
+          </p>
+          {actionLabel && (
+            <button className="btn-primary" onClick={() => void onAction?.()}>
               {actionLabel}
             </button>
-          ) : null}
-
-          {secondaryLabel ? (
-            <button
-              onClick={() => {
-                void onSecondaryAction?.();
-              }}
-              className="transition"
-              style={
-                dark
-                  ? {
-                      border: "1.5px solid rgba(255,255,255,0.2)",
-                      background: "rgba(255,255,255,0.1)",
-                      color: "white",
-                      borderRadius: "var(--radius-button)",
-                      padding: "10px 20px",
-                      fontSize: 13,
-                      fontWeight: 500,
-                    }
-                  : {
-                      border: "1.5px solid var(--border-light)",
-                      color: "var(--text-primary)",
-                      borderRadius: "var(--radius-button)",
-                      padding: "10px 20px",
-                      fontSize: 13,
-                      fontWeight: 500,
-                    }
-              }
-            >
-              {secondaryLabel}
-            </button>
-          ) : null}
+          )}
         </div>
-      ) : null}
-    </div>
+      </div>
+    </>
   );
 }
 
+export function DashboardAuthGate({ children }: { children: ReactNode }) {
+  const { stage, login, error } = useAuth();
+  const handledLoginHintRef = useRef(false);
 
-export function DashboardAuthGate({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { stage, login, refreshProfile, retryWalletProvisioning, onboarding, accessToken, authenticated } = useAuth();
-  const showDebugAccessTokenPanel = shouldShowDebugAccessTokenPanel({
-    nodeEnv: process.env.NODE_ENV,
-    authenticated,
-    stage,
-    accessToken,
-  });
+  useEffect(() => {
+    if (
+      handledLoginHintRef.current ||
+      (stage !== "signed_out" && stage !== "loading")
+    ) {
+      return;
+    }
 
-const walletPendingDetail = onboarding.walletProvisioningInProgress
-    ? "Your wallet is being set up in the background — this only takes a moment. You can explore the app while it finishes."
-    : onboarding.walletProvisioningLastError
-      ? "Your profile is ready, but wallet setup hit a snag. Hit retry and it'll try again automatically."
-      : "Your profile is ready. Wallet setup is finishing up — paid actions like brand research and email outreach will unlock once complete.";
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("login") !== "1") {
+      return;
+    }
+
+    handledLoginHintRef.current = true;
+    params.delete("login");
+    const nextSearch = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ""}`,
+    );
+    void login();
+  }, [login, stage]);
 
   if (stage === "loading") {
     return (
-      <StateCard
+      <CenteredGlass
         eyebrow="Loading"
         title="Opening your workspace…"
-        detail="Just a moment while we restore your session."
+        detail={error ?? "Just a moment while we restore your session."}
+        actionLabel="Sign in"
+        onAction={login}
+        pose="reach"
       />
     );
   }
 
   if (stage === "signed_out") {
     return (
-      <StateCard
-        eyebrow="Sign in required"
-        title="Sign in to open your dashboard"
-        detail="Sign in to access your deals, messages, wallet, and approvals."
+      <CenteredGlass
+        eyebrow="Welcome to Indyfren"
+        title="Sign in to open your workspace"
+        detail={
+          error ??
+          "Access your deals, wallet, approvals, and your AI business manager."
+        }
         actionLabel="Sign in"
         onAction={login}
+        pose="squad"
       />
     );
   }
 
   if (stage === "unregistered" || stage === "onboarding") {
-    return (
-      <div className="space-y-6">
-        <OnboardingWizard />
-        {showDebugAccessTokenPanel && accessToken ? (
-          <DebugAccessTokenPanel accessToken={accessToken} />
-        ) : null}
-      </div>
-    );
+    return <OnboardingWizard />;
   }
 
-  return (
-    <div className="space-y-6">
-      {stage === "wallet_pending" ? (
-        <StateCard
-          eyebrow="Almost ready"
-          title="One last step — setting up your wallet"
-          detail={walletPendingDetail}
-          actionLabel={
-            onboarding.walletProvisioningInProgress
-              ? "Check status"
-              : "Retry"
-          }
-          onAction={
-            onboarding.walletProvisioningInProgress
-              ? refreshProfile
-              : retryWalletProvisioning
-          }
-          secondaryLabel="Refresh"
-          onSecondaryAction={refreshProfile}
-          tone="ink"
-        />
-      ) : null}
-
-      {children}
-    </div>
-  );
+  // wallet_pending + active — the app is usable; wallet status surfaces on the Wallet page.
+  return <>{children}</>;
 }
