@@ -13,41 +13,45 @@ vi.mock("../../../src/db/queries/creators.js", () => ({
 
 vi.mock("../../../src/wallet/provisioning.js", () => ({
   ensureCreatorWalletProvisioning: vi.fn(),
-  getWalletOnboardingMetadata: vi.fn((creator: {
-    wallet_id?: string | null;
-    wallet_address?: string | null;
-    settings?: Record<string, unknown> | null;
-  } | null) => {
-    if (!creator) {
-      return {
-        status: "unregistered",
-        walletProvisioned: false,
-        walletProvisioningInProgress: false,
-        walletProvisioningAttempts: 0,
-        walletProvisioningLastError: null,
-      };
-    }
+  getWalletOnboardingMetadata: vi.fn(
+    (
+      creator: {
+        wallet_id?: string | null;
+        wallet_address?: string | null;
+        settings?: Record<string, unknown> | null;
+      } | null,
+    ) => {
+      if (!creator) {
+        return {
+          status: "unregistered",
+          walletProvisioned: false,
+          walletProvisioningInProgress: false,
+          walletProvisioningAttempts: 0,
+          walletProvisioningLastError: null,
+        };
+      }
 
-    return {
-      status:
-        creator.wallet_id && creator.wallet_address
-          ? "active"
-          : typeof creator.settings?.onboarding_status === "string"
-            ? creator.settings.onboarding_status
-            : "wallet_pending",
-      walletProvisioned: Boolean(creator.wallet_id && creator.wallet_address),
-      walletProvisioningInProgress:
-        creator.settings?.wallet_provisioning_in_progress === true,
-      walletProvisioningAttempts:
-        typeof creator.settings?.wallet_provisioning_attempts === "number"
-          ? creator.settings.wallet_provisioning_attempts
-          : 0,
-      walletProvisioningLastError:
-        typeof creator.settings?.onboarding_error === "string"
-          ? creator.settings.onboarding_error
-          : null,
-    };
-  }),
+      return {
+        status:
+          creator.wallet_id && creator.wallet_address
+            ? "active"
+            : typeof creator.settings?.onboarding_status === "string"
+              ? creator.settings.onboarding_status
+              : "wallet_pending",
+        walletProvisioned: Boolean(creator.wallet_id && creator.wallet_address),
+        walletProvisioningInProgress:
+          creator.settings?.wallet_provisioning_in_progress === true,
+        walletProvisioningAttempts:
+          typeof creator.settings?.wallet_provisioning_attempts === "number"
+            ? creator.settings.wallet_provisioning_attempts
+            : 0,
+        walletProvisioningLastError:
+          typeof creator.settings?.onboarding_error === "string"
+            ? creator.settings.onboarding_error
+            : null,
+      };
+    },
+  ),
 }));
 
 import { Hono } from "hono";
@@ -170,7 +174,7 @@ describe("auth API", () => {
     vi.mocked(authenticateAccessToken).mockResolvedValue({
       creatorId: null,
       creatorResolutionError: new Error(
-        "Creator service is temporarily unavailable. Please retry in a moment."
+        "Creator service is temporarily unavailable. Please retry in a moment.",
       ),
       privyUserId: "did:privy:user-1",
     } as never);
@@ -189,7 +193,7 @@ describe("auth API", () => {
     vi.mocked(authenticateAccessToken).mockResolvedValue({
       creatorId: null,
       creatorResolutionError: new Error(
-        "Creator service is temporarily unavailable. Please retry in a moment."
+        "Creator service is temporarily unavailable. Please retry in a moment.",
       ),
       privyUserId: "did:privy:user-1",
     } as never);
@@ -255,7 +259,7 @@ describe("auth API", () => {
       expect.objectContaining({
         privy_user_id: "did:privy:user-2",
         display_name: "Efe",
-      })
+      }),
     );
     expect(ensureCreatorWalletProvisioning).toHaveBeenCalledWith("creator-5", {
       force: true,

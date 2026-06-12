@@ -1,8 +1,17 @@
-import { registerTool, type AgentTool } from "./registry.js";
+import {
+  readStringParam,
+  registerTool,
+  type AgentTool,
+} from "./registry.js";
 import pino from "pino";
 import { env } from "../../config/env.js";
+import { isRecord } from "../../db/json.js";
 
 const log = pino({ name: "tool:browser" });
+
+function isBrowserSessionResponse(value: unknown): value is { id: string } {
+  return isRecord(value) && typeof value.id === "string";
+}
 
 const browserTool: AgentTool = {
   name: "browse_web",
@@ -31,26 +40,28 @@ const browserTool: AgentTool = {
     },
   },
   async execute(params) {
-    const {
-      url,
-      action = "extract_text",
-      selector,
-    } = params as {
-      url: string;
-      action?: string;
-      selector?: string;
-    };
-
     if (!env.BROWSERBASE_API_KEY || !env.BROWSERBASE_PROJECT_ID) {
       return {
         success: false,
         data: null,
-        error: "BrowserBase is not configured. Set BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID.",
+        error:
+          "BrowserBase is not configured. Set BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID.",
       };
     }
 
+    const url = readStringParam(params, "url");
+    if (!url) {
+      return {
+        success: false,
+        data: null,
+        error: "url is required",
+      };
+    }
+
+    const action = readStringParam(params, "action") ?? "extract_text";
+    const selector = readStringParam(params, "selector");
+
     try {
-      // Create a session
       const sessionRes = await fetch(
         "https://www.browserbase.com/v1/sessions",
         {
@@ -62,7 +73,7 @@ const browserTool: AgentTool = {
           body: JSON.stringify({
             projectId: env.BROWSERBASE_PROJECT_ID,
           }),
-        }
+        },
       );
 
       if (!sessionRes.ok) {
@@ -74,10 +85,17 @@ const browserTool: AgentTool = {
         };
       }
 
-      const session = (await sessionRes.json()) as { id: string };
+      const session: unknown = await sessionRes.json();
+      if (!isBrowserSessionResponse(session)) {
+        return {
+          success: false,
+          data: null,
+          error:
+            "Failed to create browser session: response missing session id",
+        };
+      }
       log.info({ sessionId: session.id, url }, "Browser session created");
 
-      // Navigate and extract content via the session API
       const contentRes = await fetch(
         `https://www.browserbase.com/v1/sessions/${session.id}/browser/content`,
         {
@@ -93,7 +111,7 @@ const browserTool: AgentTool = {
             waitForSelector: selector ?? undefined,
             timeout: 30000,
           }),
-        }
+        },
       );
 
       if (!contentRes.ok) {
@@ -105,7 +123,7 @@ const browserTool: AgentTool = {
         };
       }
 
-      const content = await contentRes.json();
+      const content: unknown = await contentRes.json();
 
       return {
         success: true,

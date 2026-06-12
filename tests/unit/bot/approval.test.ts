@@ -5,6 +5,7 @@ vi.mock("../../../src/db/queries/agent-actions.js", () => ({
   getAgentActionByIdForCreator: vi.fn(),
   listPendingAgentActionsForCreator: vi.fn(),
   updateAgentActionStatus: vi.fn(),
+  updatePendingAgentActionStatus: vi.fn(),
 }));
 
 import {
@@ -12,6 +13,7 @@ import {
   getAgentActionByIdForCreator,
   listPendingAgentActionsForCreator,
   updateAgentActionStatus,
+  updatePendingAgentActionStatus,
 } from "../../../src/db/queries/agent-actions.js";
 import {
   getPendingApproval,
@@ -93,21 +95,40 @@ describe("approval store", () => {
   });
 
   it("updates approval status transitions", async () => {
-    await markApprovalApproved("action-1");
+    vi.mocked(updatePendingAgentActionStatus).mockResolvedValue({
+      id: "action-1",
+    } as never);
+
+    const approved = await markApprovalApproved("action-1");
     await markApprovalExecuted("action-1", { message: "done" });
     await markApprovalSkipped("action-2");
 
+    expect(approved).toBe(true);
+    expect(updatePendingAgentActionStatus).toHaveBeenNthCalledWith(
+      1,
+      "action-1",
+      {
+        status: "approved",
+        approved_at: expect.any(String),
+      },
+    );
     expect(updateAgentActionStatus).toHaveBeenNthCalledWith(1, "action-1", {
-      status: "approved",
-      approved_at: expect.any(String),
-    });
-    expect(updateAgentActionStatus).toHaveBeenNthCalledWith(2, "action-1", {
       status: "executed",
       executed_at: expect.any(String),
       output: { message: "done" },
     });
-    expect(updateAgentActionStatus).toHaveBeenNthCalledWith(3, "action-2", {
-      status: "skipped",
-    });
+    expect(updatePendingAgentActionStatus).toHaveBeenNthCalledWith(
+      2,
+      "action-2",
+      {
+        status: "skipped",
+      },
+    );
+  });
+
+  it("reports when approval lock was already taken", async () => {
+    vi.mocked(updatePendingAgentActionStatus).mockResolvedValue(null);
+
+    await expect(markApprovalApproved("action-1")).resolves.toBe(false);
   });
 });

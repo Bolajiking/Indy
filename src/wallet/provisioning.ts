@@ -4,6 +4,7 @@ import {
   updateCreator,
   type Creator,
 } from "../db/queries/creators.js";
+import type { JsonObject } from "../db/json.js";
 import { createWalletForCreator } from "./privy.js";
 
 const log = pino({ name: "wallet:provisioning" });
@@ -20,7 +21,7 @@ const inFlightProvisioning = new Map<
 interface CreatorWithWalletSettings {
   wallet_id?: string | null;
   wallet_address?: string | null;
-  settings?: Record<string, unknown> | null;
+  settings?: JsonObject | null;
 }
 
 export interface WalletOnboardingMetadata {
@@ -49,12 +50,18 @@ export interface EnsureWalletProvisioningResult {
     | "started";
 }
 
-function readProvisioningAttempts(settings: Record<string, unknown> | null | undefined): number {
+function readProvisioningAttempts(
+  settings: JsonObject | null | undefined,
+): number {
   const attempts = settings?.wallet_provisioning_attempts;
-  return typeof attempts === "number" && Number.isFinite(attempts) ? attempts : 0;
+  return typeof attempts === "number" && Number.isFinite(attempts)
+    ? attempts
+    : 0;
 }
 
-function readLastAttemptAt(settings: Record<string, unknown> | null | undefined): number | null {
+function readLastAttemptAt(
+  settings: JsonObject | null | undefined,
+): number | null {
   const raw = settings?.wallet_provisioning_last_attempt_at;
   if (typeof raw !== "string" || raw.length === 0) {
     return null;
@@ -74,8 +81,8 @@ function normalizeProvisioningError(error: unknown): string {
 
 function mergeWalletSettings(
   creator: CreatorWithWalletSettings,
-  updates: Record<string, unknown>
-): Record<string, unknown> {
+  updates: JsonObject,
+): JsonObject {
   return {
     ...(creator.settings ?? {}),
     ...updates,
@@ -83,7 +90,7 @@ function mergeWalletSettings(
 }
 
 export function getWalletOnboardingMetadata(
-  creator: CreatorWithWalletSettings | null
+  creator: CreatorWithWalletSettings | null,
 ): WalletOnboardingMetadata {
   if (!creator) {
     return {
@@ -126,13 +133,14 @@ export function getWalletOnboardingMetadata(
 
 async function markProvisioningStarted(
   creator: Creator,
-  source: string
+  source: string,
 ): Promise<Creator> {
   return updateCreator(creator.id, {
     settings: mergeWalletSettings(creator, {
       onboarding_status: "wallet_pending",
       wallet_provisioning_in_progress: true,
-      wallet_provisioning_attempts: readProvisioningAttempts(creator.settings) + 1,
+      wallet_provisioning_attempts:
+        readProvisioningAttempts(creator.settings) + 1,
       wallet_provisioning_last_attempt_at: new Date().toISOString(),
       wallet_provisioning_source: source,
       onboarding_error: null,
@@ -158,7 +166,7 @@ async function markProvisioningSucceeded(creatorId: string): Promise<void> {
 
 async function markProvisioningFailed(
   creatorId: string,
-  error: unknown
+  error: unknown,
 ): Promise<void> {
   const creator = await getCreatorById(creatorId);
   if (!creator) {
@@ -178,7 +186,10 @@ async function markProvisioningFailed(
 async function runProvisioningAttempt(creatorId: string): Promise<void> {
   try {
     const wallet = await createWalletForCreator(creatorId);
-    log.info({ creatorId, walletId: wallet.walletId }, "Creator wallet provisioned");
+    log.info(
+      { creatorId, walletId: wallet.walletId },
+      "Creator wallet provisioned",
+    );
     await markProvisioningSucceeded(creatorId);
   } catch (error) {
     log.warn(
@@ -192,7 +203,7 @@ async function runProvisioningAttempt(creatorId: string): Promise<void> {
               ? String(error.cause)
               : undefined,
       },
-      "Creator wallet provisioning failed"
+      "Creator wallet provisioning failed",
     );
     await markProvisioningFailed(creatorId, error);
   }
@@ -200,7 +211,7 @@ async function runProvisioningAttempt(creatorId: string): Promise<void> {
 
 export async function ensureCreatorWalletProvisioning(
   creatorId: string,
-  options: EnsureWalletProvisioningOptions = {}
+  options: EnsureWalletProvisioningOptions = {},
 ): Promise<EnsureWalletProvisioningResult> {
   const creator = await getCreatorById(creatorId);
   if (!creator) {
@@ -255,10 +266,7 @@ export async function ensureCreatorWalletProvisioning(
     };
   }
 
-  if (
-    !options.force &&
-    withinRetryWindow
-  ) {
+  if (!options.force && withinRetryWindow) {
     return {
       started: false,
       creator,
@@ -278,7 +286,7 @@ export async function ensureCreatorWalletProvisioning(
     try {
       const updatedCreator = await markProvisioningStarted(
         creator,
-        options.source ?? "wallet_provisioning"
+        options.source ?? "wallet_provisioning",
       );
       resolveStarted(updatedCreator);
       await runProvisioningAttempt(creatorId);

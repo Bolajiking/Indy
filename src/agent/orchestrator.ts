@@ -1,12 +1,19 @@
 import { AGENT } from "../config/constants.js";
-import { assembleContext, getRecentMessages } from "./memory.js";
-import { createMppClient, getOnChainBalance } from "../wallet/mpp.js";
+import {
+  assembleContext,
+  buildConversationMessages,
+  getRecentMessages,
+} from "./memory.js";
+import {
+  createMppClient,
+  getOnChainBalanceWithTimeout,
+} from "../wallet/mpp.js";
 import { canAffordTransaction } from "../wallet/spending.js";
+import { formatUsd } from "../lib/format.js";
 import { resolveWalletForCreator } from "../wallet/privy.js";
 import { getCreatorById, deductCredits } from "../db/queries/creators.js";
 import { maybeSendLowCreditAlert } from "../messaging/notify.js";
 import { runAgentLoop } from "./loop.js";
-import type { AgentLoopResult } from "./loop.js";
 import pino from "pino";
 
 import "./tools/enrichment.js";
@@ -17,7 +24,15 @@ import "./tools/media-kit-generator.js";
 import "./tools/browser.js";
 import "./tools/run-skill.js";
 import "./tools/deal-manager.js";
+import "./tools/connection-manager.js";
 import { findService } from "./tools/x402-registry.js";
+import { composioLoopTools } from "../integrations/composio.js";
+import {
+  ACCURACY_DIRECTIVE,
+  CONTEXT_AWARENESS_DIRECTIVE,
+  channelNote,
+} from "./prompts.js";
+import type { AgentChannel, AgentResponse } from "./types.js";
 
 const log = pino({ name: "agent:orchestrator" });
 
@@ -54,13 +69,12 @@ You have 12 specialized skill sub-agents. Use the run_skill tool to delegate to 
 
 You also have direct tools:
 - browse_web: Research brands, scrape deal platforms
-- search_web: Web search for research
-- get_platform_analytics: Pull social media data
-- generate_media_kit: Create visual media kits
+- web_search: Web search for research
 - send_email: Send pitches/emails (requires approval)
-- enrich_brand_data: Enrich brand data via x402
 - create_deal: Save a brand opportunity to the creator's pipeline (use whenever a deal/opportunity is identified)
 - update_deal_stage: Move a deal to a new stage and record pitch text, responses, or contract notes
+- request_connections: Surface inline "Continue to …" connect cards in chat when the creator asks to connect/link/authorize an account or channel
+- use_tool: Runs the occasional tools — generate_media_kit (visual media kits), enrich_brand (brand/contact data), get_platform_analytics (native social stats), disconnect_connections (revoke an app). Call use_tool with the tool name and its arguments.
 
 ## Your Personality
 - Direct, no-BS, results-oriented
@@ -77,28 +91,23 @@ You also have direct tools:
 - Prefer run_skill for specialized tasks — skill sub-agents are better at their domain
 - ALWAYS call create_deal when you identify a brand opportunity — never just list deals as text without saving them
 - ALWAYS call update_deal_stage when a deal's status changes (pitch sent, response received, etc.)
-- BEFORE calling create_deal, check the Active Deals list in context. If the brand name is already listed there (even with different casing), call update_deal_stage instead — NEVER create a duplicate entry for a brand already in the pipeline`;
+- BEFORE calling create_deal, check the Active Deals list in context. If the brand name is already listed there (even with different casing), call update_deal_stage instead — NEVER create a duplicate entry for a brand already in the pipeline
+- When the creator asks to connect, link, or authorize an account or channel (e.g. "connect my YouTube and Telegram"), call request_connections with those services. This surfaces secure connect cards in the chat — do NOT tell them to go to Settings to do it manually. After calling it, briefly confirm what you've surfaced and that they should complete the prompts.
+- If the creator has connected apps (Gmail, Slack, etc.), their tools appear in your tool list (named like GMAIL_SEND_EMAIL) — use them to act on the creator's behalf. If they ask to do something that needs an app they have NOT connected, call request_connections for that app first, then act once connected.
+- When the creator asks to disconnect, unlink, or revoke an app, call use_tool with disconnect_connections and those services, then confirm what was disconnected.
 
-export interface AgentResponse {
-  text: string;
-  requiresApproval: boolean;
-  skill?: string;
-  pendingAction?: {
-    id: string;
-    type: string;
-    description: string;
-    input: Record<string, unknown>;
-    toolUseId?: string;
-    messageHistory?: import("@anthropic-ai/sdk").Anthropic.MessageParam[];
-    systemPrompt?: string;
-  };
-}
+${ACCURACY_DIRECTIVE}
+
+${CONTEXT_AWARENESS_DIRECTIVE}`;
+
+export type { AgentResponse } from "./types.js";
 
 export async function runAgent(
   creatorId: string,
   userMessage: string,
   walletId?: string,
-  walletAddress?: string
+  walletAddress?: string,
+  channel?: AgentChannel,
 ): Promise<AgentResponse> {
   log.info({ creatorId, message: userMessage.slice(0, 100) }, "Agent invoked");
 
@@ -107,7 +116,7 @@ export async function runAgent(
   if (creator && creator.free_credits_remaining_cents <= 0) {
     log.warn({ creatorId }, "Creator has no credits remaining");
     return {
-      text: "You've used all your free credits. Top up your wallet to keep using Indyfren's paid features. You can still use free commands like \"calendar\", \"finances\", and \"content plan\".",
+      text: "You've used all your free credits, so I held off on paid work. Add USDC on the dashboard Wallet page and I'll pick this right back up. Meanwhile everything free still works — try \"show my deals\", \"calendar\", \"finances\", or \"content plan\" and I'll run them now.",
       requiresApproval: false,
     };
   }
@@ -116,39 +125,46 @@ export async function runAgent(
 
   let toolContext = null;
   if (walletId && walletAddress) {
-    const wallet = await resolveWalletForCreator(creatorId, walletId, walletAddress);
+    const wallet = await resolveWalletForCreator(
+      creatorId,
+      walletId,
+      walletAddress,
+    );
     if (wallet) {
       // Pre-flight: check combined credits + wallet balance before starting any paid work.
       // Apply a 7s timeout — a hung RPC node should not block the entire agent run.
       try {
-        const balancePromise = getOnChainBalance(wallet.address);
-        const timeout = new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Balance check timed out")), 7_000)
+        const { balanceCents } = await getOnChainBalanceWithTimeout(
+          wallet.address,
         );
-        const { balanceCents } = await Promise.race([balancePromise, timeout]);
         const freeCredits = creator?.free_credits_remaining_cents ?? 0;
         const afford = canAffordTransaction(
           AGENT.MIN_TASK_COST_CENTS,
           freeCredits,
-          balanceCents
+          balanceCents,
         );
         if (!afford.canAfford) {
-          const shortfallDollars = (afford.shortfall / 100).toFixed(2);
-          log.warn({ creatorId, shortfall: afford.shortfall }, "Creator cannot afford task");
+          log.warn(
+            { creatorId, shortfall: afford.shortfall },
+            "Creator cannot afford task",
+          );
           return {
-            text: `Your account needs $${shortfallDollars} more to run paid actions. Add USDC to your wallet (${wallet.address}) or wait for your free credits to reset.`,
+            text: `This needs paid tools and your balance is ${formatUsd(afford.shortfall)} short. Top up on the dashboard Wallet page (your address: ${wallet.address}) and ask me again — I'll run it immediately. Anything free (deals, calendar, finances, content plans) I can still do right now.`,
             requiresApproval: false,
           };
         }
       } catch (err) {
         // Balance check failed (network issue) — proceed; individual tool calls will catch failures
-        log.warn({ err, creatorId }, "Pre-flight balance check failed — proceeding");
+        log.warn(
+          { err, creatorId },
+          "Pre-flight balance check failed — proceeding",
+        );
       }
 
       const mppClient = await createMppClient(
         creatorId,
         wallet.walletId,
-        wallet.address as `0x${string}`
+        wallet.address as `0x${string}`,
       );
       toolContext = { creatorId, mppFetch: mppClient.fetch, findService };
     }
@@ -156,33 +172,14 @@ export async function runAgent(
 
   // Load conversation history for continuity
   const recentMessages = await getRecentMessages(creatorId);
+  const messages = buildConversationMessages(
+    context,
+    recentMessages,
+    userMessage,
+  );
 
-  const messages: any[] = [];
-
-  if (recentMessages.length > 0) {
-    messages.push({
-      role: "user",
-      content: `<creator_context>\n${context}\n</creator_context>\n\n${recentMessages[0].content}`,
-    });
-    for (let i = 1; i < recentMessages.length; i++) {
-      const msg = recentMessages[i];
-      const lastRole = messages[messages.length - 1].role;
-      if (msg.role === lastRole) continue;
-      messages.push({ role: msg.role as "user" | "assistant", content: msg.content });
-    }
-    const lastRole = messages[messages.length - 1].role;
-    if (lastRole === "user") {
-      const last = messages[messages.length - 1];
-      messages[messages.length - 1] = { role: "user", content: `${last.content}\n\n${userMessage}` };
-    } else {
-      messages.push({ role: "user", content: userMessage });
-    }
-  } else {
-    messages.push({
-      role: "user",
-      content: `<creator_context>\n${context}\n</creator_context>\n\n${userMessage}`,
-    });
-  }
+  // Connected-app tools (Gmail, Calendar, …) the creator has authorized via Composio.
+  const composio = await composioLoopTools(creatorId);
 
   let totalCostCents = 0;
   const result = await runAgentLoop({
@@ -194,6 +191,8 @@ export async function runAgent(
     onToolUsed: (_toolName, costCents) => {
       totalCostCents += costCents;
     },
+    ...composio,
+    systemPromptSuffix: `${composio.systemPromptSuffix ?? ""}${channelNote(channel)}`,
   });
 
   // Deduct credits for tool usage and alert if balance is low
@@ -201,11 +200,20 @@ export async function runAgent(
     try {
       const updatedCreator = await deductCredits(creatorId, totalCostCents);
       log.info({ creatorId, costCents: totalCostCents }, "Credits deducted");
-      maybeSendLowCreditAlert(creatorId, updatedCreator.free_credits_remaining_cents).catch(
-        () => {}
-      );
+      maybeSendLowCreditAlert(
+        creatorId,
+        updatedCreator.free_credits_remaining_cents,
+      ).catch((alertErr) => {
+        log.warn(
+          { err: alertErr, creatorId },
+          "Failed to send low credit alert",
+        );
+      });
     } catch (err) {
-      log.warn({ creatorId, costCents: totalCostCents, error: err }, "Failed to deduct credits");
+      log.warn(
+        { creatorId, costCents: totalCostCents, error: err },
+        "Failed to deduct credits",
+      );
     }
   }
 

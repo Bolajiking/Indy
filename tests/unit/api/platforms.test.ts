@@ -72,7 +72,7 @@ describe("platform routes", () => {
     expect(body[0].refresh_token).toBeUndefined();
   });
 
-  it("encrypts platform credentials before persisting them", async () => {
+  it("delegates platform credentials to the persistence boundary", async () => {
     vi.mocked(upsertConnection).mockResolvedValue({
       id: "conn-1",
       creator_id: "creator-1",
@@ -109,13 +109,10 @@ describe("platform routes", () => {
         creator_id: "creator-1",
         platform: "youtube",
         platform_username: "creator-channel",
-        access_token: expect.stringMatching(/^v1:/),
-        refresh_token: expect.stringMatching(/^v1:/),
-      })
+        access_token: "raw-access-token",
+        refresh_token: "raw-refresh-token",
+      }),
     );
-    expect(
-      vi.mocked(upsertConnection).mock.calls[0]?.[0]?.access_token
-    ).not.toBe("raw-access-token");
   });
 
   it("returns 500 when platform disconnect deletion fails", async () => {
@@ -124,7 +121,9 @@ describe("platform routes", () => {
       creator_id: "creator-1",
       platform: "youtube",
     } as never);
-    vi.mocked(deleteConnectionById).mockRejectedValue(new Error("delete failed"));
+    vi.mocked(deleteConnectionById).mockRejectedValue(
+      new Error("delete failed"),
+    );
 
     const app = createApiServer();
     app.route("/api/platforms", platforms);

@@ -18,6 +18,7 @@ import {
   extractQuotedAmountCents,
   SpendingLimitExceeded,
   checkSpendingLimits,
+  enforceCumulativeLimits,
   enforcePerTransactionLimit,
   resolveCreatorSpendingLimits,
 } from "../../../src/wallet/spending.js";
@@ -93,7 +94,7 @@ describe("checkSpendingLimits", () => {
         limit: "monthly",
         current: 2500,
         max: 2500,
-      })
+      }),
     );
   });
 });
@@ -113,7 +114,9 @@ describe("enforcePerTransactionLimit", () => {
       },
     } as never);
 
-    await expect(enforcePerTransactionLimit("creator-1", 500)).resolves.toBeUndefined();
+    await expect(
+      enforcePerTransactionLimit("creator-1", 500),
+    ).resolves.toBeUndefined();
   });
 
   it("throws when the quoted payment exceeds the configured per-transaction limit", async () => {
@@ -132,7 +135,70 @@ describe("enforcePerTransactionLimit", () => {
         limit: "per_transaction",
         current: 500,
         max: 400,
-      })
+      }),
+    );
+  });
+});
+
+describe("enforceCumulativeLimits", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("allows a charge that stays within the daily limit once added to prior spend", async () => {
+    vi.mocked(getCreatorById).mockResolvedValue({
+      id: "creator-1",
+      settings: {
+        spending_limits: { daily_cents: 5000, monthly_cents: 50000 },
+      },
+    } as never);
+    vi.mocked(getTotalSpendToday).mockResolvedValue(4000);
+    vi.mocked(getTotalSpendThisMonth).mockResolvedValue(4000);
+
+    await expect(
+      enforceCumulativeLimits("creator-1", 800),
+    ).resolves.toBeUndefined();
+  });
+
+  it("rejects a charge that would push cumulative daily spend past the limit", async () => {
+    vi.mocked(getCreatorById).mockResolvedValue({
+      id: "creator-1",
+      settings: {
+        spending_limits: { daily_cents: 5000, monthly_cents: 50000 },
+      },
+    } as never);
+    // Prior spend $48, limit $50, charge $10 → would land at $58. checkSpendingLimits
+    // would have let this through ($48 < $50); the cumulative guard must not.
+    vi.mocked(getTotalSpendToday).mockResolvedValue(4800);
+    vi.mocked(getTotalSpendThisMonth).mockResolvedValue(4800);
+
+    await expect(enforceCumulativeLimits("creator-1", 1000)).rejects.toEqual(
+      expect.objectContaining<Partial<SpendingLimitExceeded>>({
+        name: "SpendingLimitExceeded",
+        limit: "daily",
+        current: 5800,
+        max: 5000,
+      }),
+    );
+  });
+
+  it("rejects a charge that would push cumulative monthly spend past the limit", async () => {
+    vi.mocked(getCreatorById).mockResolvedValue({
+      id: "creator-1",
+      settings: {
+        spending_limits: { daily_cents: 50000, monthly_cents: 50000 },
+      },
+    } as never);
+    vi.mocked(getTotalSpendToday).mockResolvedValue(100);
+    vi.mocked(getTotalSpendThisMonth).mockResolvedValue(49900);
+
+    await expect(enforceCumulativeLimits("creator-1", 500)).rejects.toEqual(
+      expect.objectContaining<Partial<SpendingLimitExceeded>>({
+        name: "SpendingLimitExceeded",
+        limit: "monthly",
+        current: 50400,
+        max: 50000,
+      }),
     );
   });
 });
@@ -146,7 +212,7 @@ describe("extractQuotedAmountCents", () => {
           amount: "2500000",
           currency: "0x20c0000000000000000000000000000000000000",
         },
-      } as never)
+      } as never),
     ).toBe(250);
   });
 
@@ -158,7 +224,7 @@ describe("extractQuotedAmountCents", () => {
           amount: "2500000",
           currency: "0xnot-supported",
         },
-      } as never)
+      } as never),
     ).toBeNull();
   });
 });

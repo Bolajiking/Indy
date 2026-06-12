@@ -17,7 +17,9 @@ function getQueueConnection(): ConnectionOptions {
       port: Number(redisUrl.port || "6379"),
       username: redisUrl.username || undefined,
       password: redisUrl.password || undefined,
-      db: redisUrl.pathname ? Number(redisUrl.pathname.replace("/", "") || "0") : 0,
+      db: redisUrl.pathname
+        ? Number(redisUrl.pathname.replace("/", "") || "0")
+        : 0,
       maxRetriesPerRequest: null,
       tls: redisUrl.protocol === "rediss:" ? {} : undefined,
     };
@@ -62,7 +64,8 @@ export async function processJob(job: {
       return;
     }
     case "analytics-aggregation": {
-      const { aggregateAnalytics } = await import("../agent/skills/analytics-aggregator.js");
+      const { aggregateAnalytics } =
+        await import("../agent/skills/analytics-aggregator.js");
       if (job.data.creatorId) {
         await aggregateAnalytics(job.data.creatorId);
       }
@@ -85,11 +88,17 @@ export function startWorkers(): Worker {
   });
 
   worker.on("failed", (job, error) => {
-    log.error({ jobId: job?.id, jobName: job?.name, error: error.message }, "Job failed");
+    log.error(
+      { jobId: job?.id, jobName: job?.name, error: error.message },
+      "Job failed",
+    );
   });
 
   worker.on("error", (error) => {
-    log.error({ error: error.message }, "Worker error (Redis connection issue)");
+    log.error(
+      { error: error.message },
+      "Worker error (Redis connection issue)",
+    );
   });
 
   log.info("Job workers started");
@@ -97,37 +106,57 @@ export function startWorkers(): Worker {
 }
 
 export async function scheduleRecurringJobs(
-  queue: Pick<Queue, "add"> = getAgentQueue()
+  queue: Pick<Queue, "add"> = getAgentQueue(),
 ): Promise<void> {
-  await queue.add("morning-scan", {}, {
-    jobId: "morning-scan-all",
-    repeat: { pattern: "0 6 * * *" },
-    removeOnComplete: true,
-  });
+  await queue.add(
+    "morning-scan",
+    {},
+    {
+      jobId: "morning-scan-all",
+      repeat: { pattern: "0 6 * * *" },
+      removeOnComplete: true,
+    },
+  );
 
-  await queue.add("morning-brief", {}, {
-    jobId: "morning-brief-all",
-    repeat: { pattern: "0 7 * * *" },
-    removeOnComplete: true,
-  });
+  await queue.add(
+    "morning-brief",
+    {},
+    {
+      jobId: "morning-brief-all",
+      repeat: { pattern: "0 7 * * *" },
+      removeOnComplete: true,
+    },
+  );
 
-  await queue.add("invoice-reminder", {}, {
-    jobId: "invoice-reminder-all",
-    repeat: { pattern: "0 10 * * 1" }, // Mondays at 10am
-    removeOnComplete: true,
-  });
+  await queue.add(
+    "invoice-reminder",
+    {},
+    {
+      jobId: "invoice-reminder-all",
+      repeat: { pattern: "0 10 * * 1" }, // Mondays at 10am
+      removeOnComplete: true,
+    },
+  );
 
-  await queue.add("end-of-day-summary", {}, {
-    jobId: "eod-summary-all",
-    repeat: { pattern: "0 18 * * *" }, // Daily at 6pm
-    removeOnComplete: true,
-  });
+  await queue.add(
+    "end-of-day-summary",
+    {},
+    {
+      jobId: "eod-summary-all",
+      repeat: { pattern: "0 18 * * *" }, // Daily at 6pm
+      removeOnComplete: true,
+    },
+  );
 
-  await queue.add("weekly-review", {}, {
-    jobId: "weekly-review-all",
-    repeat: { pattern: "0 10 * * 0" }, // Sundays at 10am
-    removeOnComplete: true,
-  });
+  await queue.add(
+    "weekly-review",
+    {},
+    {
+      jobId: "weekly-review-all",
+      repeat: { pattern: "0 10 * * 0" }, // Sundays at 10am
+      removeOnComplete: true,
+    },
+  );
 
   log.info("Recurring jobs scheduled");
 }

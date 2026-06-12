@@ -37,7 +37,7 @@ describe("ipv4Fetch", () => {
         write: vi.fn(),
         end: vi.fn(() => {
           onResponse(response);
-          response.emit("data", Buffer.from("{\"ok\":true}"));
+          response.emit("data", Buffer.from('{"ok":true}'));
           response.emit("end");
         }),
       };
@@ -57,7 +57,7 @@ describe("ipv4Fetch", () => {
         family: 4,
         method: "POST",
       }),
-      expect.any(Function)
+      expect.any(Function),
     );
     expect(await response.json()).toEqual({ ok: true });
   });

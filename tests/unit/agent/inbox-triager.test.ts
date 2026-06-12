@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { TriageResult, TriagedMessage } from "../../../src/agent/skills/inbox-triager.js";
+import type {
+  TriageResult,
+  TriagedMessage,
+} from "../../../src/agent/skills/inbox-triager.js";
 
 describe("inbox-triager types", () => {
   it("TriageResult has the expected shape", () => {
@@ -33,7 +36,12 @@ describe("inbox-triager types", () => {
 
   it("TriagedMessage category is constrained", () => {
     const categories: TriagedMessage["category"][] = [
-      "brand_deal", "collaboration", "fan_mail", "spam", "urgent", "general",
+      "brand_deal",
+      "collaboration",
+      "fan_mail",
+      "spam",
+      "urgent",
+      "general",
     ];
     expect(categories).toHaveLength(6);
   });

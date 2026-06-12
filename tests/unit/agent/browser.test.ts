@@ -30,7 +30,7 @@ describe("browser tool", () => {
     const tool = getTool("browse_web")!;
     const result = await tool.execute(
       { url: "https://example.com" },
-      { creatorId: "test", mppFetch: fetch }
+      { creatorId: "test", mppFetch: fetch },
     );
     expect(result.success).toBe(false);
     expect(result.error).toContain("BrowserBase is not configured");

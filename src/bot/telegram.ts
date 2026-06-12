@@ -1,20 +1,23 @@
 import pino from "pino";
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot } from "grammy";
 import { env } from "../config/env.js";
-import {
-  getPendingApprovalByAction,
-  markApprovalSkipped,
-} from "./approval.js";
+import { getPendingApprovalByAction, markApprovalSkipped } from "./approval.js";
 import { saveCreatorFeedback } from "../agent/os/creator-memory.js";
-import { handleMessage, type OutgoingMessage } from "./handler.js";
+import { handleMessage } from "./handler.js";
 import { ipv4Fetch } from "../network/ipv4-fetch.js";
+import { formatUsd } from "../lib/format.js";
+import { sendMessageToCreator } from "./telegram-sender.js";
 import {
   ApprovalExecutionError,
   executePendingApprovalAction,
 } from "../agent/approval-execution.js";
+export {
+  registerTelegramBot,
+  sendMessageToCreator,
+  splitMessage,
+} from "./telegram-sender.js";
 
 const log = pino({ name: "bot:telegram" });
-let activeBot: Bot | null = null;
 
 function parseApprovalCallbackData(data: string) {
   const parts = data.split(":");
@@ -36,108 +39,10 @@ function parseFeedbackCallbackData(data: string) {
 }
 
 // Track pending "tell me what was wrong" prompts: chatId → { creatorId, skill }
-const pendingFeedbackRequests = new Map<string, { creatorId: string; skill: string }>();
-
-function buildTelegramOptions(response: OutgoingMessage) {
-  const options: Record<string, unknown> = {};
-
-  if (response.parseMode) {
-    options.parse_mode = response.parseMode;
-  }
-
-  if (response.buttons?.length) {
-    const keyboard = new InlineKeyboard();
-    for (const button of response.buttons) {
-      keyboard.text(button.text, button.callbackData);
-    }
-    options.reply_markup = keyboard;
-  }
-
-  return options;
-}
-
-const TELEGRAM_MAX_MESSAGE_LENGTH = 4096;
-
-/**
- * Split a long message into chunks that fit Telegram's 4096 char limit.
- * Tries to break on newlines, falls back to hard split.
- */
-export function splitMessage(text: string, maxLen = TELEGRAM_MAX_MESSAGE_LENGTH): string[] {
-  if (text.length <= maxLen) return [text];
-
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > 0) {
-    if (remaining.length <= maxLen) {
-      chunks.push(remaining);
-      break;
-    }
-
-    // Try to break at a newline within range
-    let breakIndex = remaining.lastIndexOf("\n", maxLen);
-    if (breakIndex < maxLen * 0.3) {
-      // No good newline break — break at space
-      breakIndex = remaining.lastIndexOf(" ", maxLen);
-    }
-    if (breakIndex < maxLen * 0.3) {
-      // Hard break
-      breakIndex = maxLen;
-    }
-
-    chunks.push(remaining.slice(0, breakIndex));
-    remaining = remaining.slice(breakIndex).trimStart();
-  }
-
-  return chunks;
-}
-
-export async function sendMessageToCreator(
-  chatId: string,
-  response: OutgoingMessage,
-  bot: Bot | null = activeBot
-) {
-  if (!bot) {
-    log.warn({ chatId }, "Telegram bot is not registered; skipping outbound message");
-    return;
-  }
-
-  try {
-    const chunks = splitMessage(response.text);
-
-    for (let i = 0; i < chunks.length; i++) {
-      // Only attach buttons to the last chunk
-      const isLast = i === chunks.length - 1;
-      const chunkResponse: OutgoingMessage = {
-        text: chunks[i],
-        parseMode: response.parseMode,
-        buttons: isLast ? response.buttons : undefined,
-      };
-
-      await bot.api.sendMessage(
-        Number(chatId),
-        chunkResponse.text,
-        buildTelegramOptions(chunkResponse)
-      );
-    }
-  } catch (error) {
-    log.error({ chatId, error }, "Failed to send Telegram message");
-
-    // If Markdown parsing fails, retry without formatting
-    if (response.parseMode) {
-      try {
-        const plainText = response.text.replace(/[*_`\[\]()~>#+=|{}.!\\-]/g, "");
-        await bot.api.sendMessage(Number(chatId), plainText);
-      } catch (retryError) {
-        log.error({ chatId, retryError }, "Telegram plain-text fallback also failed");
-      }
-    }
-  }
-}
-
-export function registerTelegramBot(bot: Bot) {
-  activeBot = bot;
-}
+const pendingFeedbackRequests = new Map<
+  string,
+  { creatorId: string; skill: string }
+>();
 
 export function isTelegramConfigured(): boolean {
   return env.TELEGRAM_BOT_TOKEN.trim().length > 0;
@@ -155,19 +60,21 @@ export function createTelegramBot(): Bot {
   });
 
   // Set bot commands for Telegram menu
-  bot.api.setMyCommands([
-    { command: "start", description: "Welcome message" },
-    { command: "help", description: "Show available commands" },
-    { command: "scan", description: "Find brand deals" },
-    { command: "deals", description: "Show deal pipeline" },
-    { command: "wallet", description: "Check wallet balance" },
-    { command: "calendar", description: "View upcoming deadlines" },
-    { command: "finances", description: "Financial snapshot" },
-    { command: "content", description: "Content strategy" },
-    { command: "brief", description: "Morning brief" },
-  ]).catch((error) => {
-    log.warn({ error }, "Failed to set bot commands");
-  });
+  bot.api
+    .setMyCommands([
+      { command: "start", description: "Welcome message" },
+      { command: "help", description: "Show available commands" },
+      { command: "scan", description: "Find brand deals" },
+      { command: "deals", description: "Show deal pipeline" },
+      { command: "wallet", description: "Check wallet balance" },
+      { command: "calendar", description: "View upcoming deadlines" },
+      { command: "finances", description: "Financial snapshot" },
+      { command: "content", description: "Content strategy" },
+      { command: "brief", description: "Morning brief" },
+    ])
+    .catch((error) => {
+      log.warn({ error }, "Failed to set bot commands");
+    });
 
   bot.on("message:text", async (ctx) => {
     const chatId = String(ctx.chat.id);
@@ -181,8 +88,13 @@ export function createTelegramBot(): Bot {
       await saveCreatorFeedback(
         creatorId,
         skill,
-        `Creator correction (👎): ${ctx.message.text}`
-      ).catch(() => {});
+        `Creator correction (👎): ${ctx.message.text}`,
+      ).catch((error) => {
+        log.warn(
+          { error, creatorId, skill },
+          "Failed to save creator feedback",
+        );
+      });
       await ctx.reply("Got it — I'll factor that in next time. 🙏");
       return;
     }
@@ -201,7 +113,9 @@ export function createTelegramBot(): Bot {
       await sendMessageToCreator(chatId, response, bot);
     } catch (error) {
       log.error({ error, chatId }, "Failed to handle Telegram message");
-      await ctx.reply("❌ Something went wrong on my end. Please try again in a moment.");
+      await ctx.reply(
+        "❌ Something went wrong on my end. Please try again in a moment.",
+      );
     }
   });
 
@@ -215,7 +129,16 @@ export function createTelegramBot(): Bot {
       const chatId = String(ctx.chat?.id ?? ctx.from?.id);
 
       if (direction === "up") {
-        await saveCreatorFeedback(creatorId, skill, "Creator rated this response positively (👍)").catch(() => {});
+        await saveCreatorFeedback(
+          creatorId,
+          skill,
+          "Creator rated this response positively (👍)",
+        ).catch((error) => {
+          log.warn(
+            { error, creatorId, skill },
+            "Failed to save creator feedback",
+          );
+        });
         await ctx.answerCallbackQuery({ text: "👍 Got it, thanks!" });
         await ctx.editMessageReplyMarkup({ reply_markup: undefined });
       } else {
@@ -223,7 +146,9 @@ export function createTelegramBot(): Bot {
         pendingFeedbackRequests.set(chatId, { creatorId, skill });
         await ctx.answerCallbackQuery({ text: "Thanks for the feedback" });
         await ctx.editMessageReplyMarkup({ reply_markup: undefined });
-        await ctx.reply("What was off? (e.g. rates too low, wrong tone, irrelevant brand) — I'll remember this.");
+        await ctx.reply(
+          "What was off? (e.g. rates too low, wrong tone, irrelevant brand) — I'll remember this.",
+        );
       }
       return;
     }
@@ -234,7 +159,10 @@ export function createTelegramBot(): Bot {
       return;
     }
 
-    const approval = await getPendingApprovalByAction(parsed.creatorId, parsed.actionId);
+    const approval = await getPendingApprovalByAction(
+      parsed.creatorId,
+      parsed.actionId,
+    );
     if (!approval) {
       await ctx.answerCallbackQuery({ text: "⏰ Action expired" });
       await ctx.reply("⏰ That action has expired or was already handled.");
@@ -249,15 +177,17 @@ export function createTelegramBot(): Bot {
     }
 
     await ctx.answerCallbackQuery({ text: "⚡ Approved — executing..." });
-    await ctx.reply("⚡ *Approved.* Executing now...", { parse_mode: "Markdown" });
+    await ctx.reply("⚡ *Approved.* Executing now...", {
+      parse_mode: "Markdown",
+    });
 
     try {
       const result = await executePendingApprovalAction(
         approval.creatorId,
-        approval.actionId
+        approval.actionId,
       );
       const costMsg = result.costCents
-        ? ` _(cost: $${(result.costCents / 100).toFixed(2)})_`
+        ? ` _(cost: ${formatUsd(result.costCents)})_`
         : "";
       await ctx.reply(`✅ *Done!* ${result.message}${costMsg}`, {
         parse_mode: "Markdown",

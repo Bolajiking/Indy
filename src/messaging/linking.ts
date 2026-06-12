@@ -15,8 +15,8 @@ import {
   createMessagingLinkToken,
   MESSAGING_LINK_TOKEN_TTL_SECONDS,
   verifyMessagingLinkToken,
-  type MessagingPlatform,
 } from "./link-tokens.js";
+import type { MessagingPlatform } from "./types.js";
 
 export type MessagingLinkResult =
   | { status: "linked"; creator: Creator }
@@ -30,7 +30,7 @@ export async function issueMessagingLinkSession(input: {
 }) {
   const sessionId = crypto.randomUUID();
   const expiresAt = new Date(
-    Date.now() + MESSAGING_LINK_TOKEN_TTL_SECONDS * 1000
+    Date.now() + MESSAGING_LINK_TOKEN_TTL_SECONDS * 1000,
   );
   const { token, tokenHash } = createMessagingLinkToken({ sessionId });
 
@@ -63,7 +63,7 @@ export async function connectMessagingChannelFromToken(input: {
     verified.sessionId,
     input.platform,
     verified.tokenHash,
-    input.platformUserId
+    input.platformUserId,
   );
   if (!session) {
     return { status: "invalid_or_expired" };

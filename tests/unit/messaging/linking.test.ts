@@ -74,13 +74,13 @@ describe("connectMessagingChannelFromToken", () => {
       sessionId,
       "telegram",
       expect.any(String),
-      "777"
+      "777",
     );
     expect(updateCreator).toHaveBeenCalledWith(
       baseCreator.id,
       expect.objectContaining({
         telegram_chat_id: "777",
-      })
+      }),
     );
   });
 

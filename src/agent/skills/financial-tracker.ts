@@ -28,7 +28,7 @@ export interface FinancialSnapshot {
 }
 
 export async function generateFinancialSnapshot(
-  creatorId: string
+  creatorId: string,
 ): Promise<FinancialSnapshot> {
   log.info({ creatorId }, "Generating financial snapshot");
 
@@ -37,7 +37,6 @@ export async function generateFinancialSnapshot(
     getTransactionsForCreator(creatorId),
   ]);
 
-  // Calculate income from completed deals
   const completedDeals = deals.filter((d) => d.stage === "completed");
   const incomeBySource: Record<string, number> = {};
   let totalIncome = 0;
@@ -49,7 +48,6 @@ export async function generateFinancialSnapshot(
     incomeBySource[source] = (incomeBySource[source] ?? 0) + value;
   }
 
-  // Calculate expenses from transactions
   const expenseByCategory: Record<string, number> = {};
   let totalExpenses = 0;
   let agentSpend = 0;
@@ -64,23 +62,29 @@ export async function generateFinancialSnapshot(
     }
   }
 
-  // Pipeline value
   const activeDeals = deals.filter(
-    (d) => d.stage === "active" || d.stage === "negotiating" || d.stage === "pitched"
+    (d) =>
+      d.stage === "active" ||
+      d.stage === "negotiating" ||
+      d.stage === "pitched",
   );
   const pipelineValue = activeDeals.reduce(
     (sum, d) => sum + (d.estimated_value_cents ?? 0),
-    0
+    0,
   );
 
-  // Simple forecast: average monthly income from completed deals
   const monthsOfData = Math.max(1, getMonthSpan(completedDeals));
   const avgMonthlyIncome = Math.round(totalIncome / monthsOfData);
-  const pipelineContribution = Math.round(pipelineValue * 0.3); // 30% close rate estimate
+  // Forecast uses realized monthly income plus a conservative 30% pipeline close-rate estimate.
+  const pipelineContribution = Math.round(pipelineValue * 0.3);
   const forecastCents = avgMonthlyIncome + pipelineContribution;
 
   const confidence: "low" | "medium" | "high" =
-    completedDeals.length >= 5 ? "high" : completedDeals.length >= 2 ? "medium" : "low";
+    completedDeals.length >= 5
+      ? "high"
+      : completedDeals.length >= 2
+        ? "medium"
+        : "low";
 
   const snapshot: FinancialSnapshot = {
     creatorId,
@@ -103,8 +107,13 @@ export async function generateFinancialSnapshot(
   };
 
   log.info(
-    { creatorId, income: totalIncome, expenses: totalExpenses, pipeline: pipelineValue },
-    "Financial snapshot generated"
+    {
+      creatorId,
+      income: totalIncome,
+      expenses: totalExpenses,
+      pipeline: pipelineValue,
+    },
+    "Financial snapshot generated",
   );
 
   return snapshot;

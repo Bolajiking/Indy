@@ -1,8 +1,5 @@
 /**
- * run_skill tool — lets the general orchestrator delegate to specialized skill sub-agents.
- *
- * This is the core tool that implements the Agentic OS architecture: every distinct
- * capability is a skill sub-agent, and the orchestrator dispatches to them via this tool.
+ * Lets the general orchestrator delegate creator requests to specialized skills.
  */
 
 import { registerTool } from "./registry.js";

@@ -8,6 +8,7 @@ import { platforms } from "./api/routes/platforms.js";
 import { reports } from "./api/routes/reports.js";
 import { wallet } from "./api/routes/wallet.js";
 import { messaging } from "./api/routes/messaging.js";
+import { connections } from "./api/routes/connections.js";
 import { webhooks, setTelegramBotForWebhook } from "./api/routes/webhooks.js";
 import { health } from "./api/routes/health.js";
 import {
@@ -29,7 +30,9 @@ const log = pino({ name: "indyfren" });
 
 async function main() {
   // Load MCP tool servers (non-blocking — failures logged, not fatal)
-  loadMCPServers().catch((err) => log.error({ err }, "MCP server initialization failed"));
+  loadMCPServers().catch((err) =>
+    log.error({ err }, "MCP server initialization failed"),
+  );
 
   const app = createApiServer();
   app.route("/health", health);
@@ -41,6 +44,7 @@ async function main() {
   app.route("/api/reports", reports);
   app.route("/api/wallet", wallet);
   app.route("/api/messaging-links", messaging);
+  app.route("/api/connections", connections);
 
   serve(
     {
@@ -49,7 +53,7 @@ async function main() {
     },
     (info) => {
       log.info({ port: info.port }, "API server started");
-    }
+    },
   );
 
   if (env.ENABLE_TELEGRAM_BOT && isTelegramConfigured()) {
@@ -63,20 +67,25 @@ async function main() {
     log.info("Calling telegramBot.start()...");
     const startPromise = telegramBot.start();
     log.info("telegramBot.start() called, waiting for promise...");
-    startPromise.then(() => {
-      log.info("✅ Telegram bot started successfully (long-polling mode)");
-    }).catch((error) => {
-      log.error({ error }, "❌ Telegram bot failed to start");
-    });
+    startPromise
+      .then(() => {
+        log.info("✅ Telegram bot started successfully (long-polling mode)");
+      })
+      .catch((error) => {
+        log.error({ error }, "❌ Telegram bot failed to start");
+      });
   } else if (!env.ENABLE_TELEGRAM_BOT) {
     log.warn("Telegram bot startup is disabled via ENABLE_TELEGRAM_BOT=false");
   } else {
-    log.warn("Telegram bot not started because TELEGRAM_BOT_TOKEN is not configured");
+    log.warn(
+      "Telegram bot not started because TELEGRAM_BOT_TOKEN is not configured",
+    );
   }
 
   if (env.ENABLE_JOBS) {
     try {
-      const { scheduleRecurringJobs, startWorkers } = await import("./jobs/queue.js");
+      const { scheduleRecurringJobs, startWorkers } =
+        await import("./jobs/queue.js");
       startWorkers();
       await scheduleRecurringJobs();
     } catch (error) {

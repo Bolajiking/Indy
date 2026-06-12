@@ -1,4 +1,5 @@
 import { supabase } from "../client.js";
+import type { JsonObject } from "../json.js";
 
 export interface AgentAction {
   id: string;
@@ -6,7 +7,7 @@ export interface AgentAction {
   action_type: string;
   status: string;
   description: string;
-  input: Record<string, unknown> | null;
+  input: JsonObject | null;
   output: Record<string, unknown> | null;
   cost_cents: number;
   requires_approval: boolean;
@@ -20,7 +21,7 @@ export async function createPendingAgentAction(action: {
   creator_id: string;
   action_type: string;
   description: string;
-  input: Record<string, unknown>;
+  input: JsonObject;
 }): Promise<AgentAction> {
   const { data, error } = await supabase
     .from("agent_actions")
@@ -43,7 +44,7 @@ export async function createPendingAgentAction(action: {
 
 export async function getAgentActionByIdForCreator(
   creatorId: string,
-  actionId: string
+  actionId: string,
 ): Promise<AgentAction | null> {
   const { data, error } = await supabase
     .from("agent_actions")
@@ -63,7 +64,7 @@ export async function getAgentActionByIdForCreator(
 }
 
 export async function listPendingAgentActionsForCreator(
-  creatorId: string
+  creatorId: string,
 ): Promise<AgentAction[]> {
   const { data, error } = await supabase
     .from("agent_actions")
@@ -82,8 +83,11 @@ export async function listPendingAgentActionsForCreator(
 export async function updateAgentActionStatus(
   actionId: string,
   updates: Partial<
-    Pick<AgentAction, "status" | "approved_at" | "executed_at" | "output" | "cost_cents">
-  >
+    Pick<
+      AgentAction,
+      "status" | "approved_at" | "executed_at" | "output" | "cost_cents"
+    >
+  >,
 ): Promise<AgentAction> {
   const { data, error } = await supabase
     .from("agent_actions")
@@ -91,6 +95,30 @@ export async function updateAgentActionStatus(
     .eq("id", actionId)
     .select()
     .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updatePendingAgentActionStatus(
+  actionId: string,
+  updates: Partial<
+    Pick<
+      AgentAction,
+      "status" | "approved_at" | "executed_at" | "output" | "cost_cents"
+    >
+  >,
+): Promise<AgentAction | null> {
+  const { data, error } = await supabase
+    .from("agent_actions")
+    .update(updates)
+    .eq("id", actionId)
+    .eq("status", "pending")
+    .select()
+    .maybeSingle();
 
   if (error) {
     throw error;

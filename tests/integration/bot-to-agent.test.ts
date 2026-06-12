@@ -23,7 +23,8 @@ vi.mock("../../src/db/queries/messages.js", () => ({
 }));
 
 vi.mock("../../src/bot/whatsapp.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/bot/whatsapp.js")>();
+  const actual =
+    await importOriginal<typeof import("../../src/bot/whatsapp.js")>();
 
   return {
     ...actual,
@@ -119,7 +120,7 @@ describe("bot-to-agent integration", () => {
       expect.objectContaining({
         parseMode: "Markdown",
         text: expect.stringContaining("your AI business manager"),
-      })
+      }),
     );
   });
 
@@ -178,7 +179,7 @@ describe("bot-to-agent integration", () => {
       expect.objectContaining({
         creatorId: "creator-2",
         text: "scan for deals",
-      })
+      }),
     );
     expect(sendWhatsAppMessage).toHaveBeenCalledWith("2348001", {
       text: "I found three strong sponsor targets for you.",

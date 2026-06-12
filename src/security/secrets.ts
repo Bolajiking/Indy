@@ -1,9 +1,16 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  randomBytes,
+} from "node:crypto";
 
 const ENCRYPTED_PREFIX = "v1";
 const TEST_FALLBACK_KEY = "indyfren-test-platform-secret-key";
 
-export function isEncryptedSecretValue(value: string | null | undefined): boolean {
+export function isEncryptedSecretValue(
+  value: string | null | undefined,
+): boolean {
   return Boolean(value && value.startsWith(`${ENCRYPTED_PREFIX}:`));
 }
 
@@ -26,7 +33,9 @@ function getEncryptionKey(): Buffer {
   return createHash("sha256").update(getKeyMaterial()).digest();
 }
 
-export function encryptSecretValue(value: string | null | undefined): string | null {
+export function encryptSecretValue(
+  value: string | null | undefined,
+): string | null {
   if (!value) {
     return null;
   }
@@ -37,7 +46,10 @@ export function encryptSecretValue(value: string | null | undefined): string | n
 
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", getEncryptionKey(), iv);
-  const encrypted = Buffer.concat([cipher.update(value, "utf8"), cipher.final()]);
+  const encrypted = Buffer.concat([
+    cipher.update(value, "utf8"),
+    cipher.final(),
+  ]);
   const tag = cipher.getAuthTag();
 
   return [
@@ -48,7 +60,9 @@ export function encryptSecretValue(value: string | null | undefined): string | n
   ].join(":");
 }
 
-export function decryptSecretValue(value: string | null | undefined): string | null {
+export function decryptSecretValue(
+  value: string | null | undefined,
+): string | null {
   if (!value) {
     return null;
   }
@@ -65,7 +79,7 @@ export function decryptSecretValue(value: string | null | undefined): string | n
   const decipher = createDecipheriv(
     "aes-256-gcm",
     getEncryptionKey(),
-    Buffer.from(ivRaw, "base64url")
+    Buffer.from(ivRaw, "base64url"),
   );
   decipher.setAuthTag(Buffer.from(tagRaw, "base64url"));
 

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import type { ContractReview, ContractIssue } from "../../../src/agent/skills/contract-reviewer.js";
+import type {
+  ContractReview,
+  ContractIssue,
+} from "../../../src/agent/skills/contract-reviewer.js";
 
 describe("ContractReview shape", () => {
   it("has required fields with proper severity levels", () => {
@@ -11,7 +14,8 @@ describe("ContractReview shape", () => {
           severity: "critical",
           clause: "Creator grants perpetual, worldwide, irrevocable license...",
           issue: "Perpetual usage rights with no additional compensation",
-          suggestion: "Limit usage rights to 12 months or negotiate buyout pricing",
+          suggestion:
+            "Limit usage rights to 12 months or negotiate buyout pricing",
         },
         {
           severity: "warning",

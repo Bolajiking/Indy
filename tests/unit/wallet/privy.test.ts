@@ -132,7 +132,7 @@ describe("createWalletForCreator", () => {
       Object.assign(new Error("Invalid wallet ID"), {
         status: 400,
         error: { code: "invalid_data" },
-      })
+      }),
     );
     policiesCreateMock.mockResolvedValue({ id: "policy-1" });
     walletsCreateMock.mockResolvedValue({
@@ -158,7 +158,7 @@ describe("createWalletForCreator", () => {
           privy_policy_id: "policy-1",
           wallet_mode: "agentic",
         }),
-      })
+      }),
     );
     expect(wallet).toEqual({
       walletId: "wallet-live",
@@ -181,7 +181,9 @@ describe("createWalletForCreator", () => {
     });
     walletsGetMock.mockRejectedValue(new Error("network down"));
 
-    await expect(createWalletForCreator("creator-3")).rejects.toThrow("network down");
+    await expect(createWalletForCreator("creator-3")).rejects.toThrow(
+      "network down",
+    );
     expect(policiesCreateMock).not.toHaveBeenCalled();
     expect(walletsCreateMock).not.toHaveBeenCalled();
     expect(updateCreator).not.toHaveBeenCalled();

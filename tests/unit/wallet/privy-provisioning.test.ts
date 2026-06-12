@@ -130,7 +130,7 @@ describe("buildAgentWalletPolicyDefinition", () => {
 
   it("keeps the policy name under Privy's 50 character limit for long creator ids", () => {
     const policy = buildAgentWalletPolicyDefinition(
-      "201d129d-e8af-4a59-b003-33a524e02f9c"
+      "201d129d-e8af-4a59-b003-33a524e02f9c",
     );
 
     expect(policy.name).toMatch(/^Indyfren agent [a-f0-9]{12}$/);

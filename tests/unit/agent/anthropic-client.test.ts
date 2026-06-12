@@ -22,7 +22,7 @@ describe("shared anthropic client", () => {
       expect.objectContaining({
         apiKey: expect.any(String),
         fetch: ipv4Fetch,
-      })
+      }),
     );
   });
 });

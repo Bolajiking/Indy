@@ -9,7 +9,7 @@ function createAbortError() {
 
 async function supabaseFetch(
   input: Parameters<typeof fetch>[0],
-  init?: Parameters<typeof fetch>[1]
+  init?: Parameters<typeof fetch>[1],
 ) {
   const controller = new AbortController();
   const timeout = setTimeout(() => {
@@ -40,8 +40,12 @@ async function supabaseFetch(
   }
 }
 
-export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY, {
-  global: {
-    fetch: supabaseFetch,
+export const supabase = createClient(
+  env.SUPABASE_URL,
+  env.SUPABASE_SERVICE_KEY,
+  {
+    global: {
+      fetch: supabaseFetch,
+    },
   },
-});
+);

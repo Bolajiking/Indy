@@ -14,26 +14,34 @@ vi.mock("../../../src/db/queries/agent-actions.js", () => ({
     executed_at: null,
     created_at: new Date().toISOString(),
   })),
-  getAgentActionByIdForCreator: vi.fn().mockImplementation(async (creatorId, actionId) => ({
-    id: actionId,
-    creator_id: creatorId,
-    action_type: "generate_pitch",
-    status: "pending",
-    description: "Pitch Acme",
-    input: { preview: "Draft preview", params: {} },
-    output: null,
-    cost_cents: 0,
-    requires_approval: true,
-    approved_at: null,
-    executed_at: null,
-    created_at: new Date().toISOString(),
-  })),
+  getAgentActionByIdForCreator: vi
+    .fn()
+    .mockImplementation(async (creatorId, actionId) => ({
+      id: actionId,
+      creator_id: creatorId,
+      action_type: "generate_pitch",
+      status: "pending",
+      description: "Pitch Acme",
+      input: { preview: "Draft preview", params: {} },
+      output: null,
+      cost_cents: 0,
+      requires_approval: true,
+      approved_at: null,
+      executed_at: null,
+      created_at: new Date().toISOString(),
+    })),
   listPendingAgentActionsForCreator: vi.fn().mockResolvedValue([]),
   updateAgentActionStatus: vi.fn(),
 }));
 
-import { isTelegramConfigured, splitMessage } from "../../../src/bot/telegram.js";
-import { getPendingApprovalByAction, storePendingApproval } from "../../../src/bot/approval.js";
+import {
+  isTelegramConfigured,
+  splitMessage,
+} from "../../../src/bot/telegram.js";
+import {
+  getPendingApprovalByAction,
+  storePendingApproval,
+} from "../../../src/bot/approval.js";
 
 describe("telegram configuration", () => {
   it("exposes whether telegram is configured", () => {
@@ -54,9 +62,9 @@ describe("telegram approval callback payloads", () => {
     });
 
     expect(action.actionId).toBe("action-tele");
-    expect((await getPendingApprovalByAction("creator-tele", "action-tele"))?.type).toBe(
-      "generate_pitch"
-    );
+    expect(
+      (await getPendingApprovalByAction("creator-tele", "action-tele"))?.type,
+    ).toBe("generate_pitch");
   });
 });
 

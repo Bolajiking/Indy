@@ -40,10 +40,22 @@ CREATE TABLE IF NOT EXISTS deals (
   brand_name TEXT NOT NULL,
   brand_contact_email TEXT,
   brand_contact_name TEXT,
+  brand_domain TEXT,
   stage TEXT NOT NULL DEFAULT 'discovered',
   fit_score INTEGER,
   estimated_value_cents INTEGER,
   actual_value_cents INTEGER,
+  source_url TEXT,
+  source_type TEXT,
+  source_confidence INTEGER,
+  source_evidence JSONB DEFAULT '[]',
+  deliverables JSONB DEFAULT '[]',
+  deadline_at TIMESTAMPTZ,
+  follow_up_at TIMESTAMPTZ,
+  probability INTEGER,
+  next_action TEXT,
+  agent_provenance JSONB DEFAULT '{}',
+  archived_at TIMESTAMPTZ,
   pitch_text TEXT,
   pitch_sent_at TIMESTAMPTZ,
   response_text TEXT,
@@ -67,6 +79,28 @@ CREATE TABLE IF NOT EXISTS transactions (
   tx_hash TEXT,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Payment attempts table (tracks the full MPP lifecycle, including failures)
+CREATE TABLE IF NOT EXISTS payment_attempts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  creator_id UUID NOT NULL REFERENCES creators(id) ON DELETE CASCADE,
+  transaction_id UUID REFERENCES transactions(id) ON DELETE SET NULL,
+  service_url TEXT NOT NULL,
+  service_host TEXT NOT NULL,
+  method TEXT,
+  intent TEXT,
+  currency TEXT,
+  quoted_amount_cents INTEGER,
+  actual_amount_cents INTEGER,
+  status TEXT NOT NULL,
+  challenge_id TEXT,
+  receipt_reference TEXT,
+  tx_hash TEXT,
+  error TEXT,
+  metadata JSONB DEFAULT '{}',
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Agent actions table
@@ -145,6 +179,8 @@ CREATE INDEX IF NOT EXISTS idx_creators_privy_user_id ON creators(privy_user_id)
 CREATE INDEX IF NOT EXISTS idx_deals_creator_id ON deals(creator_id);
 CREATE INDEX IF NOT EXISTS idx_deals_stage ON deals(stage);
 CREATE INDEX IF NOT EXISTS idx_transactions_creator_id ON transactions(creator_id);
+CREATE INDEX IF NOT EXISTS idx_payment_attempts_creator_id ON payment_attempts(creator_id);
+CREATE INDEX IF NOT EXISTS idx_payment_attempts_status ON payment_attempts(status);
 CREATE INDEX IF NOT EXISTS idx_agent_actions_creator_id ON agent_actions(creator_id);
 CREATE INDEX IF NOT EXISTS idx_agent_actions_status ON agent_actions(status);
 CREATE INDEX IF NOT EXISTS idx_messages_creator_id ON messages(creator_id);
@@ -161,6 +197,7 @@ ALTER TABLE creators ENABLE ROW LEVEL SECURITY;
 ALTER TABLE platform_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE deals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE payment_attempts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE agent_actions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messaging_link_sessions ENABLE ROW LEVEL SECURITY;
@@ -200,6 +237,14 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_transactions') THEN
     CREATE POLICY deny_anon_transactions ON transactions FOR ALL TO anon USING (false);
+  END IF;
+
+  -- Agent actions
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'service_role_payment_attempts') THEN
+    CREATE POLICY service_role_payment_attempts ON payment_attempts FOR ALL TO service_role USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_payment_attempts') THEN
+    CREATE POLICY deny_anon_payment_attempts ON payment_attempts FOR ALL TO anon USING (false);
   END IF;
 
   -- Agent actions

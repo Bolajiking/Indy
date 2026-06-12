@@ -1,4 +1,10 @@
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from "node:crypto";
+import { isRecord } from "../db/json.js";
 
 const YOUTUBE_PLATFORM = "youtube";
 const YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube.readonly";
@@ -28,6 +34,14 @@ export interface PlatformOAuthStateInput {
 }
 
 interface PlatformOAuthStatePayload extends PlatformOAuthStateInput {
+  issuedAt: number;
+  nonce: string;
+}
+
+interface DecodedPlatformOAuthStatePayload {
+  creatorId: string;
+  privyUserId: string;
+  platform: string;
   issuedAt: number;
   nonce: string;
 }
@@ -66,6 +80,23 @@ function getEnv(name: keyof NodeJS.ProcessEnv): string {
   return process.env[name]?.trim() ?? "";
 }
 
+function isDecodedPlatformOAuthStatePayload(
+  value: unknown,
+): value is DecodedPlatformOAuthStatePayload {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.creatorId === "string" &&
+    typeof value.privyUserId === "string" &&
+    typeof value.platform === "string" &&
+    typeof value.issuedAt === "number" &&
+    Number.isFinite(value.issuedAt) &&
+    typeof value.nonce === "string"
+  );
+}
+
 function deriveStateSigningKey(): Buffer {
   const secret = getEnv("PRIVY_APP_SECRET");
 
@@ -77,10 +108,14 @@ function deriveStateSigningKey(): Buffer {
 }
 
 function signStatePayload(payload: string): string {
-  return createHmac("sha256", deriveStateSigningKey()).update(payload).digest("base64url");
+  return createHmac("sha256", deriveStateSigningKey())
+    .update(payload)
+    .digest("base64url");
 }
 
-function assertYouTubePlatform(platform: string): asserts platform is "youtube" {
+function assertYouTubePlatform(
+  platform: string,
+): asserts platform is "youtube" {
   if (platform !== YOUTUBE_PLATFORM) {
     throw new Error(`Unsupported OAuth platform: ${platform}`);
   }
@@ -142,7 +177,9 @@ export function getPlatformOAuthProviders(): PlatformOAuthProvider[] {
   ];
 }
 
-export function createPlatformOAuthState(input: PlatformOAuthStateInput): string {
+export function createPlatformOAuthState(
+  input: PlatformOAuthStateInput,
+): string {
   assertYouTubePlatform(input.platform);
 
   const payload = Buffer.from(
@@ -150,14 +187,14 @@ export function createPlatformOAuthState(input: PlatformOAuthStateInput): string
       ...input,
       issuedAt: Math.floor(Date.now() / 1000),
       nonce: randomBytes(16).toString("base64url"),
-    } satisfies PlatformOAuthStatePayload)
+    } satisfies PlatformOAuthStatePayload),
   ).toString("base64url");
 
   return `${payload}.${signStatePayload(payload)}`;
 }
 
 export function verifyPlatformOAuthState(
-  input: VerifyPlatformOAuthStateInput
+  input: VerifyPlatformOAuthStateInput,
 ): VerifiedPlatformOAuthState {
   assertYouTubePlatform(input.platform);
 
@@ -177,10 +214,16 @@ export function verifyPlatformOAuthState(
     throw new Error("Invalid OAuth state signature");
   }
 
-  let parsed: PlatformOAuthStatePayload;
+  let parsed: DecodedPlatformOAuthStatePayload;
 
   try {
-    parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
+    const decoded: unknown = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8"),
+    );
+    if (!isDecodedPlatformOAuthStatePayload(decoded)) {
+      throw new Error("Invalid OAuth state payload");
+    }
+    parsed = decoded;
   } catch {
     throw new Error("Invalid OAuth state payload");
   }
@@ -195,7 +238,7 @@ export function verifyPlatformOAuthState(
     throw new Error("OAuth state has expired");
   }
 
-  return parsed;
+  return { ...parsed, platform: input.platform };
 }
 
 export function buildPlatformOAuthUrl(input: PlatformOAuthStateInput): string {
@@ -217,9 +260,10 @@ export function buildPlatformOAuthUrl(input: PlatformOAuthStateInput): string {
 }
 
 export async function exchangeYouTubeOAuthCode(
-  code: string
+  code: string,
 ): Promise<ExchangeYouTubeOAuthCodeResult> {
-  const { clientId, clientSecret, redirectUri } = assertYouTubeOAuthConfigured();
+  const { clientId, clientSecret, redirectUri } =
+    assertYouTubeOAuthConfigured();
 
   const response = await fetch(GOOGLE_TOKEN_URL, {
     method: "POST",
@@ -236,37 +280,41 @@ export async function exchangeYouTubeOAuthCode(
   });
 
   if (!response.ok) {
-    throw new Error(`YouTube OAuth token exchange failed with status ${response.status}`);
+    throw new Error(
+      `YouTube OAuth token exchange failed with status ${response.status}`,
+    );
   }
 
-  const data = (await response.json()) as {
-    access_token?: string;
-    refresh_token?: string;
-    expires_in?: number;
-    scope?: string;
-    token_type?: string;
-  };
+  const data: unknown = await response.json();
 
-  if (!data.access_token) {
-    throw new Error("YouTube OAuth token exchange did not return an access token");
+  if (
+    !isRecord(data) ||
+    typeof data.access_token !== "string" ||
+    data.access_token.length === 0
+  ) {
+    throw new Error(
+      "YouTube OAuth token exchange did not return an access token",
+    );
   }
 
-  const expiresIn = typeof data.expires_in === "number" ? data.expires_in : null;
+  const expiresIn =
+    typeof data.expires_in === "number" ? data.expires_in : null;
 
   return {
     accessToken: data.access_token,
-    refreshToken: data.refresh_token ?? null,
+    refreshToken:
+      typeof data.refresh_token === "string" ? data.refresh_token : null,
     expiresIn,
     expiresAt: expiresIn
       ? new Date(Date.now() + expiresIn * 1000).toISOString()
       : null,
-    scope: data.scope ?? null,
-    tokenType: data.token_type ?? null,
+    scope: typeof data.scope === "string" ? data.scope : null,
+    tokenType: typeof data.token_type === "string" ? data.token_type : null,
   };
 }
 
 export async function fetchYouTubeChannelIdentity(
-  accessToken: string
+  accessToken: string,
 ): Promise<YouTubeChannelIdentity> {
   const response = await fetch(YOUTUBE_CHANNELS_URL, {
     headers: {
@@ -275,33 +323,36 @@ export async function fetchYouTubeChannelIdentity(
   });
 
   if (!response.ok) {
-    throw new Error(`YouTube channel lookup failed with status ${response.status}`);
+    throw new Error(
+      `YouTube channel lookup failed with status ${response.status}`,
+    );
   }
 
-  const data = (await response.json()) as {
-    items?: Array<{
-      id?: string;
-      snippet?: {
-        title?: string;
-        customUrl?: string;
-      };
-    }>;
-  };
-
-  const channel = data.items?.[0];
-  if (!channel?.id || !channel.snippet?.title) {
+  const data: unknown = await response.json();
+  const items = isRecord(data) && Array.isArray(data.items) ? data.items : [];
+  const channel = items[0];
+  const snippet =
+    isRecord(channel) && isRecord(channel.snippet)
+      ? channel.snippet
+      : undefined;
+  if (
+    !isRecord(channel) ||
+    typeof channel.id !== "string" ||
+    !snippet ||
+    typeof snippet.title !== "string"
+  ) {
     throw new Error("YouTube channel lookup did not return a channel identity");
   }
 
   return {
     channelId: channel.id,
-    title: channel.snippet.title,
-    handle: channel.snippet.customUrl ?? null,
+    title: snippet.title,
+    handle: typeof snippet.customUrl === "string" ? snippet.customUrl : null,
   };
 }
 
 export function buildPlatformOAuthRedirect(
-  input: BuildPlatformOAuthRedirectInput
+  input: BuildPlatformOAuthRedirectInput,
 ): string {
   const url = new URL("/dashboard/settings", getDashboardAppUrl());
   url.searchParams.set("oauth", input.status);

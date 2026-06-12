@@ -1,12 +1,18 @@
 import pino from "pino";
 import { AGENT } from "../../config/constants.js";
-import anthropic from "../anthropic.js";
+import llm from "../llm.js";
 
 const log = pino({ name: "skill:inbox-triager" });
 
 export interface TriagedMessage {
   originalText: string;
-  category: "brand_deal" | "collaboration" | "fan_mail" | "spam" | "urgent" | "general";
+  category:
+    | "brand_deal"
+    | "collaboration"
+    | "fan_mail"
+    | "spam"
+    | "urgent"
+    | "general";
   priority: "high" | "medium" | "low";
   suggestedAction: string;
   brandMentioned?: string;
@@ -21,23 +27,30 @@ export interface TriageResult {
 
 /**
  * Categorize and prioritize a batch of incoming messages/DMs
- * for the creator. Uses Claude Haiku for fast classification.
+ * for the creator. Uses the configured fast LLM for classification.
  */
 export async function triageMessages(
   creatorId: string,
-  messages: Array<{ from: string; text: string; platform?: string }>
+  messages: Array<{ from: string; text: string; platform?: string }>,
 ): Promise<TriageResult> {
   log.info({ creatorId, count: messages.length }, "Triaging messages");
 
   if (messages.length === 0) {
-    return { messages: [], summary: "No messages to triage.", actionRequired: 0 };
+    return {
+      messages: [],
+      summary: "No messages to triage.",
+      actionRequired: 0,
+    };
   }
 
   const messageList = messages
-    .map((m, i) => `[${i + 1}] From: ${m.from} (${m.platform ?? "unknown"})\n${m.text}`)
+    .map(
+      (m, i) =>
+        `[${i + 1}] From: ${m.from} (${m.platform ?? "unknown"})\n${m.text}`,
+    )
     .join("\n\n");
 
-  const response = await anthropic.messages.create({
+  const response = await llm.messages.create({
     model: AGENT.FAST_LLM,
     max_tokens: 2048,
     system: `You are an inbox manager for a content creator. Categorize and prioritize each message.
@@ -75,8 +88,12 @@ Priority rules:
   try {
     const parsed = JSON.parse(text) as TriageResult;
     log.info(
-      { creatorId, triaged: parsed.messages.length, actionRequired: parsed.actionRequired },
-      "Inbox triaged"
+      {
+        creatorId,
+        triaged: parsed.messages.length,
+        actionRequired: parsed.actionRequired,
+      },
+      "Inbox triaged",
     );
     return parsed;
   } catch (error) {

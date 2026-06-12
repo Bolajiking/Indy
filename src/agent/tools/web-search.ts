@@ -1,4 +1,9 @@
-import { registerTool, type AgentTool } from "./registry.js";
+import {
+  readNumberParam,
+  readStringParam,
+  registerTool,
+  type AgentTool,
+} from "./registry.js";
 
 const webSearchTool: AgentTool = {
   name: "web_search",
@@ -21,14 +26,19 @@ const webSearchTool: AgentTool = {
   },
   async execute(params, context) {
     try {
-      const { query, num_results } = params as {
-        query: string;
-        num_results?: number;
-      };
+      const query = readStringParam(params, "query");
+      if (!query) {
+        return {
+          success: false,
+          data: null,
+          error: "query is required",
+        };
+      }
+      const numResults = readNumberParam(params, "num_results");
 
       const url = new URL("https://stableenrich.dev/api/exa/search");
       url.searchParams.set("query", query);
-      url.searchParams.set("num_results", String(num_results ?? 5));
+      url.searchParams.set("num_results", String(numResults ?? 5));
 
       const response = await context.mppFetch(url.toString());
       if (!response.ok) {
@@ -39,7 +49,7 @@ const webSearchTool: AgentTool = {
         };
       }
 
-      const data = await response.json();
+      const data: unknown = await response.json();
       return {
         success: true,
         data,
@@ -49,7 +59,8 @@ const webSearchTool: AgentTool = {
       return {
         success: false,
         data: null,
-        error: error instanceof Error ? error.message : "Unknown web search error",
+        error:
+          error instanceof Error ? error.message : "Unknown web search error",
       };
     }
   },

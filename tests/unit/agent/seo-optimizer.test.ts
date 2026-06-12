@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { SeoAnalysis, SeoSuggestion } from "../../../src/agent/skills/seo-optimizer.js";
+import type {
+  SeoAnalysis,
+  SeoSuggestion,
+} from "../../../src/agent/skills/seo-optimizer.js";
 
 describe("seo-optimizer types", () => {
   it("SeoAnalysis has the expected shape", () => {
@@ -26,7 +29,12 @@ describe("seo-optimizer types", () => {
 
   it("SeoSuggestion field is constrained", () => {
     const fields: SeoSuggestion["field"][] = [
-      "title", "description", "tags", "thumbnail", "hook", "hashtags",
+      "title",
+      "description",
+      "tags",
+      "thumbnail",
+      "hook",
+      "hashtags",
     ];
     expect(fields).toHaveLength(6);
   });

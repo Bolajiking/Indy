@@ -1,7 +1,12 @@
-import { registerTool, type AgentTool } from "./registry.js";
+import {
+  readStringParam,
+  registerTool,
+  type AgentTool,
+} from "./registry.js";
 
 const mediaKitGeneratorTool: AgentTool = {
   name: "generate_media_kit",
+  deferred: true,
   description:
     "Generate a visual media kit image for brand pitches — includes creator stats, audience demographics, and past brand work. Uses StableStudio via MPP for image generation.",
   autonomyLevel: "autonomous",
@@ -25,31 +30,34 @@ const mediaKitGeneratorTool: AgentTool = {
     },
     platforms: {
       type: "string",
-      description: "Comma-separated platforms (e.g. 'YouTube, Instagram, TikTok')",
+      description:
+        "Comma-separated platforms (e.g. 'YouTube, Instagram, TikTok')",
       required: true,
     },
     style: {
       type: "string",
-      description: "Visual style: 'modern', 'minimal', 'bold', 'creative'. Defaults to 'modern'.",
+      description:
+        "Visual style: 'modern', 'minimal', 'bold', 'creative'. Defaults to 'modern'.",
       required: false,
     },
   },
   async execute(params, context) {
-    const {
-      creator_name,
-      niche,
-      follower_count,
-      platforms,
-      style = "modern",
-    } = params as {
-      creator_name: string;
-      niche: string;
-      follower_count: string;
-      platforms: string;
-      style?: string;
-    };
+    const creatorName = readStringParam(params, "creator_name");
+    const niche = readStringParam(params, "niche");
+    const followerCount = readStringParam(params, "follower_count");
+    const platforms = readStringParam(params, "platforms");
+    const style = readStringParam(params, "style") ?? "modern";
 
-    const prompt = `Professional ${style} media kit design for content creator "${creator_name}". Niche: ${niche}. ${follower_count} followers across ${platforms}. Clean layout with stats, audience reach, and brand collaboration section. Professional branding, social media icons, high-quality design.`;
+    if (!creatorName || !niche || !followerCount || !platforms) {
+      return {
+        success: false,
+        data: null,
+        error:
+          "creator_name, niche, follower_count, and platforms are required",
+      };
+    }
+
+    const prompt = `Professional ${style} media kit design for content creator "${creatorName}". Niche: ${niche}. ${followerCount} followers across ${platforms}. Clean layout with stats, audience reach, and brand collaboration section. Professional branding, social media icons, high-quality design.`;
 
     try {
       const response = await context.mppFetch(
@@ -63,7 +71,7 @@ const mediaKitGeneratorTool: AgentTool = {
             height: 1600,
             format: "png",
           }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -75,11 +83,11 @@ const mediaKitGeneratorTool: AgentTool = {
         };
       }
 
-      const data = await response.json();
+      const data: unknown = await response.json();
       return {
         success: true,
         data: {
-          message: `Media kit generated for ${creator_name}`,
+          message: `Media kit generated for ${creatorName}`,
           result: data,
         },
         costCents: 100,

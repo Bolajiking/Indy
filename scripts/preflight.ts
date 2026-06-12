@@ -19,7 +19,8 @@ async function checkDns(host: string, label: string): Promise<CheckResult> {
       detail: `${host} resolves to ${resolved.address}`,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown DNS error";
+    const message =
+      error instanceof Error ? error.message : "unknown DNS error";
     return {
       name: label,
       ok: false,
@@ -47,9 +48,11 @@ function checkValue(name: string, value: string | boolean): CheckResult {
 function checkGroupedValues(
   label: string,
   fields: Array<{ name: string; value: string }>,
-  options?: { optional?: boolean; note?: string }
+  options?: { optional?: boolean; note?: string },
 ): CheckResult {
-  const missing = fields.filter((field) => field.value.trim().length === 0).map((field) => field.name);
+  const missing = fields
+    .filter((field) => field.value.trim().length === 0)
+    .map((field) => field.name);
 
   if (missing.length === 0) {
     return {
@@ -80,13 +83,25 @@ function checkGroupedValues(
 async function main() {
   const supabaseHost = new URL(env.SUPABASE_URL).hostname;
 
+  const aiKey =
+    env.AI_PROVIDER === "openai"
+      ? env.AI_API_KEY || env.OPENAI_API_KEY
+      : env.AI_API_KEY || env.ANTHROPIC_API_KEY;
+
   const checks: CheckResult[] = [
-    checkValue("ANTHROPIC_API_KEY", env.ANTHROPIC_API_KEY),
+    checkValue("AI_PROVIDER", env.AI_PROVIDER),
+    {
+      name: `AI credentials (${env.AI_PROVIDER})`,
+      ok: aiKey.trim().length > 0,
+      level: aiKey.trim().length > 0 ? "ok" : "fail",
+      detail: aiKey.trim().length > 0 ? "configured" : "missing",
+    },
     checkValue("SUPABASE_URL", env.SUPABASE_URL),
     checkValue("SUPABASE_SERVICE_KEY", env.SUPABASE_SERVICE_KEY),
     checkValue("PRIVY_APP_ID", env.PRIVY_APP_ID),
     checkValue("PRIVY_APP_SECRET", env.PRIVY_APP_SECRET),
     checkValue("PRIVY_JWT_VERIFICATION_KEY", env.PRIVY_JWT_VERIFICATION_KEY),
+    checkValue("MESSAGING_LINK_SECRET", env.MESSAGING_LINK_SECRET),
     checkValue("TELEGRAM_BOT_TOKEN", env.TELEGRAM_BOT_TOKEN),
     checkValue("ENABLE_TELEGRAM_BOT", env.ENABLE_TELEGRAM_BOT),
     checkValue("ENABLE_JOBS", env.ENABLE_JOBS),
@@ -94,52 +109,82 @@ async function main() {
       "YouTube OAuth env",
       [
         { name: "GOOGLE_OAUTH_CLIENT_ID", value: env.GOOGLE_OAUTH_CLIENT_ID },
-        { name: "GOOGLE_OAUTH_CLIENT_SECRET", value: env.GOOGLE_OAUTH_CLIENT_SECRET },
-        { name: "YOUTUBE_OAUTH_REDIRECT_URI", value: env.YOUTUBE_OAUTH_REDIRECT_URI },
+        {
+          name: "GOOGLE_OAUTH_CLIENT_SECRET",
+          value: env.GOOGLE_OAUTH_CLIENT_SECRET,
+        },
+        {
+          name: "YOUTUBE_OAUTH_REDIRECT_URI",
+          value: env.YOUTUBE_OAUTH_REDIRECT_URI,
+        },
         { name: "DASHBOARD_APP_URL", value: env.DASHBOARD_APP_URL },
       ],
       {
         optional: true,
         note: "needed for live YouTube OAuth smoke",
-      }
+      },
     ),
     checkGroupedValues(
       "Dashboard public env",
       [
-        { name: "NEXT_PUBLIC_PRIVY_APP_ID", value: process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim() ?? "" },
+        {
+          name: "NEXT_PUBLIC_PRIVY_APP_ID",
+          value: process.env.NEXT_PUBLIC_PRIVY_APP_ID?.trim() ?? "",
+        },
         {
           name: "NEXT_PUBLIC_PRIVY_CLIENT_ID",
           value: process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID?.trim() ?? "",
         },
-        { name: "NEXT_PUBLIC_API_URL", value: process.env.NEXT_PUBLIC_API_URL?.trim() ?? "" },
+        {
+          name: "NEXT_PUBLIC_API_URL",
+          value: process.env.NEXT_PUBLIC_API_URL?.trim() ?? "",
+        },
       ],
       {
         optional: true,
         note: "needed when running or building dashboard directly",
-      }
+      },
+    ),
+    checkGroupedValues(
+      "MPP live smoke env",
+      [
+        {
+          name: "MPP_TEST_CREATOR_ID",
+          value: process.env.MPP_TEST_CREATOR_ID?.trim() ?? "",
+        },
+      ],
+      {
+        optional: true,
+        note: "recommended to pin npm run test:mpp to a funded Privy-backed creator",
+      },
     ),
     await checkDns(supabaseHost, "Supabase DNS"),
     await checkDns("api.telegram.org", "Telegram DNS"),
     await checkDns("stableenrich.dev", "MPP provider DNS"),
+    await checkDns("mpp.dev", "MPP paid ping DNS"),
+    await checkDns("rpc.moderato.tempo.xyz", "Tempo RPC DNS"),
   ];
 
   console.log("Indyfren preflight");
   for (const check of checks) {
-    const status =
-      check.level === "warn" ? "WARN" : check.ok ? "OK" : "FAIL";
+    const status = check.level === "warn" ? "WARN" : check.ok ? "OK" : "FAIL";
     console.log(`${status}  ${check.name}: ${check.detail}`);
   }
 
   const failed = checks.filter((check) => !check.ok);
   const warned = checks.filter((check) => check.level === "warn");
   if (failed.length > 0) {
-    console.log(`\n${failed.length} check(s) need attention before live smoke tests.`);
+    console.log(
+      `\n${failed.length} check(s) need attention before live smoke tests.`,
+    );
     process.exitCode = 1;
     return;
   }
 
   if (warned.length > 0) {
-    console.log(`\n${warned.length} optional readiness check(s) are not configured yet.`);
+    console.log(
+      `\n${warned.length} optional readiness check(s) are not configured yet.`,
+    );
   }
 
   console.log("\nAll preflight checks passed.");

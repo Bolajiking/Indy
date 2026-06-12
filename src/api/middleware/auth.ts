@@ -38,13 +38,17 @@ export const requirePrivyAuth = createMiddleware<{
     c.set("auth", session);
   } catch (error) {
     if (error instanceof AuthTokenVerificationError) {
-      log.warn({ error: error.cause ?? error }, "Bearer token verification failed");
+      log.warn(
+        { error: error.cause ?? error },
+        "Bearer token verification failed",
+      );
       throw new HTTPException(401, { message: "Invalid bearer token" });
     }
 
     log.warn({ error }, "Bearer token verification failed");
     throw new HTTPException(503, {
-      message: "Authentication service is temporarily unavailable. Please retry in a moment.",
+      message:
+        "Authentication service is temporarily unavailable. Please retry in a moment.",
     });
   }
 
@@ -57,19 +61,34 @@ export const requireCreatorAuth = createMiddleware<{
   await requirePrivyAuth(c, async () => {
     const auth = c.get("auth");
     if (auth.creatorResolutionError) {
-      throw new HTTPException(503, { message: auth.creatorResolutionError.message });
+      throw new HTTPException(503, {
+        message: auth.creatorResolutionError.message,
+      });
     }
 
     if (!auth.creatorId) {
-      throw new HTTPException(403, { message: "Creator profile not registered" });
+      throw new HTTPException(403, {
+        message: "Creator profile not registered",
+      });
     }
 
     await next();
   });
 });
 
-export function getAuthContext(c: {
-  get: (key: "auth") => AuthContext;
-}) {
+export function getAuthContext(c: { get: (key: "auth") => AuthContext }) {
   return c.get("auth");
+}
+
+export function getRequiredCreatorId(c: {
+  get: (key: "auth") => AuthContext;
+}): string {
+  const { creatorId } = getAuthContext(c);
+  if (!creatorId) {
+    throw new HTTPException(403, {
+      message: "Creator profile not registered",
+    });
+  }
+
+  return creatorId;
 }

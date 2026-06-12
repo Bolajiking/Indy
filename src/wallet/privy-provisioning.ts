@@ -47,7 +47,7 @@ export interface PrivyLinkedAccountLike {
 }
 
 export function buildPrivyLinkedAccountInput(
-  creator: ProvisioningCreatorIdentity
+  creator: ProvisioningCreatorIdentity,
 ): PrivyLinkedAccountInput {
   if (creator.telegram_chat_id) {
     return {
@@ -64,7 +64,7 @@ export function buildPrivyLinkedAccountInput(
 }
 
 export function findEmbeddedEthereumWallet(
-  linkedAccounts: PrivyLinkedAccountLike[]
+  linkedAccounts: PrivyLinkedAccountLike[],
 ): { walletId: string; address: string } | null {
   for (const account of linkedAccounts) {
     if (
@@ -87,7 +87,7 @@ export function findEmbeddedEthereumWallet(
 }
 
 export function buildAgentWalletPolicyDefinition(
-  creatorId: string
+  creatorId: string,
 ): AgentWalletPolicyDefinition {
   const chainId = String(NETWORK.TEMPO.CHAIN_ID);
   const creatorToken = createHash("sha256")

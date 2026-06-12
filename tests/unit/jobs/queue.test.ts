@@ -67,7 +67,7 @@ describe("jobs queue", () => {
         jobId: "morning-scan-all",
         removeOnComplete: true,
         repeat: { pattern: "0 6 * * *" },
-      })
+      }),
     );
     expect(queueAdd).toHaveBeenNthCalledWith(
       2,
@@ -77,13 +77,19 @@ describe("jobs queue", () => {
         jobId: "morning-brief-all",
         removeOnComplete: true,
         repeat: { pattern: "0 7 * * *" },
-      })
+      }),
     );
   });
 
   it("dispatches known jobs to their handlers", async () => {
-    await processJob({ name: "morning-scan", data: { creatorId: "creator-1" } });
-    await processJob({ name: "morning-brief", data: { creatorId: "creator-2" } });
+    await processJob({
+      name: "morning-scan",
+      data: { creatorId: "creator-1" },
+    });
+    await processJob({
+      name: "morning-brief",
+      data: { creatorId: "creator-2" },
+    });
 
     expect(runMorningScan).toHaveBeenCalledWith("creator-1");
     expect(runMorningBrief).toHaveBeenCalledWith("creator-2");
@@ -96,7 +102,7 @@ describe("jobs queue", () => {
     expect(workerConstructor).toHaveBeenCalledWith(
       "indyfren-agent",
       expect.any(Function),
-      expect.objectContaining({ concurrency: 5 })
+      expect.objectContaining({ concurrency: 5 }),
     );
     expect(workerOn).toHaveBeenCalledWith("failed", expect.any(Function));
   });

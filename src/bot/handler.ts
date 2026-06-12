@@ -10,6 +10,7 @@ import { processCreatorMessage } from "../agent/conversation.js";
 import { ensureCreatorWalletProvisioning } from "../wallet/provisioning.js";
 import { connectMessagingChannelFromToken } from "../messaging/linking.js";
 import { upsertCreatorMemory } from "../db/queries/creator-memories.js";
+import type { IncomingMessage, OutgoingMessage } from "./messages.js";
 
 const log = pino({ name: "bot:handler" });
 
@@ -23,23 +24,10 @@ const FEEDBACK_ELIGIBLE_SKILLS = new Set([
   "content-strategy",
 ]);
 
-export type Platform = "telegram" | "whatsapp";
-
-export interface IncomingMessage {
-  platform: Platform;
-  platformUserId: string;
-  displayName: string;
-  text: string;
-}
-
-export interface OutgoingMessage {
-  text: string;
-  parseMode?: "Markdown" | "HTML";
-  buttons?: Array<{ text: string; callbackData: string }>;
-}
+export type { IncomingMessage, OutgoingMessage, Platform } from "./messages.js";
 
 async function findCreatorForMessage(
-  message: IncomingMessage
+  message: IncomingMessage,
 ): Promise<Creator | null> {
   if (message.platform === "telegram") {
     return findCreatorByTelegram(message.platformUserId);
@@ -50,7 +38,9 @@ async function findCreatorForMessage(
 
 function extractMessagingLinkToken(text: string): string | null {
   const trimmed = text.trim();
-  const telegramMatch = trimmed.match(/^\/start(?:@\w+)?\s+link_([A-Za-z0-9\-_]+)$/i);
+  const telegramMatch = trimmed.match(
+    /^\/start(?:@\w+)?\s+link_([A-Za-z0-9\-_]+)$/i,
+  );
   if (telegramMatch) {
     return telegramMatch[1];
   }
@@ -64,12 +54,15 @@ function extractMessagingLinkToken(text: string): string | null {
 }
 
 export async function handleMessage(
-  message: IncomingMessage
+  message: IncomingMessage,
 ): Promise<OutgoingMessage> {
   try {
     return await handleMessageInner(message);
   } catch (err) {
-    log.error({ error: err, platform: message.platform, user: message.platformUserId }, "Unhandled error in handleMessage");
+    log.error(
+      { error: err, platform: message.platform, user: message.platformUserId },
+      "Unhandled error in handleMessage",
+    );
     return {
       text: "Something went wrong on my end. Please try again in a moment.",
       parseMode: "Markdown",
@@ -80,7 +73,8 @@ export async function handleMessage(
 async function handleBotOnboardingStep(
   creator: Creator,
   text: string,
-  step: number
+  step: number,
+  platform: IncomingMessage["platform"],
 ): Promise<OutgoingMessage> {
   const answer = text.trim();
 
@@ -96,7 +90,7 @@ async function handleBotOnboardingStep(
     await updateCreator(creator.id, {
       niche: answer,
       settings: { ...(creator.settings ?? {}), bot_onboarding_step: 2 },
-    } as any);
+    });
 
     return {
       text: `Great — *${answer}* creator, noted! 🎯\n\n📱 Which platforms are you most active on?\n_(e.g. Instagram, TikTok, YouTube, Twitter/X, LinkedIn — list as many as you like)_`,
@@ -115,7 +109,7 @@ async function handleBotOnboardingStep(
     });
     await updateCreator(creator.id, {
       settings: { ...(creator.settings ?? {}), bot_onboarding_step: 3 },
-    } as any);
+    });
 
     return {
       text: `Got it — ${answer}. 📱\n\n👥 What's your approximate total follower count across all platforms?\n_(e.g. "50K on Instagram", "200K total", "about 10K")_`,
@@ -138,24 +132,30 @@ async function handleBotOnboardingStep(
         bot_onboarding_step: "complete",
         onboarding_complete: true,
       },
-    } as any);
+    });
 
-    log.info({ creatorId: creator.id }, "Bot onboarding complete — running first brand scan");
+    log.info(
+      { creatorId: creator.id },
+      "Bot onboarding complete — running first brand scan",
+    );
 
     // Run first brand opportunity scan via the agent
     try {
       const scanResult = await processCreatorMessage({
         creatorId: creator.id,
         text: `My profile is complete: I'm a ${creator.niche ?? "content creator"} with ${answer} followers. Can you quickly scan for 2-3 brand deals that would be a great fit for me, and tell me what my recommended rate should be for a sponsored post? Keep it concise.`,
+        metadata: { platform },
       });
 
       return {
-        text:
-          `✅ *Profile complete!* Here's your first opportunity scan:\n\n${scanResult.text}\n\n---\n💬 You can now chat with me anytime. Try:\n• "scan for deals"\n• "what's my rate?"\n• /help for all commands`,
+        text: `✅ *Profile complete!* Here's your first opportunity scan:\n\n${scanResult.text}\n\n---\n💬 You can now chat with me anytime. Try:\n• "scan for deals"\n• "what's my rate?"\n• /help for all commands`,
         parseMode: "Markdown",
       };
     } catch (err) {
-      log.error({ creatorId: creator.id, err }, "First scan failed during bot onboarding");
+      log.error(
+        { creatorId: creator.id, err },
+        "First scan failed during bot onboarding",
+      );
       return {
         text: `✅ *You're all set, ${creator.display_name}!*\n\nI've saved your profile. Here's what I can do for you:\n\n💼 "scan for deals" — Find brand opportunities\n📊 "my rates" — Get your recommended rate card\n💰 "wallet" — Check your balance\n\nType /help anytime to see all commands!`,
         parseMode: "Markdown",
@@ -165,17 +165,24 @@ async function handleBotOnboardingStep(
 
   // Fallback — unknown step, reset to agent
   await updateCreator(creator.id, {
-    settings: { ...(creator.settings ?? {}), bot_onboarding_step: "complete", onboarding_complete: true },
-  } as any);
-  return { text: "You're all set! What would you like to work on?", parseMode: "Markdown" };
+    settings: {
+      ...(creator.settings ?? {}),
+      bot_onboarding_step: "complete",
+      onboarding_complete: true,
+    },
+  });
+  return {
+    text: "You're all set! What would you like to work on?",
+    parseMode: "Markdown",
+  };
 }
 
 async function handleMessageInner(
-  message: IncomingMessage
+  message: IncomingMessage,
 ): Promise<OutgoingMessage> {
   log.info(
     { platform: message.platform, user: message.platformUserId },
-    "Incoming message"
+    "Incoming message",
   );
 
   const linkToken = extractMessagingLinkToken(message.text);
@@ -186,7 +193,10 @@ async function handleMessageInner(
       platformUserId: message.platformUserId,
     });
 
-    if (linkResult.status === "linked" || linkResult.status === "already_linked") {
+    if (
+      linkResult.status === "linked" ||
+      linkResult.status === "already_linked"
+    ) {
       return {
         text:
           `✅ Your ${message.platform === "telegram" ? "Telegram" : "WhatsApp"} is now connected to *${linkResult.creator.display_name}*.\n\n` +
@@ -205,8 +215,7 @@ async function handleMessageInner(
     }
 
     return {
-      text:
-        "⏰ That connect code is invalid or expired. Generate a fresh Telegram or WhatsApp link from your dashboard settings and try again.",
+      text: "⏰ That connect code is invalid or expired. Generate a fresh Telegram or WhatsApp link from your dashboard settings and try again.",
       parseMode: "Markdown",
     };
   }
@@ -229,7 +238,7 @@ async function handleMessageInner(
     }).catch((error) => {
       log.error(
         { creatorId: creator?.id, error },
-        "Wallet provisioning trigger failed during onboarding"
+        "Wallet provisioning trigger failed during onboarding",
       );
     });
 
@@ -242,12 +251,23 @@ async function handleMessageInner(
   // Bot onboarding interview — runs for new creators before full agent access
   const onboardingStep = creator.settings?.bot_onboarding_step;
   if (onboardingStep && onboardingStep !== "complete") {
-    return await handleBotOnboardingStep(creator, message.text, onboardingStep as number);
+    return await handleBotOnboardingStep(
+      creator,
+      message.text,
+      onboardingStep as number,
+      message.platform,
+    );
   }
 
   const normalizedText = message.text.toLowerCase().trim();
 
-  if (normalizedText === "/start" || normalizedText === "/help" || normalizedText === "hi" || normalizedText === "hello" || normalizedText === "help") {
+  if (
+    normalizedText === "/start" ||
+    normalizedText === "/help" ||
+    normalizedText === "hi" ||
+    normalizedText === "hello" ||
+    normalizedText === "help"
+  ) {
     return {
       text: `👋 Welcome back, ${creator.display_name}! What can I help with?\n\n*Quick Commands:*\n💼 /scan — Find brand deals\n📊 /deals — View deal pipeline\n📅 /calendar — Upcoming deadlines\n💰 /finances — Financial snapshot\n👛 /wallet — Check balance\n📝 /content — Content strategy\n☀️ /brief — Morning brief\n\n*Or just chat with me:*\n"What's my rate for a sponsored post?"\n"Draft a pitch for TechCorp"\n"Show me my analytics"\n\nType /help anytime to see this menu.`,
       parseMode: "Markdown",
@@ -255,11 +275,25 @@ async function handleMessageInner(
   }
 
   // Rewrite slash commands to natural language for AgentOS routing
-  if (normalizedText === "/calendar" || normalizedText === "calendar" || normalizedText === "deadlines") {
+  if (
+    normalizedText === "/calendar" ||
+    normalizedText === "calendar" ||
+    normalizedText === "deadlines"
+  ) {
     message.text = "show my upcoming deadlines and calendar";
-  } else if (normalizedText === "/finances" || normalizedText === "finances" || normalizedText === "financial" || normalizedText === "money") {
+  } else if (
+    normalizedText === "/finances" ||
+    normalizedText === "finances" ||
+    normalizedText === "financial" ||
+    normalizedText === "money"
+  ) {
     message.text = "give me my financial snapshot";
-  } else if (normalizedText === "/content" || normalizedText === "content plan" || normalizedText === "content strategy" || normalizedText === "content") {
+  } else if (
+    normalizedText === "/content" ||
+    normalizedText === "content plan" ||
+    normalizedText === "content strategy" ||
+    normalizedText === "content"
+  ) {
     message.text = "generate my content strategy";
   } else if (normalizedText === "/scan") {
     message.text = "scan for brand deals";
@@ -297,7 +331,10 @@ async function handleMessageInner(
   }
 
   // Add feedback buttons for advice-producing skills
-  if (agentResponse.skill && FEEDBACK_ELIGIBLE_SKILLS.has(agentResponse.skill)) {
+  if (
+    agentResponse.skill &&
+    FEEDBACK_ELIGIBLE_SKILLS.has(agentResponse.skill)
+  ) {
     return {
       text: agentResponse.text,
       parseMode: "Markdown",

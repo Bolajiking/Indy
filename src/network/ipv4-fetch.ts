@@ -5,9 +5,7 @@ function createAbortError() {
   return new DOMException("The operation was aborted.", "AbortError");
 }
 
-function normalizeResponseHeaders(
-  headers: http.IncomingHttpHeaders
-): Headers {
+function normalizeResponseHeaders(headers: http.IncomingHttpHeaders): Headers {
   const normalized = new Headers();
 
   for (const [key, value] of Object.entries(headers)) {
@@ -30,7 +28,7 @@ function normalizeResponseHeaders(
 
 export async function ipv4Fetch(
   input: string | URL | Request,
-  init?: RequestInit
+  init?: RequestInit,
 ): Promise<Response> {
   const request = new Request(input, init);
   const url = new URL(request.url);
@@ -69,10 +67,10 @@ export async function ipv4Fetch(
             new Response(Buffer.concat(chunks), {
               status: response.statusCode ?? 500,
               headers: normalizeResponseHeaders(response.headers),
-            })
+            }),
           );
         });
-      }
+      },
     );
 
     req.on("error", (error) => {

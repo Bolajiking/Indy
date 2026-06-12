@@ -1,4 +1,4 @@
-import type { MessagingPlatform } from "../../messaging/link-tokens.js";
+import type { MessagingPlatform } from "../../messaging/types.js";
 import { supabase } from "../client.js";
 
 export interface MessagingLinkSessionRow {
@@ -42,7 +42,7 @@ export async function consumeMessagingLinkSession(
   id: string,
   platform: MessagingPlatform,
   tokenHash: string,
-  platformUserId: string
+  platformUserId: string,
 ): Promise<MessagingLinkSessionRow | null> {
   const { data, error } = await supabase
     .from("messaging_link_sessions")

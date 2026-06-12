@@ -2,7 +2,7 @@ import pino from "pino";
 import { AGENT } from "../../config/constants.js";
 import { getDealsForCreator } from "../../db/queries/deals.js";
 import { getTransactionsForCreator } from "../../db/queries/transactions.js";
-import anthropic from "../anthropic.js";
+import llm from "../llm.js";
 import { assembleContext } from "../memory.js";
 
 const log = pino({ name: "skill:revenue-advisor" });
@@ -31,7 +31,7 @@ export interface RevenueAdvisorReport {
 }
 
 export async function generateRevenueReport(
-  creatorId: string
+  creatorId: string,
 ): Promise<RevenueAdvisorReport> {
   log.info({ creatorId }, "Generating revenue diversification report");
 
@@ -55,7 +55,7 @@ export async function generateRevenueReport(
     createdAt: t.created_at,
   }));
 
-  const response = await anthropic.messages.create({
+  const response = await llm.messages.create({
     model: AGENT.DEFAULT_LLM,
     max_tokens: 2048,
     system: `You are a revenue strategist for content creators. Analyze the creator's current revenue streams and suggest diversification opportunities.
@@ -97,8 +97,12 @@ Return ONLY valid JSON in this shape:
   try {
     const parsed = JSON.parse(text) as RevenueAdvisorReport;
     log.info(
-      { creatorId, streams: parsed.currentStreams.length, suggestions: parsed.suggestions.length },
-      "Revenue report generated"
+      {
+        creatorId,
+        streams: parsed.currentStreams.length,
+        suggestions: parsed.suggestions.length,
+      },
+      "Revenue report generated",
     );
     return parsed;
   } catch (error) {

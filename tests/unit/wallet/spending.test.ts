@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { canAffordTransaction, SpendingLimitExceeded } from "../../../src/wallet/spending.js";
+import {
+  canAffordTransaction,
+  SpendingLimitExceeded,
+} from "../../../src/wallet/spending.js";
 
 describe("canAffordTransaction", () => {
   it("returns true when free credits cover the cost", () => {

@@ -23,27 +23,27 @@ function isEnabled(value: string): boolean {
 }
 
 export function resolveSmokeAuthConfig(
-  input: ResolveSmokeAuthConfigInput
+  input: ResolveSmokeAuthConfigInput,
 ): SmokeAuthConfig {
   const accessToken = input.accessToken.trim();
   if (!accessToken) {
     throw new Error(
-      "SMOKE_PRIVY_ACCESS_TOKEN is required. Use a real Privy access token from a signed-in dashboard session."
+      "SMOKE_PRIVY_ACCESS_TOKEN is required. Use a real Privy access token from a signed-in dashboard session.",
     );
   }
 
   const apiBaseUrl = normalizeBaseUrl(
-    input.smokeApiUrl || input.publicApiUrl || `http://localhost:${input.port}`
+    input.smokeApiUrl || input.publicApiUrl || `http://localhost:${input.port}`,
   );
 
   const dashboardBaseUrl = normalizeBaseUrl(
-    input.smokeDashboardUrl || input.defaultDashboardUrl
+    input.smokeDashboardUrl || input.defaultDashboardUrl,
   );
 
   if (isEnabled(input.checkDashboardProxy)) {
     if (!dashboardBaseUrl) {
       throw new Error(
-        "SMOKE_CHECK_DASHBOARD_PROXY=true requires SMOKE_DASHBOARD_URL or DASHBOARD_APP_URL."
+        "SMOKE_CHECK_DASHBOARD_PROXY=true requires SMOKE_DASHBOARD_URL or DASHBOARD_APP_URL.",
       );
     }
 

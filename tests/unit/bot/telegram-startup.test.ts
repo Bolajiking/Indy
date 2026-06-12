@@ -1,16 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const {
-  constructorSpy,
-  setMyCommands,
-  onSpy,
-  catchSpy,
-} = vi.hoisted(() => ({
-  constructorSpy: vi.fn(),
-  setMyCommands: vi.fn().mockResolvedValue(undefined),
-  onSpy: vi.fn(),
-  catchSpy: vi.fn(),
-}));
+const { constructorSpy, setMyCommands, onSpy, catchSpy } = vi.hoisted(() => {
+  process.env.TELEGRAM_BOT_TOKEN = "test-token";
+
+  return {
+    constructorSpy: vi.fn(),
+    setMyCommands: vi.fn().mockResolvedValue(undefined),
+    onSpy: vi.fn(),
+    catchSpy: vi.fn(),
+  };
+});
 
 vi.mock("grammy", () => {
   class MockBot {
@@ -58,7 +57,7 @@ describe("createTelegramBot", () => {
         client: expect.objectContaining({
           fetch: ipv4Fetch,
         }),
-      })
+      }),
     );
     expect(setMyCommands).toHaveBeenCalledOnce();
   });

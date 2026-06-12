@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { findService, listServices, registerService } from "../../../src/agent/tools/x402-registry.js";
+import {
+  findService,
+  listServices,
+  registerService,
+} from "../../../src/agent/tools/x402-registry.js";
 
 describe("x402ServiceRegistry", () => {
   beforeEach(() => {
@@ -33,9 +37,12 @@ describe("x402ServiceRegistry", () => {
     });
 
     it("falls back to static registry when bazaar is unreachable", async () => {
-      process.env.AGENTCASH_BAZAAR_URL = "http://nonexistent-bazaar.example.com";
+      process.env.AGENTCASH_BAZAAR_URL =
+        "http://nonexistent-bazaar.example.com";
 
-      vi.spyOn(global, "fetch").mockRejectedValueOnce(new Error("ECONNREFUSED"));
+      vi.spyOn(global, "fetch").mockRejectedValueOnce(
+        new Error("ECONNREFUSED"),
+      );
 
       const service = await findService("web_search");
       expect(service).not.toBeNull();

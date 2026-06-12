@@ -7,7 +7,6 @@ import {
 } from "../../../src/db/queries/creators.js";
 import { processCreatorMessage } from "../../../src/agent/conversation.js";
 
-// Mock dependencies
 vi.mock("../../../src/db/queries/creators.js");
 vi.mock("../../../src/db/queries/messages.js");
 vi.mock("../../../src/wallet/provisioning.js");
@@ -100,7 +99,9 @@ describe("Telegram Bot Improvements", () => {
       });
 
       expect(processCreatorMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: "show my upcoming deadlines and calendar" })
+        expect.objectContaining({
+          text: "show my upcoming deadlines and calendar",
+        }),
       );
       expect(response.text).toContain("Upcoming Deadlines");
       expect(response.text).toContain("Invoice #123");
@@ -121,7 +122,7 @@ describe("Telegram Bot Improvements", () => {
       });
 
       expect(processCreatorMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: "give me my financial snapshot" })
+        expect.objectContaining({ text: "give me my financial snapshot" }),
       );
       expect(response.text).toContain("Financial Snapshot");
       expect(response.parseMode).toBe("Markdown");
@@ -141,7 +142,7 @@ describe("Telegram Bot Improvements", () => {
       });
 
       expect(processCreatorMessage).toHaveBeenCalledWith(
-        expect.objectContaining({ text: "generate my content strategy" })
+        expect.objectContaining({ text: "generate my content strategy" }),
       );
       expect(response.text).toContain("Content Strategy");
       expect(response.parseMode).toBe("Markdown");
@@ -207,9 +208,8 @@ describe("Telegram Bot Improvements", () => {
     });
 
     it("should handle new user onboarding with improved message", async () => {
-      const { ensureCreatorWalletProvisioning } = await import(
-        "../../../src/wallet/provisioning.js"
-      );
+      const { ensureCreatorWalletProvisioning } =
+        await import("../../../src/wallet/provisioning.js");
 
       vi.mocked(findCreatorByTelegram).mockResolvedValue(null);
       vi.mocked(createCreator).mockResolvedValue(mockCreator);

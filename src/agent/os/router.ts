@@ -1,13 +1,10 @@
 /**
- * Agentic OS Router
- *
- * Classifies user intent and routes to the appropriate skill sub-agent.
- * Uses Claude Haiku for fast, cheap classification.
+ * Classifies user intent and routes to a skill using the configured fast LLM.
  */
 
 import pino from "pino";
 import { AGENT } from "../../config/constants.js";
-import anthropic from "../anthropic.js";
+import llm from "../llm.js";
 
 const log = pino({ name: "agent:os:router" });
 
@@ -84,14 +81,14 @@ extractedParams should contain any specific parameters mentioned (brand names, p
 
 export async function routeToSkill(
   userMessage: string,
-  creatorContext?: string
+  creatorContext?: string,
 ): Promise<RouteResult> {
   const contextHint = creatorContext
     ? `\nCreator context summary: ${creatorContext.slice(0, 200)}`
     : "";
 
   try {
-    const response = await anthropic.messages.create({
+    const response = await llm.messages.create({
       model: AGENT.FAST_LLM,
       max_tokens: 512,
       system: CLASSIFICATION_SYSTEM,
@@ -106,14 +103,20 @@ export async function routeToSkill(
     const text = response.content.find((b) => b.type === "text")?.text ?? "";
     const cleaned = text.replace(/```json\n?|\n?```/g, "").trim();
     const parsed = JSON.parse(cleaned) as RouteResult;
+    if (!(parsed.skill in SKILL_DESCRIPTIONS)) {
+      throw new Error(`LLM returned unknown skill "${parsed.skill}"`);
+    }
 
     log.info(
       { skill: parsed.skill, confidence: parsed.confidence },
-      "Routed message to skill"
+      "Routed message to skill",
     );
     return parsed;
   } catch (err) {
-    log.warn({ err, userMessage: userMessage.slice(0, 50) }, "Router failed, defaulting to general");
+    log.warn(
+      { err, userMessage: userMessage.slice(0, 50) },
+      "Router failed, defaulting to general",
+    );
     return {
       skill: "general",
       confidence: 0.5,

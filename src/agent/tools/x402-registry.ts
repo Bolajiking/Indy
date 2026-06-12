@@ -1,21 +1,13 @@
 /**
- * x402 Service Registry
+ * Maps agent capability requests to x402 endpoints.
  *
- * Discovers paid API services on the Tempo Network / agentcash bazaar by capability
- * category. Agents call `findService(capability)` to get a payable endpoint URL,
- * then use mppFetch (from ToolContext) to pay and call it.
- *
- * This is the bridge between Indyfren's payment infrastructure and the open x402
- * service marketplace — enabling the agent to autonomously expand its tool set at
- * runtime without hardcoded endpoints.
- *
- * Design:
- *   - Static fallback map of known services (always available, no network needed)
- *   - Optional live discovery from agentcash bazaar (if AGENTCASH_BAZAAR_URL is set)
- *   - Results cached for TTL to avoid repeated discovery calls
+ * Live bazaar discovery is preferred when configured; static entries keep paid
+ * tools discoverable when the bazaar is unavailable or unset.
  */
 
 import pino from "pino";
+import { isRecord } from "../../db/json.js";
+import { errMsg } from "../../lib/errors.js";
 
 const log = pino({ name: "agent:x402-registry" });
 
@@ -30,19 +22,19 @@ export interface ServiceEntry {
   estimatedCostCents: number;
   /** Brief description of what the service does */
   description: string;
-  /** Source: "static" = hardcoded fallback, "bazaar" = discovered from registry */
+  /** Source: "static" = offline fallback, "bazaar" = discovered from registry */
   source: "static" | "bazaar";
 }
 
-// Static registry of known x402 services — always available as fallback.
-// Add new services here as they come online on Tempo Network.
+// Static registry of known x402 services, used as the offline fallback.
 const STATIC_REGISTRY: ServiceEntry[] = [
   {
     capability: "brand_enrichment",
     name: "StableEnrich",
     url: "https://stableenrich.com/api/v1/enrich",
     estimatedCostCents: 200,
-    description: "Enrich company/brand data: employees, revenue, domain, contacts",
+    description:
+      "Enrich company/brand data: employees, revenue, domain, contacts",
     source: "static",
   },
   {
@@ -82,7 +74,8 @@ const STATIC_REGISTRY: ServiceEntry[] = [
     name: "Modash API",
     url: "https://api.modash.io/v1",
     estimatedCostCents: 300,
-    description: "Creator/influencer analytics across Instagram, TikTok, YouTube",
+    description:
+      "Creator/influencer analytics across Instagram, TikTok, YouTube",
     source: "static",
   },
 ];
@@ -92,35 +85,60 @@ interface CacheEntry {
   expiresAt: number;
 }
 
+interface BazaarService {
+  capability: string;
+  name: string;
+  endpoint: string;
+  max_price_cents: number;
+  description: string;
+}
+
 const discoveryCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+function isBazaarService(value: unknown): value is BazaarService {
+  return (
+    isRecord(value) &&
+    typeof value.capability === "string" &&
+    typeof value.name === "string" &&
+    typeof value.endpoint === "string" &&
+    typeof value.max_price_cents === "number" &&
+    Number.isFinite(value.max_price_cents) &&
+    typeof value.description === "string"
+  );
+}
 
 /**
  * Find the best available service for a given capability.
  * Returns the static fallback if live discovery is unavailable or fails.
  */
-export async function findService(capability: string): Promise<ServiceEntry | null> {
-  // Check cache first
+export async function findService(
+  capability: string,
+): Promise<ServiceEntry | null> {
   const cached = discoveryCache.get(capability);
   if (cached && Date.now() < cached.expiresAt) {
     return cached.services[0] ?? null;
   }
 
-  // Try live discovery if bazaar URL is configured
   const bazaarUrl = process.env.AGENTCASH_BAZAAR_URL;
   if (bazaarUrl) {
     try {
       const discovered = await discoverFromBazaar(bazaarUrl, capability);
       if (discovered.length > 0) {
-        discoveryCache.set(capability, { services: discovered, expiresAt: Date.now() + CACHE_TTL_MS });
+        discoveryCache.set(capability, {
+          services: discovered,
+          expiresAt: Date.now() + CACHE_TTL_MS,
+        });
         return discovered[0];
       }
-    } catch (err: any) {
-      log.warn({ capability, error: err.message }, "Live service discovery failed — falling back to static registry");
+    } catch (err: unknown) {
+      log.warn(
+        { capability, error: errMsg(err) },
+        "Live service discovery failed — falling back to static registry",
+      );
     }
   }
 
-  // Fall back to static registry
   const staticMatch = STATIC_REGISTRY.find((s) => s.capability === capability);
   if (staticMatch) {
     return staticMatch;
@@ -130,10 +148,10 @@ export async function findService(capability: string): Promise<ServiceEntry | nu
   return null;
 }
 
-/**
- * List all known services for a capability (static + discovered).
- */
-export async function listServices(capability?: string): Promise<ServiceEntry[]> {
+/** List static services for a capability, or every static service when omitted. */
+export async function listServices(
+  capability?: string,
+): Promise<ServiceEntry[]> {
   const staticServices = capability
     ? STATIC_REGISTRY.filter((s) => s.capability === capability)
     : STATIC_REGISTRY;
@@ -145,25 +163,29 @@ export async function listServices(capability?: string): Promise<ServiceEntry[]>
  * Discover services from the agentcash bazaar or Tempo marketplace.
  * Returns an empty array if the bazaar is unreachable.
  */
-async function discoverFromBazaar(bazaarUrl: string, capability: string): Promise<ServiceEntry[]> {
-  const response = await fetch(`${bazaarUrl}/v1/services?capability=${encodeURIComponent(capability)}`, {
-    headers: { "Content-Type": "application/json" },
-    signal: AbortSignal.timeout(3000),
-  });
+async function discoverFromBazaar(
+  bazaarUrl: string,
+  capability: string,
+): Promise<ServiceEntry[]> {
+  const response = await fetch(
+    `${bazaarUrl}/v1/services?capability=${encodeURIComponent(capability)}`,
+    {
+      headers: { "Content-Type": "application/json" },
+      signal: AbortSignal.timeout(3000),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(`Bazaar returned ${response.status}`);
   }
 
-  const data = await response.json() as { services?: Array<{
-    capability: string;
-    name: string;
-    endpoint: string;
-    max_price_cents: number;
-    description: string;
-  }> };
+  const data: unknown = await response.json();
+  const services =
+    isRecord(data) && Array.isArray(data.services)
+      ? data.services.filter(isBazaarService)
+      : [];
 
-  return (data.services ?? []).map((s) => ({
+  return services.map((s) => ({
     capability: s.capability,
     name: s.name,
     url: s.endpoint,
@@ -180,5 +202,8 @@ export function registerService(entry: ServiceEntry): void {
   STATIC_REGISTRY.push(entry);
   // Invalidate cache for this capability
   discoveryCache.delete(entry.capability);
-  log.info({ service: entry.name, capability: entry.capability }, "Service registered");
+  log.info(
+    { service: entry.name, capability: entry.capability },
+    "Service registered",
+  );
 }

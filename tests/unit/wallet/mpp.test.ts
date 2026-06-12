@@ -16,9 +16,15 @@ vi.mock("../../../src/db/queries/transactions.js", () => ({
   logTransaction: vi.fn(),
 }));
 
+vi.mock("../../../src/db/queries/payment-attempts.js", () => ({
+  createPaymentAttempt: vi.fn(),
+  updatePaymentAttempt: vi.fn(),
+}));
+
 vi.mock("../../../src/wallet/spending.js", () => ({
   checkSpendingLimits: vi.fn(),
   enforcePerTransactionLimit: vi.fn(),
+  enforceCumulativeLimits: vi.fn(),
   extractQuotedAmountCents: vi.fn(),
 }));
 
@@ -28,6 +34,11 @@ import {
   installMppFetchPolyfill,
 } from "../../../src/wallet/mpp.js";
 import { createPrivyAccount } from "../../../src/wallet/privy.js";
+import { logTransaction } from "../../../src/db/queries/transactions.js";
+import {
+  createPaymentAttempt,
+  updatePaymentAttempt,
+} from "../../../src/db/queries/payment-attempts.js";
 import {
   checkSpendingLimits,
   enforcePerTransactionLimit,
@@ -36,17 +47,36 @@ import {
 
 describe("createMppClient", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
+    vi.mocked(createPaymentAttempt).mockResolvedValue({
+      id: "attempt-1",
+      creator_id: "creator-1",
+      service_url: "https://example.com",
+      service_host: "example.com",
+      status: "started",
+      metadata: {},
+    } as never);
+    vi.mocked(updatePaymentAttempt).mockResolvedValue({
+      id: "attempt-1",
+    } as never);
+    vi.mocked(logTransaction).mockResolvedValue({
+      id: "txn-1",
+    } as never);
   });
 
   it("creates an mppx client backed by a Privy account", async () => {
     const account = { address: "0x123" };
     const method = { name: "tempo-method" };
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
     const createCredential = vi.fn().mockResolvedValue("credential");
 
     vi.mocked(createPrivyAccount).mockReturnValue(account as never);
-    vi.mocked(tempo).mockReturnValue([method, { name: "session-method" }] as never);
+    vi.mocked(tempo).mockReturnValue([
+      method,
+      { name: "session-method" },
+    ] as never);
     vi.mocked(extractQuotedAmountCents).mockReturnValue(250);
     vi.mocked(Mppx.create).mockReturnValue({
       fetch: fetchMock,
@@ -68,7 +98,7 @@ describe("createMppClient", () => {
           currency: "0x20c0000000000000000000000000000000000000",
         },
       } as never,
-      { createCredential }
+      { createCredential },
     );
 
     expect(createPrivyAccount).toHaveBeenCalledWith("wallet-1", "0x123");
@@ -76,7 +106,7 @@ describe("createMppClient", () => {
       expect.objectContaining({
         account,
         getClient: expect.any(Function),
-      })
+      }),
     );
     expect(Mppx.create).toHaveBeenCalledWith({
       onChallenge: expect.any(Function),
@@ -94,23 +124,30 @@ describe("createMppClient", () => {
   it("blocks quoted payments that exceed the per-transaction limit before credential creation", async () => {
     const account = { address: "0x123" };
     const method = { name: "tempo-method" };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
     const createCredential = vi.fn().mockResolvedValue("credential");
 
     vi.mocked(createPrivyAccount).mockReturnValue(account as never);
-    vi.mocked(tempo).mockReturnValue([method, { name: "session-method" }] as never);
+    vi.mocked(tempo).mockReturnValue([
+      method,
+      { name: "session-method" },
+    ] as never);
     vi.mocked(extractQuotedAmountCents).mockReturnValue(900);
     vi.mocked(enforcePerTransactionLimit).mockRejectedValue(
-      new Error("per-transaction limit exceeded")
+      new Error("per-transaction limit exceeded"),
     );
     vi.mocked(Mppx.create).mockReturnValue({
-      fetch: vi.fn(),
+      fetch: fetchMock,
       rawFetch: fetch,
       methods: [method],
       transport: {} as never,
       createCredential,
     } as never);
 
-    await createMppClient("creator-1", "wallet-1", "0x123");
+    const client = await createMppClient("creator-1", "wallet-1", "0x123");
+    await client.fetch("https://example.com");
 
     const config = vi.mocked(Mppx.create).mock.calls[0]?.[0];
 
@@ -123,29 +160,80 @@ describe("createMppClient", () => {
             currency: "0x20c0000000000000000000000000000000000000",
           },
         } as never,
-        { createCredential }
-      )
+        { createCredential },
+      ),
     ).rejects.toThrow("per-transaction limit exceeded");
     expect(createCredential).not.toHaveBeenCalled();
+    expect(updatePaymentAttempt).toHaveBeenCalledWith(
+      "attempt-1",
+      expect.objectContaining({
+        status: "failed",
+        error: "per-transaction limit exceeded",
+      }),
+    );
+  });
+
+  it("records a failed payment attempt when spending limits block before challenge", async () => {
+    const account = { address: "0x123" };
+    const method = { name: "tempo-method" };
+
+    vi.mocked(createPrivyAccount).mockReturnValue(account as never);
+    vi.mocked(tempo).mockReturnValue([method] as never);
+    vi.mocked(checkSpendingLimits).mockRejectedValue(
+      new Error("daily limit exceeded"),
+    );
+    vi.mocked(Mppx.create).mockReturnValue({
+      fetch: vi.fn(),
+      rawFetch: fetch,
+      methods: [method],
+      transport: {} as never,
+      createCredential: vi.fn(),
+    } as never);
+
+    const client = await createMppClient("creator-1", "wallet-1", "0x123");
+
+    await expect(client.fetch("https://example.com")).rejects.toThrow(
+      "daily limit exceeded",
+    );
+    expect(createPaymentAttempt).toHaveBeenCalledWith(
+      expect.objectContaining({
+        creator_id: "creator-1",
+        service_url: "https://example.com",
+        service_host: "example.com",
+        status: "started",
+      }),
+    );
+    expect(updatePaymentAttempt).toHaveBeenCalledWith("attempt-1", {
+      status: "failed",
+      error: "daily limit exceeded",
+    });
+    expect(Mppx.create).not.toHaveBeenCalled();
   });
 
   it("blocks paid calls when the challenge does not expose a usable quote", async () => {
     const account = { address: "0x123" };
     const method = { name: "tempo-method" };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(null, { status: 200 }));
     const createCredential = vi.fn().mockResolvedValue("credential");
 
     vi.mocked(createPrivyAccount).mockReturnValue(account as never);
-    vi.mocked(tempo).mockReturnValue([method, { name: "session-method" }] as never);
+    vi.mocked(tempo).mockReturnValue([
+      method,
+      { name: "session-method" },
+    ] as never);
     vi.mocked(extractQuotedAmountCents).mockReturnValue(null);
     vi.mocked(Mppx.create).mockReturnValue({
-      fetch: vi.fn(),
+      fetch: fetchMock,
       rawFetch: fetch,
       methods: [method],
       transport: {} as never,
       createCredential,
     } as never);
 
-    await createMppClient("creator-1", "wallet-1", "0x123");
+    const client = await createMppClient("creator-1", "wallet-1", "0x123");
+    await client.fetch("https://example.com");
 
     const config = vi.mocked(Mppx.create).mock.calls[0]?.[0];
 
@@ -158,8 +246,8 @@ describe("createMppClient", () => {
             currency: "0xnot-supported",
           },
         } as never,
-        { createCredential }
-      )
+        { createCredential },
+      ),
     ).rejects.toThrow("Unable to determine quoted payment amount");
     expect(createCredential).not.toHaveBeenCalled();
   });
@@ -170,7 +258,10 @@ describe("createMppClient", () => {
     const createCredential = vi.fn().mockResolvedValue("credential");
 
     vi.mocked(createPrivyAccount).mockReturnValue(account as never);
-    vi.mocked(tempo).mockReturnValue([method, { name: "session-method" }] as never);
+    vi.mocked(tempo).mockReturnValue([
+      method,
+      { name: "session-method" },
+    ] as never);
     vi.mocked(extractQuotedAmountCents).mockReturnValue(125);
     vi.mocked(enforcePerTransactionLimit).mockResolvedValue(undefined as never);
     vi.mocked(Mppx.create).mockReturnValue({
@@ -181,7 +272,11 @@ describe("createMppClient", () => {
       createCredential,
     } as never);
 
-    const client = await installMppFetchPolyfill("creator-1", "wallet-1", "0x123");
+    const client = await installMppFetchPolyfill(
+      "creator-1",
+      "wallet-1",
+      "0x123",
+    );
 
     const config = vi.mocked(Mppx.create).mock.calls[0]?.[0];
     const credential = await config?.onChallenge?.(
@@ -192,7 +287,7 @@ describe("createMppClient", () => {
           currency: "0x20c0000000000000000000000000000000000000",
         },
       } as never,
-      { createCredential }
+      { createCredential },
     );
 
     expect(Mppx.create).toHaveBeenCalledWith({

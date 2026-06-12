@@ -1,6 +1,6 @@
 import pino from "pino";
 import { AGENT } from "../../config/constants.js";
-import anthropic from "../anthropic.js";
+import llm from "../llm.js";
 
 const log = pino({ name: "skill:seo-optimizer" });
 
@@ -26,11 +26,11 @@ export async function analyzeSeo(
     description?: string;
     tags?: string[];
     niche?: string;
-  }
+  },
 ): Promise<SeoAnalysis> {
   log.info({ platform, title: content.title }, "Running SEO analysis");
 
-  const response = await anthropic.messages.create({
+  const response = await llm.messages.create({
     model: AGENT.FAST_LLM,
     max_tokens: 2048,
     system: `You are an SEO and content optimization expert for ${platform}. Analyze the provided content metadata and suggest improvements for discoverability and engagement.
@@ -65,8 +65,12 @@ Score 0-100 based on: keyword usage, length optimization, engagement signals, pl
   try {
     const parsed = JSON.parse(text) as SeoAnalysis;
     log.info(
-      { platform, score: parsed.overallScore, suggestions: parsed.suggestions.length },
-      "SEO analysis complete"
+      {
+        platform,
+        score: parsed.overallScore,
+        suggestions: parsed.suggestions.length,
+      },
+      "SEO analysis complete",
     );
     return parsed;
   } catch (error) {

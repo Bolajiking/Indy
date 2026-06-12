@@ -1,5 +1,6 @@
 import pino from "pino";
 import { getDealsForCreator } from "../../db/queries/deals.js";
+import { formatUsdWhole } from "../../lib/format.js";
 
 const log = pino({ name: "skill:calendar-manager" });
 
@@ -25,7 +26,7 @@ export interface CalendarView {
  * and payment milestones based on the creator's deal pipeline.
  */
 export async function getCalendarView(
-  creatorId: string
+  creatorId: string,
 ): Promise<CalendarView> {
   log.info({ creatorId }, "Generating calendar view");
 
@@ -38,9 +39,9 @@ export async function getCalendarView(
     if (deal.stage === "completed" || deal.stage === "lost") continue;
 
     const updatedAt = new Date(deal.updated_at);
-    const daysSinceUpdate = (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24);
+    const daysSinceUpdate =
+      (now.getTime() - updatedAt.getTime()) / (1000 * 60 * 60 * 24);
 
-    // Generate events based on deal stage
     if (deal.stage === "discovered") {
       const event: CalendarEvent = {
         title: `Pitch ${deal.brand_name}`,
@@ -83,7 +84,7 @@ export async function getCalendarView(
         brandName: deal.brand_name,
         priority: "high",
         notes: deal.estimated_value_cents
-          ? `Value: $${(deal.estimated_value_cents / 100).toFixed(0)}`
+          ? `Value: ${formatUsdWhole(deal.estimated_value_cents)}`
           : undefined,
       };
       if (daysSinceUpdate > 7) {
@@ -94,7 +95,7 @@ export async function getCalendarView(
     }
 
     if (deal.stage === "active") {
-      // Content delivery deadline
+      // Active deals get inferred delivery and invoice checkpoints when no explicit dates exist.
       upcoming.push({
         title: `Deliver content for ${deal.brand_name}`,
         date: addDays(updatedAt, 14).toISOString().slice(0, 10),
@@ -104,7 +105,6 @@ export async function getCalendarView(
         priority: "high",
       });
 
-      // Payment follow-up
       if (!deal.actual_value_cents) {
         upcoming.push({
           title: `Invoice ${deal.brand_name}`,
@@ -114,20 +114,19 @@ export async function getCalendarView(
           brandName: deal.brand_name,
           priority: "medium",
           notes: deal.estimated_value_cents
-            ? `Expected: $${(deal.estimated_value_cents / 100).toFixed(0)}`
+            ? `Expected: ${formatUsdWhole(deal.estimated_value_cents)}`
             : undefined,
         });
       }
     }
   }
 
-  // Sort by date
   upcoming.sort((a, b) => a.date.localeCompare(b.date));
   overdue.sort((a, b) => a.date.localeCompare(b.date));
 
   log.info(
     { creatorId, upcoming: upcoming.length, overdue: overdue.length },
-    "Calendar view generated"
+    "Calendar view generated",
   );
 
   return {

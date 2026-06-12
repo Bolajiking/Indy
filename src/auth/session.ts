@@ -24,7 +24,7 @@ export class AuthTokenVerificationError extends Error {
 export class CreatorResolutionError extends Error {
   constructor(
     message = CREATOR_SERVICE_UNAVAILABLE_MESSAGE,
-    options?: ErrorOptions
+    options?: ErrorOptions,
   ) {
     super(message, options);
     this.name = "CreatorResolutionError";
@@ -39,49 +39,62 @@ export interface AuthenticatedSession {
 }
 
 function getLinkedTelegramUserId(
-  user: { linked_accounts?: Array<{ type?: string; telegram_user_id?: string }> } | null
+  user: {
+    linked_accounts?: Array<{ type?: string; telegram_user_id?: string }>;
+  } | null,
 ): string | null {
   const linkedTelegramAccount = user?.linked_accounts?.find(
     (account) =>
-      account?.type === "telegram" && typeof account.telegram_user_id === "string"
+      account?.type === "telegram" &&
+      typeof account.telegram_user_id === "string",
   );
 
   return linkedTelegramAccount?.telegram_user_id ?? null;
 }
 
 async function resolveCreatorForPrivyUser(privyUserId: string) {
-  const existingCreator = await getCreatorByPrivyUserId(privyUserId).catch((error) => {
-    if (isDatabaseServiceUnavailableError(error)) {
-      throw new CreatorResolutionError(undefined, { cause: error });
-    }
+  const existingCreator = await getCreatorByPrivyUserId(privyUserId).catch(
+    (error) => {
+      if (isDatabaseServiceUnavailableError(error)) {
+        throw new CreatorResolutionError(undefined, { cause: error });
+      }
 
-    log.warn({ error, privyUserId }, "Failed to resolve creator for Privy user");
-    throw new CreatorResolutionError(undefined, { cause: error });
-  });
+      log.warn(
+        { error, privyUserId },
+        "Failed to resolve creator for Privy user",
+      );
+      throw new CreatorResolutionError(undefined, { cause: error });
+    },
+  );
   if (existingCreator) {
     return existingCreator;
   }
 
-  const privyUser = await privy.users()._get(privyUserId).catch((error) => {
-    log.warn({ error, privyUserId }, "Failed to read Privy linked accounts");
-    return null;
-  });
+  const privyUser = await privy
+    .users()
+    ._get(privyUserId)
+    .catch((error) => {
+      log.warn({ error, privyUserId }, "Failed to read Privy linked accounts");
+      return null;
+    });
   const telegramUserId = getLinkedTelegramUserId(privyUser);
   if (!telegramUserId) {
     return null;
   }
 
-  const telegramCreator = await findCreatorByTelegram(telegramUserId).catch((error) => {
-    if (isDatabaseServiceUnavailableError(error)) {
-      throw new CreatorResolutionError(undefined, { cause: error });
-    }
+  const telegramCreator = await findCreatorByTelegram(telegramUserId).catch(
+    (error) => {
+      if (isDatabaseServiceUnavailableError(error)) {
+        throw new CreatorResolutionError(undefined, { cause: error });
+      }
 
-    log.warn(
-      { error, privyUserId, telegramUserId },
-      "Failed to resolve Telegram creator during Privy claim"
-    );
-    throw new CreatorResolutionError(undefined, { cause: error });
-  });
+      log.warn(
+        { error, privyUserId, telegramUserId },
+        "Failed to resolve Telegram creator during Privy claim",
+      );
+      throw new CreatorResolutionError(undefined, { cause: error });
+    },
+  );
 
   if (!telegramCreator) {
     return null;
@@ -98,7 +111,7 @@ async function resolveCreatorForPrivyUser(privyUserId: string) {
         privyUserId,
         telegramUserId,
       },
-      "Telegram creator is already claimed by another Privy identity"
+      "Telegram creator is already claimed by another Privy identity",
     );
     return null;
   }
@@ -116,7 +129,7 @@ async function resolveCreatorForPrivyUser(privyUserId: string) {
 
     log.warn(
       { error, creatorId: telegramCreator.id, privyUserId, telegramUserId },
-      "Failed to claim Telegram creator for Privy user"
+      "Failed to claim Telegram creator for Privy user",
     );
     throw new CreatorResolutionError(undefined, { cause: error });
   });
@@ -125,7 +138,7 @@ async function resolveCreatorForPrivyUser(privyUserId: string) {
 }
 
 export async function authenticateAccessToken(
-  accessToken: string
+  accessToken: string,
 ): Promise<AuthenticatedSession> {
   const verified = await privy
     .utils()
@@ -150,7 +163,7 @@ export async function authenticateAccessToken(
           error: error.cause ?? error,
           privyUserId: verified.user_id,
         },
-        "Creator resolution failed during bearer auth"
+        "Creator resolution failed during bearer auth",
       );
 
       return {

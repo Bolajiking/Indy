@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { ContentStrategyReport, ContentIdea } from "../../../src/agent/skills/content-strategy.js";
+import type {
+  ContentStrategyReport,
+  ContentIdea,
+} from "../../../src/agent/skills/content-strategy.js";
 
 describe("content-strategy types", () => {
   it("ContentStrategyReport has the expected shape", () => {

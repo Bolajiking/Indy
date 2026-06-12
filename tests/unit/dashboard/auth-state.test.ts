@@ -9,7 +9,7 @@ import {
 } from "../../../dashboard/src/lib/auth-state";
 
 function onboarding(
-  overrides: Partial<DashboardOnboardingState> = {}
+  overrides: Partial<DashboardOnboardingState> = {},
 ): DashboardOnboardingState {
   return {
     status: "unregistered",
@@ -26,7 +26,8 @@ describe("resolveDashboardAuthStage", () => {
         authenticated: false,
         creator: null,
         onboarding: onboarding(),
-      })
+        profileLoaded: false,
+      }),
     ).toBe("loading");
   });
 
@@ -37,7 +38,8 @@ describe("resolveDashboardAuthStage", () => {
         authenticated: false,
         creator: null,
         onboarding: onboarding(),
-      })
+        profileLoaded: false,
+      }),
     ).toBe("signed_out");
   });
 
@@ -48,8 +50,35 @@ describe("resolveDashboardAuthStage", () => {
         authenticated: true,
         creator: null,
         onboarding: onboarding({ status: "unregistered" }),
-      })
+        profileLoaded: true,
+      }),
     ).toBe("unregistered");
+  });
+
+  it("stays on loading while an authenticated user's profile is still resolving", () => {
+    // Regression: an existing user must not flash the onboarding flow during the
+    // brief window before their profile fetch resolves (creator still null).
+    expect(
+      resolveDashboardAuthStage({
+        ready: true,
+        authenticated: true,
+        creator: null,
+        onboarding: onboarding({ status: "unregistered" }),
+        profileLoaded: false,
+      }),
+    ).toBe("loading");
+  });
+
+  it("resolves the real stage once the profile has loaded", () => {
+    expect(
+      resolveDashboardAuthStage({
+        ready: true,
+        authenticated: true,
+        creator: { id: "creator-1" },
+        onboarding: onboarding({ status: "active", walletProvisioned: true }),
+        profileLoaded: true,
+      }),
+    ).toBe("active");
   });
 
   it("returns wallet_pending when a creator exists but onboarding is incomplete", () => {
@@ -59,7 +88,8 @@ describe("resolveDashboardAuthStage", () => {
         authenticated: true,
         creator: { id: "creator-1" },
         onboarding: onboarding({ status: "wallet_pending" }),
-      })
+        profileLoaded: true,
+      }),
     ).toBe("wallet_pending");
   });
 
@@ -70,7 +100,8 @@ describe("resolveDashboardAuthStage", () => {
         authenticated: true,
         creator: { id: "creator-1" },
         onboarding: onboarding({ status: "active", walletProvisioned: true }),
-      })
+        profileLoaded: true,
+      }),
     ).toBe("active");
   });
 });
@@ -92,7 +123,7 @@ describe("getSyncFailureFallback", () => {
         creator: { id: "creator-1", privy_user_id: "did:privy:user-1" },
         onboarding: onboarding({ status: "active", walletProvisioned: true }),
         currentUserId: "did:privy:user-1",
-      })
+      }),
     ).toEqual({
       creator: { id: "creator-1", privy_user_id: "did:privy:user-1" },
       onboarding: onboarding({ status: "active", walletProvisioned: true }),
@@ -105,7 +136,7 @@ describe("getSyncFailureFallback", () => {
         creator: null,
         onboarding: onboarding({ status: "active", walletProvisioned: true }),
         currentUserId: "did:privy:user-1",
-      })
+      }),
     ).toEqual({
       creator: null,
       onboarding: onboarding(),
@@ -118,7 +149,7 @@ describe("getSyncFailureFallback", () => {
         creator: { id: "creator-1", privy_user_id: "did:privy:user-1" },
         onboarding: onboarding({ status: "active", walletProvisioned: true }),
         currentUserId: "did:privy:user-2",
-      })
+      }),
     ).toEqual({
       creator: null,
       onboarding: onboarding(),
@@ -134,7 +165,7 @@ describe("shouldSyncDashboardSession", () => {
         authenticated: true,
         userId: "did:privy:user-1",
         lastSyncedUserId: null,
-      })
+      }),
     ).toBe(true);
   });
 
@@ -145,7 +176,7 @@ describe("shouldSyncDashboardSession", () => {
         authenticated: true,
         userId: "did:privy:user-1",
         lastSyncedUserId: "did:privy:user-1",
-      })
+      }),
     ).toBe(false);
   });
 
@@ -156,7 +187,7 @@ describe("shouldSyncDashboardSession", () => {
         authenticated: true,
         userId: "did:privy:user-1",
         lastSyncedUserId: null,
-      })
+      }),
     ).toBe(false);
 
     expect(
@@ -165,7 +196,7 @@ describe("shouldSyncDashboardSession", () => {
         authenticated: false,
         userId: "did:privy:user-1",
         lastSyncedUserId: null,
-      })
+      }),
     ).toBe(false);
   });
 });

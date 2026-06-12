@@ -1,4 +1,5 @@
 import { supabase } from "../client.js";
+import type { JsonObject } from "../json.js";
 
 export interface Creator {
   id: string;
@@ -11,13 +12,13 @@ export interface Creator {
   wallet_address: string | null;
   free_credits_remaining_cents: number;
   monthly_spend_cents: number;
-  settings: Record<string, any>;
+  settings: JsonObject;
   created_at: string;
   updated_at: string;
 }
 
 export async function findCreatorByTelegram(
-  chatId: string
+  chatId: string,
 ): Promise<Creator | null> {
   const { data, error } = await supabase
     .from("creators")
@@ -37,7 +38,7 @@ export async function findCreatorByTelegram(
 }
 
 export async function findCreatorByWhatsApp(
-  phone: string
+  phone: string,
 ): Promise<Creator | null> {
   const { data, error } = await supabase
     .from("creators")
@@ -57,7 +58,7 @@ export async function findCreatorByWhatsApp(
 }
 
 export async function createCreator(
-  creatorData: Partial<Creator>
+  creatorData: Partial<Creator>,
 ): Promise<Creator> {
   const { data, error } = await supabase
     .from("creators")
@@ -90,7 +91,7 @@ export async function getCreatorById(id: string): Promise<Creator | null> {
 }
 
 export async function getCreatorByPrivyUserId(
-  privyUserId: string
+  privyUserId: string,
 ): Promise<Creator | null> {
   const { data, error } = await supabase
     .from("creators")
@@ -140,7 +141,7 @@ export async function listCreatorsForMorningBriefs(): Promise<
 
 export async function updateCreator(
   id: string,
-  updates: Partial<Creator>
+  updates: Partial<Creator>,
 ): Promise<Creator> {
   const { data, error } = await supabase
     .from("creators")
@@ -158,7 +159,7 @@ export async function updateCreator(
 
 export async function deductCredits(
   creatorId: string,
-  amountCents: number
+  amountCents: number,
 ): Promise<Creator> {
   const { data, error } = await supabase.rpc("deduct_credits", {
     creator_id: creatorId,
@@ -177,7 +178,10 @@ export async function deductCredits(
       throw creator.error;
     }
 
-    const newCredits = creator.data.free_credits_remaining_cents - amountCents;
+    const newCredits = Math.max(
+      0,
+      creator.data.free_credits_remaining_cents - amountCents,
+    );
 
     return updateCreator(creatorId, {
       free_credits_remaining_cents: newCredits,

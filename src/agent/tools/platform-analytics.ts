@@ -1,7 +1,16 @@
-import { registerTool, type AgentTool } from "./registry.js";
+import {
+  readStringParam,
+  registerTool,
+  type AgentTool,
+} from "./registry.js";
+import {
+  getPlatformAnalyticsEndpoint,
+  SUPPORTED_PLATFORM_ANALYTICS_PLATFORMS,
+} from "../platform-analytics-endpoints.js";
 
 const platformAnalyticsTool: AgentTool = {
   name: "get_platform_analytics",
+  deferred: true,
   description:
     "Fetch social media analytics for a creator's account — followers, engagement rate, recent post performance. Uses StableSocial via MPP. Supports Instagram, TikTok, YouTube, Twitter/X.",
   autonomyLevel: "autonomous",
@@ -21,26 +30,23 @@ const platformAnalyticsTool: AgentTool = {
     },
   },
   async execute(params, context) {
-    const { platform, username } = params as {
-      platform: string;
-      username: string;
-    };
+    const platform = readStringParam(params, "platform");
+    const username = readStringParam(params, "username");
 
-    const platformEndpoints: Record<string, string> = {
-      instagram: "https://stablesocial.dev/api/instagram/profile",
-      tiktok: "https://stablesocial.dev/api/tiktok/profile",
-      youtube: "https://stablesocial.dev/api/youtube/channel",
-      twitter: "https://stablesocial.dev/api/twitter/profile",
-      facebook: "https://stablesocial.dev/api/facebook/profile",
-      reddit: "https://stablesocial.dev/api/reddit/profile",
-    };
+    if (!platform || !username) {
+      return {
+        success: false,
+        data: null,
+        error: "platform and username are required",
+      };
+    }
 
-    const endpoint = platformEndpoints[platform.toLowerCase()];
+    const endpoint = getPlatformAnalyticsEndpoint(platform.toLowerCase());
     if (!endpoint) {
       return {
         success: false,
         data: null,
-        error: `Unsupported platform: ${platform}. Supported: ${Object.keys(platformEndpoints).join(", ")}`,
+        error: `Unsupported platform: ${platform}. Supported: ${SUPPORTED_PLATFORM_ANALYTICS_PLATFORMS.join(", ")}`,
       };
     }
 
@@ -59,7 +65,7 @@ const platformAnalyticsTool: AgentTool = {
         };
       }
 
-      const data = await response.json();
+      const data: unknown = await response.json();
       return {
         success: true,
         data,

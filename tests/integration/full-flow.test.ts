@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ApprovalAction } from "../../src/bot/approval.js";
 
 vi.mock("../../src/agent/orchestrator.js", () => ({
   runAgent: vi.fn(),
@@ -36,15 +37,25 @@ vi.mock("../../src/db/queries/platform-connections.js", () => ({
 }));
 
 vi.mock("../../src/bot/approval.js", () => {
-  const store = new Map<string, any[]>();
+  const store = new Map<string, ApprovalAction[]>();
   return {
-    storePendingApproval: vi.fn((action: any) => {
-      const key = action.creatorId;
-      if (!store.has(key)) store.set(key, []);
-      store.get(key)!.push(action);
-      return `${action.creatorId}:${action.actionId}`;
-    }),
-    getPendingApprovalsForCreator: vi.fn((creatorId: string) => store.get(creatorId) ?? []),
+    storePendingApproval: vi.fn(
+      async (
+        action: Omit<ApprovalAction, "id"> & { id?: string },
+      ): Promise<ApprovalAction> => {
+        const key = action.creatorId;
+        const saved = {
+          ...action,
+          id: action.id ?? action.actionId,
+        };
+        if (!store.has(key)) store.set(key, []);
+        store.get(key)!.push(saved);
+        return saved;
+      },
+    ),
+    getPendingApprovalsForCreator: vi.fn(
+      (creatorId: string) => store.get(creatorId) ?? [],
+    ),
     getPendingApprovalByAction: vi.fn(),
     markApprovalApproved: vi.fn(),
     markApprovalSkipped: vi.fn(),
@@ -110,10 +121,13 @@ describe("full end-to-end flow", () => {
     });
 
     expect(createCreator).toHaveBeenCalled();
-    expect(ensureCreatorWalletProvisioning).toHaveBeenCalledWith("new-creator", {
-      force: true,
-      source: "messaging_onboarding",
-    });
+    expect(ensureCreatorWalletProvisioning).toHaveBeenCalledWith(
+      "new-creator",
+      {
+        force: true,
+        source: "messaging_onboarding",
+      },
+    );
     expect(res.text).toContain("your AI business manager");
     expect(res.text).toContain("wallet");
     expect(res.parseMode).toBe("Markdown");
@@ -178,7 +192,9 @@ describe("full end-to-end flow", () => {
     });
 
     expect(processCreatorMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "show my upcoming deadlines and calendar" })
+      expect.objectContaining({
+        text: "show my upcoming deadlines and calendar",
+      }),
     );
     expect(res.text).toContain("Upcoming Deadlines");
   });
@@ -198,7 +214,7 @@ describe("full end-to-end flow", () => {
     });
 
     expect(processCreatorMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "give me my financial snapshot" })
+      expect.objectContaining({ text: "give me my financial snapshot" }),
     );
     expect(res.text).toContain("Financial Snapshot");
   });
@@ -218,7 +234,7 @@ describe("full end-to-end flow", () => {
     });
 
     expect(processCreatorMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "generate my content strategy" })
+      expect.objectContaining({ text: "generate my content strategy" }),
     );
     expect(res.text).toContain("Content Strategy");
   });

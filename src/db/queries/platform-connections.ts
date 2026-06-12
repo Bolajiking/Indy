@@ -1,5 +1,9 @@
 import { supabase } from "../client.js";
-import { decryptSecretValue } from "../../security/secrets.js";
+import {
+  decryptSecretValue,
+  encryptSecretValue,
+} from "../../security/secrets.js";
+import type { JsonObject } from "../json.js";
 
 export interface PlatformConnection {
   id: string;
@@ -9,7 +13,7 @@ export interface PlatformConnection {
   refresh_token: string | null;
   platform_user_id: string | null;
   platform_username: string | null;
-  metadata: Record<string, any>;
+  metadata: JsonObject;
   expires_at: string | null;
   created_at: string;
 }
@@ -23,11 +27,17 @@ function hydrateSecrets(connection: PlatformConnection): PlatformConnection {
 }
 
 export async function upsertConnection(
-  connectionData: Omit<PlatformConnection, "id" | "created_at">
+  connectionData: Omit<PlatformConnection, "id" | "created_at">,
 ): Promise<PlatformConnection> {
+  const encryptedConnectionData = {
+    ...connectionData,
+    access_token: encryptSecretValue(connectionData.access_token) ?? "",
+    refresh_token: encryptSecretValue(connectionData.refresh_token),
+  };
+
   const { data, error } = await supabase
     .from("platform_connections")
-    .upsert(connectionData, {
+    .upsert(encryptedConnectionData, {
       onConflict: "creator_id,platform",
     })
     .select()
@@ -41,7 +51,7 @@ export async function upsertConnection(
 }
 
 export async function getConnectionsForCreator(
-  creatorId: string
+  creatorId: string,
 ): Promise<PlatformConnection[]> {
   const { data, error } = await supabase
     .from("platform_connections")
@@ -57,7 +67,7 @@ export async function getConnectionsForCreator(
 
 export async function getConnection(
   creatorId: string,
-  platform: string
+  platform: string,
 ): Promise<PlatformConnection | null> {
   const { data, error } = await supabase
     .from("platform_connections")
@@ -77,7 +87,10 @@ export async function getConnection(
 }
 
 export async function deleteConnectionById(id: string): Promise<void> {
-  const { error } = await supabase.from("platform_connections").delete().eq("id", id);
+  const { error } = await supabase
+    .from("platform_connections")
+    .delete()
+    .eq("id", id);
 
   if (error) {
     throw error;

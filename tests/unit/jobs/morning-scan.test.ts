@@ -38,11 +38,10 @@ describe("runMorningScan", () => {
 
     await runMorningScan("creator-1");
 
-    expect(scanForBrandDeals).toHaveBeenCalledWith(
-      "creator-1",
-      "fitness",
-      ["instagram", "youtube"]
-    );
+    expect(scanForBrandDeals).toHaveBeenCalledWith("creator-1", "fitness", [
+      "instagram",
+      "youtube",
+    ]);
   });
 
   it("runs scans for every creator with a niche when no creator id is provided", async () => {
@@ -56,14 +55,29 @@ describe("runMorningScan", () => {
         return { id: creatorId, niche: null } as never;
       }
 
-      return { id: creatorId, niche: creatorId === "creator-1" ? "finance" : "beauty" } as never;
+      return {
+        id: creatorId,
+        niche: creatorId === "creator-1" ? "finance" : "beauty",
+      } as never;
     });
-    vi.mocked(getConnectionsForCreator).mockResolvedValue([{ platform: "tiktok" }] as never);
+    vi.mocked(getConnectionsForCreator).mockResolvedValue([
+      { platform: "tiktok" },
+    ] as never);
 
     await runMorningScan();
 
     expect(scanForBrandDeals).toHaveBeenCalledTimes(2);
-    expect(scanForBrandDeals).toHaveBeenNthCalledWith(1, "creator-1", "finance", ["tiktok"]);
-    expect(scanForBrandDeals).toHaveBeenNthCalledWith(2, "creator-3", "beauty", ["tiktok"]);
+    expect(scanForBrandDeals).toHaveBeenNthCalledWith(
+      1,
+      "creator-1",
+      "finance",
+      ["tiktok"],
+    );
+    expect(scanForBrandDeals).toHaveBeenNthCalledWith(
+      2,
+      "creator-3",
+      "beauty",
+      ["tiktok"],
+    );
   });
 });

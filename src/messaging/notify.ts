@@ -8,8 +8,9 @@
 
 import pino from "pino";
 import { getCreatorById } from "../db/queries/creators.js";
-import { sendMessageToCreator } from "../bot/telegram.js";
-import { sendWhatsAppMessage } from "../bot/whatsapp.js";
+import { sendMessageToCreator } from "../bot/telegram-sender.js";
+import { sendWhatsAppMessage } from "../bot/whatsapp-sender.js";
+import { formatUsd } from "../lib/format.js";
 
 const log = pino({ name: "messaging:notify" });
 
@@ -18,22 +19,29 @@ const LOW_CREDIT_THRESHOLD_CENTS = 100; // $1.00
 /**
  * Send a proactive message to a creator on all their connected channels.
  */
-export async function notifyCreator(creatorId: string, text: string): Promise<void> {
+async function notifyCreator(
+  creatorId: string,
+  text: string,
+): Promise<void> {
   try {
     const creator = await getCreatorById(creatorId);
     if (!creator) return;
 
     if (creator.telegram_chat_id) {
-      sendMessageToCreator(creator.telegram_chat_id, { text, parseMode: "Markdown" }).catch(
-        (err) => log.warn({ err, creatorId }, "Failed to notify creator via Telegram")
+      sendMessageToCreator(creator.telegram_chat_id, {
+        text,
+        parseMode: "Markdown",
+      }).catch((err) =>
+        log.warn({ err, creatorId }, "Failed to notify creator via Telegram"),
       );
     }
 
     if (creator.whatsapp_phone) {
       // Strip markdown for WhatsApp plain text
       const plainText = text.replace(/[*_`\[\]()]/g, "");
-      sendWhatsAppMessage(creator.whatsapp_phone, { text: plainText }).catch((err) =>
-        log.warn({ err, creatorId }, "Failed to notify creator via WhatsApp")
+      sendWhatsAppMessage(creator.whatsapp_phone, { text: plainText }).catch(
+        (err) =>
+          log.warn({ err, creatorId }, "Failed to notify creator via WhatsApp"),
       );
     }
   } catch (err) {
@@ -47,18 +55,18 @@ export async function notifyCreator(creatorId: string, text: string): Promise<vo
  */
 export async function maybeSendLowCreditAlert(
   creatorId: string,
-  newBalanceCents: number
+  newBalanceCents: number,
 ): Promise<void> {
   if (newBalanceCents > LOW_CREDIT_THRESHOLD_CENTS) return;
   if (newBalanceCents <= 0) {
     await notifyCreator(
       creatorId,
-      "⚠️ *You've run out of Indyfren credits.*\n\nYou can still use free commands (/calendar, /finances, /content), but paid tools like brand scanning and web research need a top-up.\n\n👛 Top up from your wallet: [open dashboard](https://app.indyfren.com/wallet)"
+      "⚠️ *You've run out of Indyfren credits.*\n\nYou can still use free commands (/calendar, /finances, /content), but paid tools like brand scanning and web research need a top-up.\n\n👛 Top up from your wallet: [open dashboard](https://app.indyfren.com/wallet)",
     );
     return;
   }
   await notifyCreator(
     creatorId,
-    `⚡ *Low credits: $${(newBalanceCents / 100).toFixed(2)} remaining.*\n\nTop up to keep your AI manager running at full power.\n\n👛 [Top up now](https://app.indyfren.com/wallet)`
+    `⚡ *Low credits: ${formatUsd(newBalanceCents)} remaining.*\n\nTop up to keep your AI manager running at full power.\n\n👛 [Top up now](https://app.indyfren.com/wallet)`,
   );
 }

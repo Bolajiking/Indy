@@ -9,11 +9,50 @@ import { analyzeSeo } from "../../agent/skills/seo-optimizer.js";
 import { getCalendarView } from "../../agent/skills/calendar-manager.js";
 import { triageMessages } from "../../agent/skills/inbox-triager.js";
 import { getAuthContext, requireCreatorAuth } from "../middleware/auth.js";
+import { isRecord } from "../../db/json.js";
+import { errMsg } from "../../lib/errors.js";
+import type {
+  ApiAggregatedAnalytics,
+  ApiFinancialSnapshot,
+} from "../contracts.js";
 
 const log = pino({ name: "api:reports" });
 
-function errMsg(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+type TriageMessageInput = {
+  from: string;
+  text: string;
+  platform?: string;
+};
+
+type SeoReportInput = {
+  platform: string;
+  title?: string;
+  description?: string;
+  tags?: string[];
+  niche?: string;
+};
+
+function isTriageMessageInput(value: unknown): value is TriageMessageInput {
+  return (
+    isRecord(value) &&
+    typeof value.from === "string" &&
+    typeof value.text === "string" &&
+    (value.platform === undefined || typeof value.platform === "string")
+  );
+}
+
+function isSeoReportInput(value: unknown): value is SeoReportInput {
+  return (
+    isRecord(value) &&
+    typeof value.platform === "string" &&
+    (value.title === undefined || typeof value.title === "string") &&
+    (value.description === undefined ||
+      typeof value.description === "string") &&
+    (value.tags === undefined ||
+      (Array.isArray(value.tags) &&
+        value.tags.every((tag) => typeof tag === "string"))) &&
+    (value.niche === undefined || typeof value.niche === "string")
+  );
 }
 
 export const reports = new Hono();
@@ -40,7 +79,7 @@ reports.get("/financial", async (c) => {
   const { creatorId } = getAuthContext(c);
   try {
     const snapshot = await generateFinancialSnapshot(creatorId!);
-    return c.json(snapshot);
+    return c.json(snapshot satisfies ApiFinancialSnapshot);
   } catch (err: unknown) {
     log.error({ creatorId, error: errMsg(err) }, "Financial snapshot failed");
     return c.json({ error: "Failed to generate financial snapshot" }, 500);
@@ -68,9 +107,12 @@ reports.get("/analytics", async (c) => {
   const { creatorId } = getAuthContext(c);
   try {
     const analytics = await aggregateAnalytics(creatorId!);
-    return c.json(analytics);
+    return c.json(analytics satisfies ApiAggregatedAnalytics);
   } catch (err: unknown) {
-    log.error({ creatorId, error: errMsg(err) }, "Analytics aggregation failed");
+    log.error(
+      { creatorId, error: errMsg(err) },
+      "Analytics aggregation failed",
+    );
     return c.json({ error: "Failed to aggregate analytics" }, 500);
   }
 });
@@ -96,18 +138,24 @@ reports.get("/calendar", async (c) => {
 reports.post("/triage", async (c) => {
   const { creatorId } = getAuthContext(c);
 
-  let body: { messages?: unknown };
+  let body: unknown;
   try {
-    body = await c.req.json<{ messages?: unknown }>();
+    body = await c.req.json<unknown>();
   } catch {
-    throw new HTTPException(400, { message: "Request body must be valid JSON" });
+    throw new HTTPException(400, {
+      message: "Request body must be valid JSON",
+    });
   }
 
-  if (!body.messages || !Array.isArray(body.messages)) {
+  if (!isRecord(body) || !Array.isArray(body.messages)) {
     return c.json({ error: "messages array is required" }, 400);
   }
 
-  const messages = body.messages as Array<{ from: string; text: string; platform?: string }>;
+  if (!body.messages.every(isTriageMessageInput)) {
+    return c.json({ error: "messages must include from and text" }, 400);
+  }
+
+  const messages = body.messages;
 
   try {
     const result = await triageMessages(creatorId!, messages);
@@ -123,14 +171,16 @@ reports.post("/triage", async (c) => {
  * Body: { platform, title?, description?, tags?, niche? }
  */
 reports.post("/seo", async (c) => {
-  let body: { platform?: string; title?: string; description?: string; tags?: string[]; niche?: string };
+  let body: unknown;
   try {
-    body = await c.req.json();
+    body = await c.req.json<unknown>();
   } catch {
-    throw new HTTPException(400, { message: "Request body must be valid JSON" });
+    throw new HTTPException(400, {
+      message: "Request body must be valid JSON",
+    });
   }
 
-  if (!body.platform) {
+  if (!isSeoReportInput(body)) {
     return c.json({ error: "platform is required" }, 400);
   }
 

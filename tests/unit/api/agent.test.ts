@@ -40,7 +40,9 @@ vi.mock("../../../src/wallet/privy.js", () => ({
 
 vi.mock("../../../src/wallet/mpp.js", () => ({
   createMppClient: vi.fn(),
-  getOnChainBalance: vi.fn().mockResolvedValue({ balanceCents: 100000, balanceFormatted: "1.00" }),
+  getOnChainBalance: vi
+    .fn()
+    .mockResolvedValue({ balanceCents: 100000, balanceFormatted: "1.00" }),
 }));
 
 import { Hono } from "hono";
@@ -57,7 +59,10 @@ import {
   storePendingApproval,
 } from "../../../src/bot/approval.js";
 import { getCreatorById } from "../../../src/db/queries/creators.js";
-import { getConversationHistory, saveMessage } from "../../../src/db/queries/messages.js";
+import {
+  getConversationHistory,
+  saveMessage,
+} from "../../../src/db/queries/messages.js";
 import { createMppClient } from "../../../src/wallet/mpp.js";
 import { resolveWalletForCreator } from "../../../src/wallet/privy.js";
 import { agent } from "../../../src/api/routes/agent.js";
@@ -143,7 +148,10 @@ describe("agent API", () => {
 
     expect(response.status).toBe(200);
     expect(processCreatorMessage).toHaveBeenCalledWith(
-      expect.objectContaining({ creatorId: "creator-1", text: "Draft an Acme pitch" })
+      expect.objectContaining({
+        creatorId: "creator-1",
+        text: "Draft an Acme pitch",
+      }),
     );
     expect(body.reply.requiresApproval).toBe(true);
     expect(body.pendingApprovals).toHaveLength(1);
@@ -178,6 +186,7 @@ describe("agent API", () => {
         costCents: 42,
       }),
     } as never);
+    vi.mocked(markApprovalApproved).mockResolvedValue(true as never);
     vi.mocked(getPendingApprovalsForCreator).mockResolvedValue([]);
 
     const response = await app.request("/agent/approvals/action-1/approve", {
@@ -194,9 +203,42 @@ describe("agent API", () => {
         success: true,
         data: "Pitch email sent.",
       },
-      42
+      42,
     );
     expect(body.execution.message).toBe("Pitch email sent.");
+  });
+
+  it("POST /agent/approvals/:actionId/approve rejects duplicate approval execution", async () => {
+    vi.mocked(getPendingApprovalByAction).mockResolvedValue({
+      id: "action-1",
+      creatorId: "creator-1",
+      actionId: "action-1",
+      type: "email_sender",
+      description: "Send pitch email",
+      preview: "Draft pitch ready",
+      input: { to: "brand@acme.com" },
+    } as never);
+    vi.mocked(getCreatorById).mockResolvedValue({
+      id: "creator-1",
+      wallet_id: "wallet-1",
+      wallet_address: "0x123",
+    } as never);
+    vi.mocked(resolveWalletForCreator).mockResolvedValue({
+      walletId: "wallet-1",
+      address: "0x123",
+    } as never);
+    vi.mocked(createMppClient).mockResolvedValue({ fetch: vi.fn() } as never);
+    vi.mocked(getTool).mockReturnValue({
+      execute: vi.fn().mockResolvedValue({ success: true, data: "sent" }),
+    } as never);
+    vi.mocked(markApprovalApproved).mockResolvedValue(false as never);
+
+    const response = await app.request("/agent/approvals/action-1/approve", {
+      method: "POST",
+      headers: { Authorization: "Bearer access-token" },
+    });
+
+    expect(response.status).toBe(404);
   });
 
   it("POST /agent/approvals/:actionId/skip marks the approval as skipped", async () => {

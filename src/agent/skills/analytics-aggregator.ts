@@ -1,5 +1,7 @@
 import pino from "pino";
 import { getConnectionsForCreator } from "../../db/queries/platform-connections.js";
+import { getPlatformAnalyticsEndpoint } from "../platform-analytics-endpoints.js";
+import { isRecord } from "../../db/json.js";
 
 const log = pino({ name: "skill:analytics-aggregator" });
 
@@ -28,7 +30,7 @@ export interface AggregatedAnalytics {
  */
 export async function aggregateAnalytics(
   creatorId: string,
-  mppFetch?: (url: string, options?: RequestInit) => Promise<Response>
+  mppFetch?: (url: string, options?: RequestInit) => Promise<Response>,
 ): Promise<AggregatedAnalytics> {
   log.info({ creatorId }, "Aggregating platform analytics");
 
@@ -45,20 +47,11 @@ export async function aggregateAnalytics(
     };
   }
 
-  const platformEndpoints: Record<string, string> = {
-    instagram: "https://stablesocial.dev/api/instagram/profile",
-    tiktok: "https://stablesocial.dev/api/tiktok/profile",
-    youtube: "https://stablesocial.dev/api/youtube/channel",
-    twitter: "https://stablesocial.dev/api/twitter/profile",
-    facebook: "https://stablesocial.dev/api/facebook/profile",
-    reddit: "https://stablesocial.dev/api/reddit/profile",
-  };
-
   const results: PlatformStats[] = [];
   const fetcher = mppFetch ?? fetch;
 
   for (const conn of connections) {
-    const endpoint = platformEndpoints[conn.platform];
+    const endpoint = getPlatformAnalyticsEndpoint(conn.platform);
     if (!endpoint || !conn.platform_username) {
       results.push({
         platform: conn.platform,
@@ -85,21 +78,28 @@ export async function aggregateAnalytics(
         continue;
       }
 
-      const data = (await response.json()) as Record<string, unknown>;
+      const data: unknown = await response.json();
+      const metrics = isRecord(data) ? data : {};
       results.push({
         platform: conn.platform,
         username: conn.platform_username,
-        followers: typeof data.followers === "number" ? data.followers : undefined,
+        followers:
+          typeof metrics.followers === "number" ? metrics.followers : undefined,
         engagementRate:
-          typeof data.engagement_rate === "number"
-            ? data.engagement_rate
+          typeof metrics.engagement_rate === "number"
+            ? metrics.engagement_rate
             : undefined,
         recentViews:
-          typeof data.recent_views === "number" ? data.recent_views : undefined,
+          typeof metrics.recent_views === "number"
+            ? metrics.recent_views
+            : undefined,
         data,
       });
     } catch (error) {
-      log.error({ creatorId, platform: conn.platform, error }, "Analytics fetch failed");
+      log.error(
+        { creatorId, platform: conn.platform, error },
+        "Analytics fetch failed",
+      );
       results.push({
         platform: conn.platform,
         username: conn.platform_username,
@@ -110,7 +110,10 @@ export async function aggregateAnalytics(
   }
 
   const validStats = results.filter((r) => r.followers != null);
-  const totalFollowers = validStats.reduce((sum, r) => sum + (r.followers ?? 0), 0);
+  const totalFollowers = validStats.reduce(
+    (sum, r) => sum + (r.followers ?? 0),
+    0,
+  );
   const avgEngagementRate =
     validStats.length > 0
       ? validStats.reduce((sum, r) => sum + (r.engagementRate ?? 0), 0) /
@@ -119,7 +122,7 @@ export async function aggregateAnalytics(
 
   log.info(
     { creatorId, platforms: results.length, totalFollowers },
-    "Analytics aggregated"
+    "Analytics aggregated",
   );
 
   return {

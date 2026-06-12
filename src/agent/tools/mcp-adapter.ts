@@ -17,12 +17,38 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import pino from "pino";
-import { registerTool, type AgentTool, type ToolContext, type ToolResult } from "./registry.js";
+import {
+  registerTool,
+  type AgentTool,
+  type AutonomyLevel,
+  type ToolContext,
+  type ToolResult,
+} from "./registry.js";
+import { isRecord, type JsonObject } from "../../db/json.js";
+import { errMsg } from "../../lib/errors.js";
 
 const log = pino({ name: "agent:mcp-adapter" });
 
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    isRecord(value) &&
+    Object.values(value).every((item) => typeof item === "string")
+  );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) && value.every((item) => typeof item === "string")
+  );
+}
+
 export type MCPTransportConfig =
-  | { type: "stdio"; command: string; args?: string[]; env?: Record<string, string> }
+  | {
+      type: "stdio";
+      command: string;
+      args?: string[];
+      env?: Record<string, string>;
+    }
   | { type: "sse"; url: string; headers?: Record<string, string> };
 
 export interface MCPServerConfig {
@@ -32,9 +58,60 @@ export interface MCPServerConfig {
    * Override autonomy level for all tools from this server.
    * Defaults to "autonomous". Set to "hybrid" to require approval for all calls.
    */
-  autonomyLevel?: "autonomous" | "hybrid";
+  autonomyLevel?: AutonomyLevel;
   /** Override max cost in cents for all tools from this server (default: 0 = free). */
   maxCostPerUseCents?: number;
+}
+
+type MCPJsonSchemaProperty = {
+  type?: string;
+  description?: string;
+};
+
+type MCPInputSchema = {
+  type: string;
+  properties?: Record<string, MCPJsonSchemaProperty>;
+  required?: string[];
+};
+
+function isMCPTransportConfig(value: unknown): value is MCPTransportConfig {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  if (value.type === "stdio") {
+    return (
+      typeof value.command === "string" &&
+      (value.args === undefined || isStringArray(value.args)) &&
+      (value.env === undefined || isStringRecord(value.env))
+    );
+  }
+
+  if (value.type === "sse") {
+    return (
+      typeof value.url === "string" &&
+      (value.headers === undefined || isStringRecord(value.headers))
+    );
+  }
+
+  return false;
+}
+
+function isMCPServerConfig(value: unknown): value is MCPServerConfig {
+  if (!isRecord(value)) {
+    return false;
+  }
+
+  return (
+    typeof value.name === "string" &&
+    isMCPTransportConfig(value.transport) &&
+    (value.autonomyLevel === undefined ||
+      value.autonomyLevel === "autonomous" ||
+      value.autonomyLevel === "hybrid") &&
+    (value.maxCostPerUseCents === undefined ||
+      (typeof value.maxCostPerUseCents === "number" &&
+        Number.isFinite(value.maxCostPerUseCents)))
+  );
 }
 
 export class MCPToolAdapter {
@@ -51,7 +128,7 @@ export class MCPToolAdapter {
   static async connect(config: MCPServerConfig): Promise<MCPToolAdapter> {
     const client = new Client(
       { name: "indyfren-agent", version: "1.0.0" },
-      { capabilities: {} }
+      { capabilities: {} },
     );
 
     let transport;
@@ -77,14 +154,17 @@ export class MCPToolAdapter {
     for (const mcpTool of tools) {
       const agentTool = this.wrapMCPTool(mcpTool);
       registerTool(agentTool);
-      log.info({ server: this.serverName, tool: mcpTool.name }, "Registered MCP tool");
+      log.info(
+        { server: this.serverName, tool: mcpTool.name },
+        "Registered MCP tool",
+      );
     }
   }
 
   private wrapMCPTool(mcpTool: {
     name: string;
     description?: string;
-    inputSchema: { type: string; properties?: Record<string, unknown>; required?: string[] };
+    inputSchema: MCPInputSchema;
   }): AgentTool {
     const serverName = this.serverName;
     const client = this.client;
@@ -92,10 +172,7 @@ export class MCPToolAdapter {
     const maxCostPerUseCents = this.config.maxCostPerUseCents ?? 0;
 
     // Translate MCP JSON Schema properties to our flat parameter format
-    const properties = (mcpTool.inputSchema.properties ?? {}) as Record<
-      string,
-      { type?: string; description?: string }
-    >;
+    const properties = mcpTool.inputSchema.properties ?? {};
     const required = new Set(mcpTool.inputSchema.required ?? []);
 
     const parameters: AgentTool["parameters"] = {};
@@ -115,12 +192,18 @@ export class MCPToolAdapter {
       maxCostPerUseCents,
       parameters,
       execute: async (
-        params: Record<string, unknown>,
-        _context: ToolContext
+        params: JsonObject,
+        _context: ToolContext,
       ): Promise<ToolResult> => {
         try {
-          const result = await client.callTool({ name: mcpTool.name, arguments: params });
-          const content = result.content as Array<{ type: string; text?: string }>;
+          const result = await client.callTool({
+            name: mcpTool.name,
+            arguments: params,
+          });
+          const content = result.content as Array<{
+            type: string;
+            text?: string;
+          }>;
           const textContent = content
             .filter((c) => c.type === "text")
             .map((c) => c.text ?? "")
@@ -131,9 +214,12 @@ export class MCPToolAdapter {
             data: textContent || result.content,
             costCents: maxCostPerUseCents,
           };
-        } catch (err: any) {
-          log.error({ server: serverName, tool: mcpTool.name, error: err.message }, "MCP tool call failed");
-          return { success: false, data: null, error: err.message };
+        } catch (err: unknown) {
+          log.error(
+            { server: serverName, tool: mcpTool.name, error: errMsg(err) },
+            "MCP tool call failed",
+          );
+          return { success: false, data: null, error: errMsg(err) };
         }
       },
     };
@@ -161,7 +247,16 @@ export async function loadMCPServers(): Promise<MCPToolAdapter[]> {
 
   let configs: MCPServerConfig[];
   try {
-    configs = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) {
+      log.error("MCP_SERVERS must be a JSON array — skipping");
+      return [];
+    }
+    configs = parsed.filter(isMCPServerConfig);
+    const skipped = parsed.length - configs.length;
+    if (skipped > 0) {
+      log.warn({ skipped }, "Skipping invalid MCP server configs");
+    }
   } catch (err) {
     log.error({ error: err }, "Invalid MCP_SERVERS JSON — skipping");
     return [];
@@ -173,8 +268,11 @@ export async function loadMCPServers(): Promise<MCPToolAdapter[]> {
       const adapter = await MCPToolAdapter.connect(config);
       await adapter.registerAll();
       adapters.push(adapter);
-    } catch (err: any) {
-      log.error({ server: config.name, error: err.message }, "Failed to connect to MCP server");
+    } catch (err: unknown) {
+      log.error(
+        { server: config.name, error: errMsg(err) },
+        "Failed to connect to MCP server",
+      );
     }
   }
 

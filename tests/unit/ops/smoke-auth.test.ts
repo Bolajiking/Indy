@@ -12,7 +12,7 @@ describe("resolveSmokeAuthConfig", () => {
         smokeDashboardUrl: "",
         defaultDashboardUrl: "",
         checkDashboardProxy: "false",
-      })
+      }),
     ).toThrow("SMOKE_PRIVY_ACCESS_TOKEN is required");
   });
 
@@ -44,7 +44,7 @@ describe("resolveSmokeAuthConfig", () => {
 
     expect(config.apiBaseUrl).toBe("http://localhost:4010");
     expect(config.dashboardProxyUrl).toBe(
-      "http://localhost:3001/api/proxy/api/auth/me"
+      "http://localhost:3001/api/proxy/api/auth/me",
     );
   });
 
@@ -58,9 +58,9 @@ describe("resolveSmokeAuthConfig", () => {
         smokeDashboardUrl: "",
         defaultDashboardUrl: "",
         checkDashboardProxy: "true",
-      })
+      }),
     ).toThrow(
-      "SMOKE_CHECK_DASHBOARD_PROXY=true requires SMOKE_DASHBOARD_URL or DASHBOARD_APP_URL"
+      "SMOKE_CHECK_DASHBOARD_PROXY=true requires SMOKE_DASHBOARD_URL or DASHBOARD_APP_URL",
     );
   });
 });

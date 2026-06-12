@@ -83,7 +83,7 @@ describe("platform OAuth routes", () => {
     expect(url.origin).toBe("https://accounts.google.com");
     expect(url.searchParams.get("client_id")).toBe("google-client-id");
     expect(url.searchParams.get("redirect_uri")).toBe(
-      "http://localhost:3000/api/platforms/oauth/youtube/callback"
+      "http://localhost:3000/api/platforms/oauth/youtube/callback",
     );
     expect(url.searchParams.get("state")).toBeTruthy();
   });
@@ -133,8 +133,8 @@ describe("platform OAuth routes", () => {
             refresh_token: "oauth-refresh-token",
             expires_in: 3600,
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        )
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -149,8 +149,8 @@ describe("platform OAuth routes", () => {
               },
             ],
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        )
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -174,12 +174,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=success&platform=youtube"
+      "http://localhost:3001/dashboard/settings?oauth=success&platform=youtube",
     );
     expect(upsertConnection).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -190,9 +190,9 @@ describe("platform OAuth routes", () => {
         metadata: expect.objectContaining({
           connection_method: "oauth",
         }),
-        access_token: expect.stringMatching(/^v1:/),
-        refresh_token: expect.stringMatching(/^v1:/),
-      })
+        access_token: "oauth-access-token",
+        refresh_token: "oauth-refresh-token",
+      }),
     );
     expect(getCreatorById).toHaveBeenCalledWith("creator-1");
   });
@@ -202,12 +202,12 @@ describe("platform OAuth routes", () => {
     app.route("/api/platforms", platforms);
 
     const response = await app.request(
-      "/api/platforms/oauth/youtube/callback?code=oauth-code&state=invalid-state"
+      "/api/platforms/oauth/youtube/callback?code=oauth-code&state=invalid-state",
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=invalid_or_expired_state"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=invalid_or_expired_state",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -223,12 +223,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=missing_code_or_state"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=missing_code_or_state",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -244,12 +244,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?error=access_denied&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?error=access_denied&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=provider_access_denied"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=provider_access_denied",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -267,12 +267,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=oauth_not_configured"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=oauth_not_configured",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -282,12 +282,12 @@ describe("platform OAuth routes", () => {
     app.route("/api/platforms", platforms);
 
     const response = await app.request(
-      "/api/platforms/oauth/tiktok/callback?code=oauth-code&state=some-state"
+      "/api/platforms/oauth/tiktok/callback?code=oauth-code&state=some-state",
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=tiktok&error=unsupported_platform"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=tiktok&error=unsupported_platform",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -302,8 +302,8 @@ describe("platform OAuth routes", () => {
         new Response(JSON.stringify({ error: "bad request" }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
-        })
-      )
+        }),
+      ),
     );
 
     const state = createPlatformOAuthState({
@@ -313,12 +313,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=provider_callback_failed"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=provider_callback_failed",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -336,14 +336,14 @@ describe("platform OAuth routes", () => {
             refresh_token: "oauth-refresh-token",
             expires_in: 3600,
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        )
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ error: { message: "forbidden" } }), {
           status: 403,
           headers: { "Content-Type": "application/json" },
-        })
+        }),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -355,12 +355,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=provider_callback_failed"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=provider_callback_failed",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -378,8 +378,8 @@ describe("platform OAuth routes", () => {
             refresh_token: "oauth-refresh-token",
             expires_in: 3600,
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        )
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
       )
       .mockResolvedValueOnce(
         new Response(
@@ -394,8 +394,8 @@ describe("platform OAuth routes", () => {
               },
             ],
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        )
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
       );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -408,12 +408,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=persistence_failed"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=persistence_failed",
     );
     expect(upsertConnection).toHaveBeenCalledTimes(1);
   });
@@ -431,12 +431,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=creator_lookup_failed"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=creator_lookup_failed",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -457,12 +457,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=creator_auth_mismatch"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=creator_auth_mismatch",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });
@@ -480,12 +480,12 @@ describe("platform OAuth routes", () => {
     });
 
     const response = await app.request(
-      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
     );
 
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=creator_auth_mismatch"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=creator_auth_mismatch",
     );
     expect(upsertConnection).not.toHaveBeenCalled();
   });

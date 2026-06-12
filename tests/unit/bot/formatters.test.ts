@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { formatMorningBrief, formatRateCard, formatScanResults } from "../../../src/bot/formatters.js";
+import {
+  formatMorningBrief,
+  formatRateCard,
+  formatScanResults,
+} from "../../../src/bot/formatters.js";
 
 describe("bot formatters", () => {
   it("formats a morning brief for chat output", () => {

@@ -2,7 +2,7 @@ import pino from "pino";
 import { AGENT } from "../../config/constants.js";
 import { getDealsForCreator } from "../../db/queries/deals.js";
 import { getConnectionsForCreator } from "../../db/queries/platform-connections.js";
-import anthropic from "../anthropic.js";
+import llm from "../llm.js";
 import { assembleContext } from "../memory.js";
 
 const log = pino({ name: "skill:content-strategy" });
@@ -25,7 +25,7 @@ export interface ContentStrategyReport {
 }
 
 export async function generateContentStrategy(
-  creatorId: string
+  creatorId: string,
 ): Promise<ContentStrategyReport> {
   log.info({ creatorId }, "Generating content strategy");
 
@@ -37,11 +37,15 @@ export async function generateContentStrategy(
 
   const activeDeals = deals
     .filter((d) => d.stage === "active" || d.stage === "negotiating")
-    .map((d) => ({ brand: d.brand_name, stage: d.stage, value: d.estimated_value_cents }));
+    .map((d) => ({
+      brand: d.brand_name,
+      stage: d.stage,
+      value: d.estimated_value_cents,
+    }));
 
   const platforms = connections.map((c) => c.platform);
 
-  const response = await anthropic.messages.create({
+  const response = await llm.messages.create({
     model: AGENT.DEFAULT_LLM,
     max_tokens: 2048,
     system: `You are a content strategist for creators. Generate a weekly content strategy based on their profile, active deals, and connected platforms.
@@ -77,7 +81,7 @@ Return ONLY valid JSON:
     const parsed = JSON.parse(text) as ContentStrategyReport;
     log.info(
       { creatorId, ideas: parsed.ideas.length },
-      "Content strategy generated"
+      "Content strategy generated",
     );
     return parsed;
   } catch (error) {

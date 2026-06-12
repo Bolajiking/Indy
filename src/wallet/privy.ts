@@ -4,6 +4,7 @@ import { toAccount } from "viem/accounts";
 import { env } from "../config/env.js";
 import { updateCreator } from "../db/queries/creators.js";
 import { supabase } from "../db/client.js";
+import type { JsonObject } from "../db/json.js";
 import pino from "pino";
 import { ipv4Fetch } from "../network/ipv4-fetch.js";
 import {
@@ -24,7 +25,7 @@ const privy = new PrivyClient({
 interface ProvisioningCreatorRecord extends ProvisioningCreatorIdentity {
   wallet_id: string | null;
   wallet_address: string | null;
-  settings: Record<string, unknown> | null;
+  settings: JsonObject | null;
 }
 
 interface ResolvedWallet {
@@ -33,11 +34,13 @@ interface ResolvedWallet {
 }
 
 async function getProvisioningCreator(
-  creatorId: string
+  creatorId: string,
 ): Promise<ProvisioningCreatorRecord> {
   const { data, error } = await supabase
     .from("creators")
-    .select("id, telegram_chat_id, whatsapp_phone, display_name, wallet_id, wallet_address, settings")
+    .select(
+      "id, telegram_chat_id, whatsapp_phone, display_name, wallet_id, wallet_address, settings",
+    )
     .eq("id", creatorId)
     .single();
 
@@ -71,7 +74,7 @@ async function validateStoredWalletReference(parameters: {
     if (!wallet.address) {
       log.warn(
         { creatorId: parameters.creatorId, walletId: parameters.walletId },
-        "Stored Privy wallet is missing an address"
+        "Stored Privy wallet is missing an address",
       );
       return null;
     }
@@ -87,7 +90,7 @@ async function validateStoredWalletReference(parameters: {
           storedAddress: parameters.walletAddress,
           canonicalAddress: wallet.address,
         },
-        "Stored wallet address did not match Privy wallet address"
+        "Stored wallet address did not match Privy wallet address",
       );
       return {
         walletId: parameters.walletId,
@@ -102,8 +105,12 @@ async function validateStoredWalletReference(parameters: {
   } catch (error) {
     if (isInvalidStoredWalletError(error)) {
       log.warn(
-        { creatorId: parameters.creatorId, walletId: parameters.walletId, error },
-        "Stored Privy wallet reference is invalid"
+        {
+          creatorId: parameters.creatorId,
+          walletId: parameters.walletId,
+          error,
+        },
+        "Stored Privy wallet reference is invalid",
       );
       return null;
     }
@@ -113,11 +120,13 @@ async function validateStoredWalletReference(parameters: {
 }
 
 async function ensureAgentWalletPolicy(
-  creator: ProvisioningCreatorRecord
+  creator: ProvisioningCreatorRecord,
 ): Promise<string> {
   const settings = creator.settings ?? {};
   const persistedPolicyId =
-    typeof settings.privy_policy_id === "string" ? settings.privy_policy_id : null;
+    typeof settings.privy_policy_id === "string"
+      ? settings.privy_policy_id
+      : null;
 
   if (persistedPolicyId) {
     try {
@@ -126,7 +135,7 @@ async function ensureAgentWalletPolicy(
     } catch (error) {
       log.warn(
         { creatorId: creator.id, privyPolicyId: persistedPolicyId, error },
-        "Stored Privy policy lookup failed"
+        "Stored Privy policy lookup failed",
       );
     }
   }
@@ -175,7 +184,10 @@ export async function createWalletForCreator(creatorId: string) {
       wallet_mode: "agentic",
     },
   });
-  log.info({ creatorId, address: wallet.address, policyId }, "Wallet provisioned");
+  log.info(
+    { creatorId, address: wallet.address, policyId },
+    "Wallet provisioned",
+  );
   return {
     walletId: wallet.id,
     address: wallet.address,
@@ -185,7 +197,7 @@ export async function createWalletForCreator(creatorId: string) {
 export async function resolveWalletForCreator(
   creatorId: string,
   walletId?: string | null,
-  walletAddress?: string | null
+  walletAddress?: string | null,
 ): Promise<ResolvedWallet | null> {
   if (!walletId || !walletAddress) {
     return null;
@@ -215,9 +227,12 @@ export function createPrivyAccount(walletId: string, address: `0x${string}`) {
   return toAccount({
     address,
     async signMessage({ message }) {
-      const result = await privy.wallets().ethereum().signMessage(walletId, {
-        message: typeof message === "string" ? message : message.raw,
-      });
+      const result = await privy
+        .wallets()
+        .ethereum()
+        .signMessage(walletId, {
+          message: typeof message === "string" ? message : message.raw,
+        });
       return result.signature as `0x${string}`;
     },
     async signTransaction(transaction, options) {
@@ -231,12 +246,18 @@ export function createPrivyAccount(walletId: string, address: `0x${string}`) {
       const signature = await signHash(hash as `0x${string}`);
       const { SignatureEnvelope } = await import("ox/tempo");
       const envelope = SignatureEnvelope.from(signature);
-      return (await serializer(transaction, envelope as never)) as `0x${string}`;
+      return (await serializer(
+        transaction,
+        envelope as never,
+      )) as `0x${string}`;
     },
     async signTypedData(typedData) {
-      const result = await privy.wallets().ethereum().signTypedData(walletId, {
-        params: typedData as never,
-      });
+      const result = await privy
+        .wallets()
+        .ethereum()
+        .signTypedData(walletId, {
+          params: typedData as never,
+        });
       return result.signature as `0x${string}`;
     },
   });

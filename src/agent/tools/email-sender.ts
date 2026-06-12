@@ -1,4 +1,8 @@
-import { registerTool, type AgentTool } from "./registry.js";
+import {
+  readStringParam,
+  registerTool,
+  type AgentTool,
+} from "./registry.js";
 
 const sendEmailTool: AgentTool = {
   name: "send_email",
@@ -30,12 +34,18 @@ const sendEmailTool: AgentTool = {
     },
   },
   async execute(params, context) {
-    const { to, subject, body, from_name } = params as {
-      to: string;
-      subject: string;
-      body: string;
-      from_name: string;
-    };
+    const to = readStringParam(params, "to");
+    const subject = readStringParam(params, "subject");
+    const body = readStringParam(params, "body");
+    const fromName = readStringParam(params, "from_name");
+
+    if (!to || !subject || !body || !fromName) {
+      return {
+        success: false,
+        data: null,
+        error: "to, subject, body, and from_name are required",
+      };
+    }
 
     try {
       const response = await context.mppFetch(
@@ -47,9 +57,9 @@ const sendEmailTool: AgentTool = {
             to,
             subject,
             body,
-            from_name,
+            from_name: fromName,
           }),
-        }
+        },
       );
 
       if (!response.ok) {
@@ -61,7 +71,7 @@ const sendEmailTool: AgentTool = {
         };
       }
 
-      const data = await response.json();
+      const data: unknown = await response.json();
       return {
         success: true,
         data: { message: `Email sent to ${to}`, result: data },
@@ -72,7 +82,9 @@ const sendEmailTool: AgentTool = {
         success: false,
         data: null,
         error:
-          error instanceof Error ? error.message : "Unknown error sending email",
+          error instanceof Error
+            ? error.message
+            : "Unknown error sending email",
       };
     }
   },

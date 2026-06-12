@@ -16,7 +16,7 @@ type AuthMeResponse = {
 
 async function fetchAuthedJson<T>(
   url: string,
-  accessToken: string
+  accessToken: string,
 ): Promise<{ data: T; status: number }> {
   const response = await fetch(url, {
     headers: {
@@ -31,7 +31,10 @@ async function fetchAuthedJson<T>(
     let detail = rawBody;
 
     try {
-      const parsed = JSON.parse(rawBody) as { error?: string; message?: string };
+      const parsed = JSON.parse(rawBody) as {
+        error?: string;
+        message?: string;
+      };
       detail = parsed.error ?? parsed.message ?? rawBody;
     } catch {
       // Preserve the raw body when the response is not JSON.
@@ -70,7 +73,8 @@ async function main() {
     port: env.PORT,
     smokeDashboardUrl: process.env.SMOKE_DASHBOARD_URL?.trim() ?? "",
     defaultDashboardUrl: env.DASHBOARD_APP_URL.trim(),
-    checkDashboardProxy: process.env.SMOKE_CHECK_DASHBOARD_PROXY?.trim() ?? "false",
+    checkDashboardProxy:
+      process.env.SMOKE_CHECK_DASHBOARD_PROXY?.trim() ?? "false",
   });
 
   console.log("Indyfren auth smoke");
@@ -78,23 +82,27 @@ async function main() {
   const directUrl = `${config.apiBaseUrl}/api/auth/me`;
   const direct = await fetchAuthedJson<AuthMeResponse>(
     directUrl,
-    config.accessToken
+    config.accessToken,
   );
 
   console.log(`OK    direct auth: ${direct.status} ${directUrl}`);
   console.log(formatAuthSummary("      direct", direct.data));
 
   if (!config.dashboardProxyUrl) {
-    console.log("SKIP  dashboard proxy: disabled (set SMOKE_CHECK_DASHBOARD_PROXY=true to enable)");
+    console.log(
+      "SKIP  dashboard proxy: disabled (set SMOKE_CHECK_DASHBOARD_PROXY=true to enable)",
+    );
     return;
   }
 
   const proxied = await fetchAuthedJson<AuthMeResponse>(
     config.dashboardProxyUrl,
-    config.accessToken
+    config.accessToken,
   );
 
-  console.log(`OK    dashboard proxy: ${proxied.status} ${config.dashboardProxyUrl}`);
+  console.log(
+    `OK    dashboard proxy: ${proxied.status} ${config.dashboardProxyUrl}`,
+  );
   console.log(formatAuthSummary("      proxy ", proxied.data));
 
   const directCreatorId = direct.data.creator?.id ?? null;
@@ -102,19 +110,18 @@ async function main() {
   const directStatus = direct.data.onboarding.status;
   const proxiedStatus = proxied.data.onboarding.status;
 
-  if (
-    directCreatorId !== proxiedCreatorId ||
-    directStatus !== proxiedStatus
-  ) {
+  if (directCreatorId !== proxiedCreatorId || directStatus !== proxiedStatus) {
     throw new Error(
-      `Direct API and dashboard proxy disagree (direct creator=${directCreatorId ?? "none"}, proxy creator=${proxiedCreatorId ?? "none"}, direct onboarding=${directStatus}, proxy onboarding=${proxiedStatus})`
+      `Direct API and dashboard proxy disagree (direct creator=${directCreatorId ?? "none"}, proxy creator=${proxiedCreatorId ?? "none"}, direct onboarding=${directStatus}, proxy onboarding=${proxiedStatus})`,
     );
   }
 }
 
 main().catch((error) => {
   const message =
-    error instanceof Error ? error.message : "Unknown error while running auth smoke";
+    error instanceof Error
+      ? error.message
+      : "Unknown error while running auth smoke";
   console.error(`Auth smoke failed: ${message}`);
   process.exit(1);
 });

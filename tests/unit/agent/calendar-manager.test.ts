@@ -47,9 +47,15 @@ describe("calendar-manager", () => {
     expect(calendar.overdue.length).toBeGreaterThan(0);
     expect(calendar.overdue.some((e) => e.brandName === "Acme")).toBe(true);
     // deal-2 (active) should have upcoming content delivery and invoice events
-    expect(calendar.upcoming.some((e) => e.brandName === "Beta Corp")).toBe(true);
+    expect(calendar.upcoming.some((e) => e.brandName === "Beta Corp")).toBe(
+      true,
+    );
     // deal-3 (completed) should be excluded
-    expect(calendar.upcoming.every((e) => e.brandName !== "Done Inc")).toBe(true);
-    expect(calendar.overdue.every((e) => e.brandName !== "Done Inc")).toBe(true);
+    expect(calendar.upcoming.every((e) => e.brandName !== "Done Inc")).toBe(
+      true,
+    );
+    expect(calendar.overdue.every((e) => e.brandName !== "Done Inc")).toBe(
+      true,
+    );
   });
 });

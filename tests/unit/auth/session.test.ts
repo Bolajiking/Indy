@@ -87,7 +87,7 @@ describe("authenticateAccessToken", () => {
       "creator-telegram",
       expect.objectContaining({
         privy_user_id: "did:privy:user-1",
-      })
+      }),
     );
     expect(session.creatorId).toBe("creator-telegram");
   });
@@ -129,7 +129,7 @@ describe("authenticateAccessToken", () => {
       creatorId: null,
     });
     expect(session.creatorResolutionError?.message).toBe(
-      CREATOR_SERVICE_UNAVAILABLE_MESSAGE
+      CREATOR_SERVICE_UNAVAILABLE_MESSAGE,
     );
   });
 });

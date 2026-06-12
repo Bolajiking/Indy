@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { getAllTools, registerTool, getToolsForLLM, type AgentTool } from "../../../src/agent/tools/registry.js";
+import {
+  getAllTools,
+  registerTool,
+  getToolsForLLM,
+  type AgentTool,
+} from "../../../src/agent/tools/registry.js";
 
 describe("tool registry", () => {
   it("registers and retrieves tools", () => {
@@ -9,7 +14,9 @@ describe("tool registry", () => {
       autonomyLevel: "autonomous",
       costCategory: "free",
       maxCostPerUseCents: 0,
-      parameters: { query: { type: "string", description: "Search query", required: true } },
+      parameters: {
+        query: { type: "string", description: "Search query", required: true },
+      },
       execute: async () => ({ success: true, data: "result" }),
     };
     registerTool(tool);

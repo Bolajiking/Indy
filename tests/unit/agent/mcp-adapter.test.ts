@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { AgentTool } from "../../../src/agent/tools/registry.js";
 
 // Shared mock state — tests can mutate these
 const mockConnect = vi.fn().mockResolvedValue(undefined);
@@ -58,10 +59,13 @@ vi.mock("@modelcontextprotocol/sdk/client/sse.js", () => {
 // Mock registry to capture registrations
 const registered: string[] = [];
 vi.mock("../../../src/agent/tools/registry.js", () => ({
-  registerTool: vi.fn((tool: any) => registered.push(tool.name)),
+  registerTool: vi.fn((tool: AgentTool) => registered.push(tool.name)),
 }));
 
-import { MCPToolAdapter, loadMCPServers } from "../../../src/agent/tools/mcp-adapter.js";
+import {
+  MCPToolAdapter,
+  loadMCPServers,
+} from "../../../src/agent/tools/mcp-adapter.js";
 import { registerTool } from "../../../src/agent/tools/registry.js";
 
 describe("MCPToolAdapter", () => {
@@ -85,7 +89,7 @@ describe("MCPToolAdapter", () => {
   });
 
   it("wraps MCP tool with correct metadata", async () => {
-    let capturedTool: any;
+    let capturedTool: AgentTool | undefined;
     vi.mocked(registerTool).mockImplementation((tool) => {
       if (tool.name === "mcp_stripe_charge_card") capturedTool = tool;
     });
@@ -98,16 +102,26 @@ describe("MCPToolAdapter", () => {
     });
     await adapter.registerAll();
 
-    expect(capturedTool.autonomyLevel).toBe("hybrid");
-    expect(capturedTool.costCategory).toBe("mpp");
-    expect(capturedTool.maxCostPerUseCents).toBe(100);
-    expect(capturedTool.description).toContain("[MCP:stripe]");
-    expect(capturedTool.parameters.amount).toEqual({ type: "number", description: "Amount in cents", required: true });
-    expect(capturedTool.parameters.currency).toEqual({ type: "string", description: "Currency code", required: false });
+    expect(capturedTool).toBeDefined();
+    const tool = capturedTool!;
+    expect(tool.autonomyLevel).toBe("hybrid");
+    expect(tool.costCategory).toBe("mpp");
+    expect(tool.maxCostPerUseCents).toBe(100);
+    expect(tool.description).toContain("[MCP:stripe]");
+    expect(tool.parameters.amount).toEqual({
+      type: "number",
+      description: "Amount in cents",
+      required: true,
+    });
+    expect(tool.parameters.currency).toEqual({
+      type: "string",
+      description: "Currency code",
+      required: false,
+    });
   });
 
   it("executes an MCP tool and returns the result", async () => {
-    let capturedTool: any;
+    let capturedTool: AgentTool | undefined;
     vi.mocked(registerTool).mockImplementation((tool) => {
       if (tool.name === "mcp_stripe_charge_card") capturedTool = tool;
     });
@@ -118,9 +132,10 @@ describe("MCPToolAdapter", () => {
     });
     await adapter.registerAll();
 
-    const result = await capturedTool.execute(
+    expect(capturedTool).toBeDefined();
+    const result = await capturedTool!.execute(
       { amount: 5000, currency: "usd" },
-      { creatorId: "creator-1", mppFetch: vi.fn() }
+      { creatorId: "creator-1", mppFetch: vi.fn() },
     );
 
     expect(result.success).toBe(true);
@@ -134,7 +149,14 @@ describe("MCPToolAdapter", () => {
 
   it("loadMCPServers loads servers from MCP_SERVERS env var", async () => {
     process.env.MCP_SERVERS = JSON.stringify([
-      { name: "stripe", transport: { type: "stdio", command: "npx", args: ["-y", "@stripe/mcp"] } },
+      {
+        name: "stripe",
+        transport: {
+          type: "stdio",
+          command: "npx",
+          args: ["-y", "@stripe/mcp"],
+        },
+      },
     ]);
 
     const adapters = await loadMCPServers();

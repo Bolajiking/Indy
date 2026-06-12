@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { RevenueAdvisorReport, RevenueStream, DiversificationSuggestion } from "../../../src/agent/skills/revenue-advisor.js";
+import type {
+  RevenueAdvisorReport,
+  RevenueStream,
+  DiversificationSuggestion,
+} from "../../../src/agent/skills/revenue-advisor.js";
 
 describe("revenue-advisor types", () => {
   it("RevenueAdvisorReport has the expected shape", () => {

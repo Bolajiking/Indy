@@ -1,16 +1,17 @@
 import { supabase } from "../client.js";
+import type { JsonObject } from "../json.js";
 
 export interface Message {
   id: string;
   creator_id: string;
   role: string;
   content: string;
-  metadata: Record<string, any>;
+  metadata: JsonObject;
   created_at: string;
 }
 
 export async function saveMessage(
-  messageData: Omit<Message, "id" | "created_at">
+  messageData: Omit<Message, "id" | "created_at">,
 ): Promise<Message> {
   const { data, error } = await supabase
     .from("messages")
@@ -27,7 +28,7 @@ export async function saveMessage(
 
 export async function getConversationHistory(
   creatorId: string,
-  limit: number = 50
+  limit: number = 50,
 ): Promise<Message[]> {
   const { data, error } = await supabase
     .from("messages")

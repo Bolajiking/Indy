@@ -6,7 +6,6 @@ import {
   verifyWhatsAppSignature,
   verifyWhatsAppWebhook,
 } from "../../bot/whatsapp.js";
-import { env } from "../../config/env.js";
 import pino from "pino";
 
 const log = pino({ name: "routes:webhooks" });
@@ -66,11 +65,18 @@ webhooks.post("/whatsapp", async (context) => {
     return context.json({ error: "Invalid WhatsApp signature" }, 401);
   }
 
-  const payload = JSON.parse(rawBody);
+  let payload: unknown;
+  try {
+    payload = JSON.parse(rawBody) as unknown;
+  } catch (error) {
+    log.warn({ error }, "WhatsApp webhook body was not valid JSON");
+    return context.json({ error: "Invalid WhatsApp payload" }, 400);
+  }
+
   const responses = await handleWhatsAppWebhookPayload(payload);
 
   await Promise.all(
-    responses.map(({ to, response }) => sendWhatsAppMessage(to, response))
+    responses.map(({ to, response }) => sendWhatsAppMessage(to, response)),
   );
 
   return context.text("OK", 200);

@@ -1,9 +1,8 @@
 import crypto from "crypto";
-import pino from "pino";
 import { env } from "../config/env.js";
-import { handleMessage, type OutgoingMessage } from "./handler.js";
-
-const log = pino({ name: "bot:whatsapp" });
+import { handleMessage } from "./handler.js";
+import type { OutgoingMessage } from "./messages.js";
+export { sendWhatsAppMessage } from "./whatsapp-sender.js";
 
 export interface WhatsAppWebhookPayload {
   object?: string;
@@ -22,8 +21,16 @@ export interface WhatsAppWebhookPayload {
   }>;
 }
 
+function isWhatsAppWebhookPayload(
+  payload: unknown,
+): payload is WhatsAppWebhookPayload {
+  return (
+    typeof payload === "object" && payload !== null && !Array.isArray(payload)
+  );
+}
+
 export function verifyWhatsAppWebhook(
-  query: Record<string, string | undefined>
+  query: Record<string, string | undefined>,
 ): { ok: boolean; challenge?: string } {
   if (
     query["hub.mode"] === "subscribe" &&
@@ -37,7 +44,7 @@ export function verifyWhatsAppWebhook(
 
 export function verifyWhatsAppSignature(
   payload: string,
-  signature: string | undefined
+  signature: string | undefined,
 ): boolean {
   if (!env.WHATSAPP_WEBHOOK_SECRET || !signature) {
     return false;
@@ -52,16 +59,22 @@ export function verifyWhatsAppSignature(
 }
 
 export async function handleWhatsAppWebhookPayload(
-  payload: WhatsAppWebhookPayload
+  payload: unknown,
 ): Promise<Array<{ to: string; response: OutgoingMessage }>> {
+  if (!isWhatsAppWebhookPayload(payload)) {
+    return [];
+  }
+
   if (payload.object !== "whatsapp_business_account") {
     return [];
   }
 
   const responses: Array<{ to: string; response: OutgoingMessage }> = [];
 
-  for (const entry of payload.entry ?? []) {
-    for (const change of entry.changes ?? []) {
+  const entries = Array.isArray(payload.entry) ? payload.entry : [];
+  for (const entry of entries) {
+    const changes = Array.isArray(entry.changes) ? entry.changes : [];
+    for (const change of changes) {
       if (change.field !== "messages") {
         continue;
       }
@@ -83,36 +96,4 @@ export async function handleWhatsAppWebhookPayload(
   }
 
   return responses;
-}
-
-export async function sendWhatsAppMessage(
-  to: string,
-  response: OutgoingMessage
-): Promise<void> {
-  if (!env.WHATSAPP_ACCESS_TOKEN || !env.WHATSAPP_PHONE_NUMBER_ID) {
-    log.warn({ to }, "WhatsApp not configured; skipping outbound message");
-    return;
-  }
-
-  const plainText = response.text.replace(/[*_`]/g, "");
-  const url = `https://graph.facebook.com/v20.0/${env.WHATSAPP_PHONE_NUMBER_ID}/messages`;
-
-  const result = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: plainText },
-    }),
-  });
-
-  if (!result.ok) {
-    const body = await result.text().catch(() => "");
-    log.error({ to, status: result.status, body }, "WhatsApp send failed");
-  }
 }

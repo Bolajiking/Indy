@@ -55,13 +55,16 @@ describe("wallet provisioning", () => {
           wallet_provisioning_attempts: 1,
         },
       } as never);
-    vi.mocked(updateCreator).mockImplementation(async (id, updates) => ({
-      id,
-      display_name: "Ada",
-      wallet_id: null,
-      wallet_address: null,
-      settings: updates.settings ?? {},
-    }) as never);
+    vi.mocked(updateCreator).mockImplementation(
+      async (id, updates) =>
+        ({
+          id,
+          display_name: "Ada",
+          wallet_id: null,
+          wallet_address: null,
+          settings: updates.settings ?? {},
+        }) as never,
+    );
     vi.mocked(createWalletForCreator).mockResolvedValue({
       walletId: "wallet-1",
       address: "0xabc",
@@ -85,7 +88,7 @@ describe("wallet provisioning", () => {
           onboarding_error: null,
           wallet_provisioning_source: "test",
         }),
-      })
+      }),
     );
     expect(updateCreator).toHaveBeenNthCalledWith(
       2,
@@ -97,7 +100,7 @@ describe("wallet provisioning", () => {
           wallet_provisioning_attempts: 1,
           onboarding_error: null,
         }),
-      })
+      }),
     );
   });
 
@@ -121,14 +124,19 @@ describe("wallet provisioning", () => {
           wallet_provisioning_attempts: 1,
         },
       } as never);
-    vi.mocked(updateCreator).mockImplementation(async (id, updates) => ({
-      id,
-      display_name: "Bola",
-      wallet_id: null,
-      wallet_address: null,
-      settings: updates.settings ?? {},
-    }) as never);
-    vi.mocked(createWalletForCreator).mockRejectedValue(new Error("Privy down"));
+    vi.mocked(updateCreator).mockImplementation(
+      async (id, updates) =>
+        ({
+          id,
+          display_name: "Bola",
+          wallet_id: null,
+          wallet_address: null,
+          settings: updates.settings ?? {},
+        }) as never,
+    );
+    vi.mocked(createWalletForCreator).mockRejectedValue(
+      new Error("Privy down"),
+    );
 
     const result = await ensureCreatorWalletProvisioning("creator-2", {
       force: true,
@@ -146,7 +154,7 @@ describe("wallet provisioning", () => {
           wallet_provisioning_in_progress: false,
           onboarding_error: "Privy down",
         }),
-      })
+      }),
     );
   });
 
@@ -209,13 +217,16 @@ describe("wallet provisioning", () => {
           wallet_provisioning_attempts: 3,
         },
       } as never);
-    vi.mocked(updateCreator).mockImplementation(async (id, updates) => ({
-      id,
-      display_name: "Dee",
-      wallet_id: null,
-      wallet_address: null,
-      settings: updates.settings ?? {},
-    }) as never);
+    vi.mocked(updateCreator).mockImplementation(
+      async (id, updates) =>
+        ({
+          id,
+          display_name: "Dee",
+          wallet_id: null,
+          wallet_address: null,
+          settings: updates.settings ?? {},
+        }) as never,
+    );
     vi.mocked(createWalletForCreator).mockResolvedValue({
       walletId: "wallet-4",
       address: "0x444",
@@ -244,16 +255,18 @@ describe("wallet provisioning", () => {
       settings: {},
     } as never);
     vi.mocked(updateCreator).mockImplementationOnce(
-      () =>
-        startPromise as Promise<never>
+      () => startPromise as Promise<never>,
     );
-    vi.mocked(updateCreator).mockImplementation(async (id, updates) => ({
-      id,
-      display_name: "Efe",
-      wallet_id: null,
-      wallet_address: null,
-      settings: updates.settings ?? {},
-    }) as never);
+    vi.mocked(updateCreator).mockImplementation(
+      async (id, updates) =>
+        ({
+          id,
+          display_name: "Efe",
+          wallet_id: null,
+          wallet_address: null,
+          settings: updates.settings ?? {},
+        }) as never,
+    );
     vi.mocked(createWalletForCreator).mockResolvedValue({
       walletId: "wallet-5",
       address: "0x555",
@@ -298,7 +311,7 @@ describe("wallet provisioning", () => {
           wallet_provisioning_attempts: 2,
           onboarding_error: "timeout",
         },
-      } as never)
+      } as never),
     ).toEqual({
       status: "wallet_pending",
       walletProvisioned: false,

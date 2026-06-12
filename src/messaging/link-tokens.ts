@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
 import { env } from "../config/env.js";
-
-export type MessagingPlatform = "telegram" | "whatsapp";
+import type { MessagingPlatform } from "./types.js";
 
 export const MESSAGING_LINK_TOKEN_TTL_SECONDS = 15 * 60;
 const UUID_BYTES = 16;

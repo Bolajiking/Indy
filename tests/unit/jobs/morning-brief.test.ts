@@ -58,7 +58,7 @@ describe("runMorningBrief", () => {
       expect.objectContaining({
         parseMode: "Markdown",
         text: expect.stringContaining("Good morning"),
-      })
+      }),
     );
     expect(sendWhatsAppMessage).not.toHaveBeenCalled();
   });
@@ -103,7 +103,7 @@ describe("runMorningBrief", () => {
       expect.objectContaining({
         parseMode: "Markdown",
         text: expect.stringContaining("Let's make money today."),
-      })
+      }),
     );
   });
 });

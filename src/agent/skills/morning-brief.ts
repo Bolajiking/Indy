@@ -1,8 +1,9 @@
 import pino from "pino";
 import { AGENT } from "../../config/constants.js";
 import { getDealsForCreator } from "../../db/queries/deals.js";
-import anthropic from "../anthropic.js";
+import llm from "../llm.js";
 import { assembleContext } from "../memory.js";
+import { formatUsdWhole } from "../../lib/format.js";
 
 const log = pino({ name: "skill:morning-brief" });
 
@@ -20,7 +21,7 @@ export interface MorningBrief {
 }
 
 export async function generateMorningBrief(
-  creatorId: string
+  creatorId: string,
 ): Promise<MorningBrief> {
   log.info({ creatorId }, "Generating morning brief");
 
@@ -28,10 +29,10 @@ export async function generateMorningBrief(
   const deals = await getDealsForCreator(creatorId);
   const newDeals = deals.filter((deal) => deal.stage === "discovered");
   const activeDeals = deals.filter((deal) =>
-    ["pitched", "responded", "negotiating"].includes(deal.stage)
+    ["pitched", "responded", "negotiating"].includes(deal.stage),
   );
 
-  const response = await anthropic.messages.create({
+  const response = await llm.messages.create({
     model: AGENT.FAST_LLM,
     max_tokens: 1024,
     system: `You are Indyfren, a creator's AI business manager. Generate a morning brief with 2-3 items max. Each item should be actionable.
@@ -58,7 +59,7 @@ Be specific, not generic. Reference actual deal names and numbers.`,
           .slice(0, 5)
           .map(
             (deal) =>
-              `- ${deal.brand_name} (fit: ${deal.fit_score ?? "n/a"}, est: $${((deal.estimated_value_cents ?? 0) / 100).toFixed(0)})`
+              `- ${deal.brand_name} (fit: ${deal.fit_score ?? "n/a"}, est: ${formatUsdWhole(deal.estimated_value_cents ?? 0)})`,
           )
           .join("\n")}\n\nActive deals:\n${activeDeals
           .map((deal) => `- ${deal.brand_name} [${deal.stage}]`)
@@ -67,7 +68,8 @@ Be specific, not generic. Reference actual deal names and numbers.`,
     ],
   });
 
-  const text = response.content.find((block) => block.type === "text")?.text ?? "";
+  const text =
+    response.content.find((block) => block.type === "text")?.text ?? "";
 
   try {
     return JSON.parse(text) as MorningBrief;

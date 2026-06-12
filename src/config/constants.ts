@@ -4,8 +4,6 @@ export const SPENDING_LIMITS = {
   MONTHLY_USD: 500,
 } as const;
 
-export const FREE_CREDITS_USD = 10;
-
 export const NETWORK = {
   TEMPO: {
     CHAIN_TYPE: "ethereum",
@@ -39,3 +37,9 @@ export const DEAL_STAGES = [
 ] as const;
 
 export type DealStage = (typeof DEAL_STAGES)[number];
+
+const DEAL_STAGE_SET = new Set<string>(DEAL_STAGES);
+
+export function isDealStage(value: unknown): value is DealStage {
+  return typeof value === "string" && DEAL_STAGE_SET.has(value);
+}

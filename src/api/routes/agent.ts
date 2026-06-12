@@ -6,24 +6,24 @@ import {
   markApprovalSkipped,
 } from "../../bot/approval.js";
 import { getConversationHistory } from "../../db/queries/messages.js";
-import { requireCreatorAuth, getAuthContext } from "../middleware/auth.js";
+import {
+  getRequiredCreatorId,
+  requireCreatorAuth,
+} from "../middleware/auth.js";
 import { processCreatorMessage } from "../../agent/conversation.js";
 import {
   ApprovalExecutionError,
   executePendingApprovalAction,
 } from "../../agent/approval-execution.js";
+import type {
+  ApiAgentApprovalResponse,
+  ApiAgentMessageInput,
+  ApiAgentMessageResponse,
+  ApiAgentState,
+} from "../contracts.js";
 
 export const agent = new Hono();
 agent.use("*", requireCreatorAuth);
-
-function getRequiredCreatorId(c: Parameters<typeof getAuthContext>[0]) {
-  const { creatorId } = getAuthContext(c);
-  if (!creatorId) {
-    throw new HTTPException(403, { message: "Creator profile not registered" });
-  }
-
-  return creatorId;
-}
 
 agent.get("/state", async (c) => {
   const creatorId = getRequiredCreatorId(c);
@@ -32,17 +32,19 @@ agent.get("/state", async (c) => {
     getPendingApprovalsForCreator(creatorId),
   ]);
 
-  return c.json({ messages, pendingApprovals });
+  return c.json({ messages, pendingApprovals } satisfies ApiAgentState);
 });
 
 agent.post("/messages", async (c) => {
   const creatorId = getRequiredCreatorId(c);
 
-  let body: { text?: string };
+  let body: ApiAgentMessageInput;
   try {
-    body = await c.req.json<{ text?: string }>();
+    body = await c.req.json<ApiAgentMessageInput>();
   } catch {
-    throw new HTTPException(400, { message: "Request body must be valid JSON" });
+    throw new HTTPException(400, {
+      message: "Request body must be valid JSON",
+    });
   }
 
   const { text } = body;
@@ -60,7 +62,11 @@ agent.post("/messages", async (c) => {
     getPendingApprovalsForCreator(creatorId),
   ]);
 
-  return c.json({ reply, messages, pendingApprovals });
+  return c.json({
+    reply,
+    messages,
+    pendingApprovals,
+  } satisfies ApiAgentMessageResponse);
 });
 
 agent.post("/approvals/:actionId/approve", async (c) => {
@@ -70,7 +76,10 @@ agent.post("/approvals/:actionId/approve", async (c) => {
   try {
     const execution = await executePendingApprovalAction(creatorId, actionId);
     const pendingApprovals = await getPendingApprovalsForCreator(creatorId);
-    return c.json({ execution, pendingApprovals });
+    return c.json({
+      execution,
+      pendingApprovals,
+    } satisfies ApiAgentApprovalResponse);
   } catch (error) {
     if (error instanceof ApprovalExecutionError) {
       const status =
@@ -100,5 +109,5 @@ agent.post("/approvals/:actionId/skip", async (c) => {
 
   await markApprovalSkipped(actionId);
   const pendingApprovals = await getPendingApprovalsForCreator(creatorId);
-  return c.json({ pendingApprovals });
+  return c.json({ pendingApprovals } satisfies ApiAgentApprovalResponse);
 });

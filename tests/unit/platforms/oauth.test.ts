@@ -53,10 +53,7 @@ describe("platform OAuth helpers", () => {
 
     expect(getYouTubeOAuthConfigStatus()).toEqual({
       enabled: false,
-      missing: [
-        "GOOGLE_OAUTH_CLIENT_SECRET",
-        "YOUTUBE_OAUTH_REDIRECT_URI",
-      ],
+      missing: ["GOOGLE_OAUTH_CLIENT_SECRET", "YOUTUBE_OAUTH_REDIRECT_URI"],
     });
   });
 
@@ -71,13 +68,13 @@ describe("platform OAuth helpers", () => {
       verifyPlatformOAuthState({
         platform: "youtube",
         state,
-      })
+      }),
     ).toEqual(
       expect.objectContaining({
         creatorId: "creator-1",
         privyUserId: "did:privy:creator-1",
         platform: "youtube",
-      })
+      }),
     );
   });
 
@@ -94,7 +91,7 @@ describe("platform OAuth helpers", () => {
       verifyPlatformOAuthState({
         platform: "youtube",
         state: tampered,
-      })
+      }),
     ).toThrow(/Invalid OAuth state signature/);
   });
 
@@ -109,7 +106,7 @@ describe("platform OAuth helpers", () => {
       verifyPlatformOAuthState({
         platform: "youtube",
         state: `${state}.junk`,
-      })
+      }),
     ).toThrow(/Invalid OAuth state format/);
   });
 
@@ -129,7 +126,7 @@ describe("platform OAuth helpers", () => {
         platform: "youtube",
         state,
         now,
-      })
+      }),
     ).toThrow(/OAuth state has expired/);
 
     vi.useRealTimers();
@@ -141,30 +138,30 @@ describe("platform OAuth helpers", () => {
         creatorId: "creator-1",
         privyUserId: "did:privy:creator-1",
         platform: "youtube",
-      })
+      }),
     );
 
     expect(url.origin).toBe("https://accounts.google.com");
     expect(url.pathname).toBe("/o/oauth2/v2/auth");
     expect(url.searchParams.get("client_id")).toBe("google-client-id");
     expect(url.searchParams.get("redirect_uri")).toBe(
-      "http://localhost:3000/api/platforms/oauth/youtube/callback"
+      "http://localhost:3000/api/platforms/oauth/youtube/callback",
     );
     expect(url.searchParams.get("response_type")).toBe("code");
     expect(url.searchParams.get("access_type")).toBe("offline");
     expect(url.searchParams.get("scope")).toBe(
-      "https://www.googleapis.com/auth/youtube.readonly"
+      "https://www.googleapis.com/auth/youtube.readonly",
     );
 
     expect(
       verifyPlatformOAuthState({
         platform: "youtube",
         state: url.searchParams.get("state") ?? "",
-      })
+      }),
     ).toEqual(
       expect.objectContaining({
         creatorId: "creator-1",
-      })
+      }),
     );
   });
 
@@ -176,7 +173,7 @@ describe("platform OAuth helpers", () => {
         creatorId: "creator-1",
         privyUserId: "did:privy:creator-1",
         platform: "youtube",
-      })
+      }),
     ).toThrow(/YouTube OAuth is not configured/);
   });
 
@@ -190,8 +187,8 @@ describe("platform OAuth helpers", () => {
           scope: "https://www.googleapis.com/auth/youtube.readonly",
           token_type: "Bearer",
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      )
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
     );
 
     vi.stubGlobal("fetch", fetchMock);
@@ -201,7 +198,7 @@ describe("platform OAuth helpers", () => {
         accessToken: "oauth-access-token",
         refreshToken: "oauth-refresh-token",
         expiresIn: 3600,
-      })
+      }),
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -209,7 +206,7 @@ describe("platform OAuth helpers", () => {
       expect.objectContaining({
         method: "POST",
         body: expect.any(URLSearchParams),
-      })
+      }),
     );
   });
 
@@ -220,12 +217,12 @@ describe("platform OAuth helpers", () => {
         new Response(JSON.stringify({ error: "invalid_grant" }), {
           status: 400,
           headers: { "Content-Type": "application/json" },
-        })
-      )
+        }),
+      ),
     );
 
     await expect(exchangeYouTubeOAuthCode("oauth-code")).rejects.toThrow(
-      /token exchange failed with status 400/i
+      /token exchange failed with status 400/i,
     );
   });
 
@@ -236,23 +233,23 @@ describe("platform OAuth helpers", () => {
         new Response(JSON.stringify({ refresh_token: "oauth-refresh-token" }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
-        })
-      )
+        }),
+      ),
     );
 
     await expect(exchangeYouTubeOAuthCode("oauth-code")).rejects.toThrow(
-      /did not return an access token/i
+      /did not return an access token/i,
     );
   });
 
   it("propagates token exchange network failures", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockRejectedValue(new Error("network down"))
+      vi.fn().mockRejectedValue(new Error("network down")),
     );
 
     await expect(exchangeYouTubeOAuthCode("oauth-code")).rejects.toThrow(
-      /network down/
+      /network down/,
     );
   });
 
@@ -270,14 +267,14 @@ describe("platform OAuth helpers", () => {
             },
           ],
         }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
-      )
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
     );
 
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      fetchYouTubeChannelIdentity("oauth-access-token")
+      fetchYouTubeChannelIdentity("oauth-access-token"),
     ).resolves.toEqual({
       channelId: "channel-123",
       title: "Creator Channel",
@@ -290,7 +287,7 @@ describe("platform OAuth helpers", () => {
         headers: expect.objectContaining({
           Authorization: "Bearer oauth-access-token",
         }),
-      })
+      }),
     );
   });
 
@@ -301,12 +298,12 @@ describe("platform OAuth helpers", () => {
         new Response(JSON.stringify({ error: { message: "forbidden" } }), {
           status: 403,
           headers: { "Content-Type": "application/json" },
-        })
-      )
+        }),
+      ),
     );
 
     await expect(
-      fetchYouTubeChannelIdentity("oauth-access-token")
+      fetchYouTubeChannelIdentity("oauth-access-token"),
     ).rejects.toThrow(/channel lookup failed with status 403/i);
   });
 
@@ -317,23 +314,23 @@ describe("platform OAuth helpers", () => {
         new Response(JSON.stringify({ items: [] }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
-        })
-      )
+        }),
+      ),
     );
 
     await expect(
-      fetchYouTubeChannelIdentity("oauth-access-token")
+      fetchYouTubeChannelIdentity("oauth-access-token"),
     ).rejects.toThrow(/did not return a channel identity/i);
   });
 
   it("propagates channel identity network failures", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockRejectedValue(new Error("youtube unavailable"))
+      vi.fn().mockRejectedValue(new Error("youtube unavailable")),
     );
 
     await expect(
-      fetchYouTubeChannelIdentity("oauth-access-token")
+      fetchYouTubeChannelIdentity("oauth-access-token"),
     ).rejects.toThrow(/youtube unavailable/);
   });
 
@@ -342,9 +339,9 @@ describe("platform OAuth helpers", () => {
       buildPlatformOAuthRedirect({
         platform: "youtube",
         status: "success",
-      })
+      }),
     ).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=success&platform=youtube"
+      "http://localhost:3001/dashboard/settings?oauth=success&platform=youtube",
     );
 
     expect(
@@ -352,9 +349,9 @@ describe("platform OAuth helpers", () => {
         platform: "youtube",
         status: "error",
         error: "token_exchange_failed",
-      })
+      }),
     ).toBe(
-      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=token_exchange_failed"
+      "http://localhost:3001/dashboard/settings?oauth=error&platform=youtube&error=token_exchange_failed",
     );
   });
 });
