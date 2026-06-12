@@ -7,6 +7,7 @@
 ## Overview
 
 Indyfren runs as two separate services:
+
 - **Backend API** - Node.js/Hono server → **Railway**
 - **Dashboard** - Next.js app → **Vercel**
 
@@ -17,13 +18,15 @@ Both services are deployed automatically via GitHub Actions on push to `main`.
 ## Prerequisites
 
 ### Required Accounts
+
 1. **Railway** account - https://railway.app
 2. **Vercel** account - https://vercel.com
 3. **Supabase** project - https://supabase.com
 4. **Privy** app - https://privy.io
-5. **Anthropic** API key - https://console.anthropic.com
+5. **AI provider** API key - Anthropic by default, or an OpenAI-compatible provider with `AI_PROVIDER=openai`
 
 ### Required Tools (for manual deployment)
+
 - Node.js 22+
 - Railway CLI: `npm install -g @railway/cli`
 - Vercel CLI: `npm install -g vercel`
@@ -34,6 +37,7 @@ Both services are deployed automatically via GitHub Actions on push to `main`.
 ## Quick Start (Automated Deployment)
 
 ### 1. Fork and Clone
+
 ```bash
 git clone https://github.com/your-org/indyfren.git
 cd indyfren
@@ -46,25 +50,30 @@ Go to your repository → Settings → Secrets and variables → Actions
 Add these secrets:
 
 **Backend (Railway):**
+
 - `RAILWAY_TOKEN` - Railway API token
-- `ANTHROPIC_API_KEY` - Your Anthropic API key
+- `AI_PROVIDER` - Optional; defaults to `anthropic`
+- `ANTHROPIC_API_KEY` - Your Anthropic API key, or set `AI_PROVIDER=openai` and provide `AI_API_KEY` / `OPENAI_API_KEY`
 - `SUPABASE_URL` - Supabase project URL
 - `SUPABASE_SERVICE_KEY` - Supabase service role key
 - `PRIVY_APP_ID` - Privy application ID
 - `PRIVY_APP_SECRET` - Privy application secret
 
 **Dashboard (Vercel):**
+
 - `VERCEL_TOKEN` - Vercel API token
 - `VERCEL_ORG_ID` - Vercel organization ID
 - `VERCEL_PROJECT_ID` - Vercel project ID
 - `NEXT_PUBLIC_PRIVY_APP_ID` - Privy app ID (public)
 
 ### 3. Push to Main
+
 ```bash
 git push origin main
 ```
 
 GitHub Actions will automatically:
+
 1. Run all tests
 2. Build both services
 3. Deploy backend to Railway
@@ -77,12 +86,14 @@ GitHub Actions will automatically:
 ### Backend (Railway)
 
 #### 1. Create Railway Project
+
 ```bash
 railway login
 railway init
 ```
 
 #### 2. Add Redis Service
+
 ```bash
 railway add
 # Select "Redis" from the list
@@ -123,6 +134,7 @@ railway variables set REDIS_URL=${{Redis.REDIS_URL}}
 ```
 
 #### 4. Deploy
+
 ```bash
 railway up
 ```
@@ -136,6 +148,7 @@ railway run npm run db:init
 ```
 
 Optional - seed demo data:
+
 ```bash
 railway run npm run db:seed
 ```
@@ -152,17 +165,20 @@ railway domain
 ### Dashboard (Vercel)
 
 #### 1. Install Vercel CLI
+
 ```bash
 npm install -g vercel
 ```
 
 #### 2. Deploy Dashboard
+
 ```bash
 cd dashboard
 vercel
 ```
 
 Follow the prompts:
+
 - Link to existing project or create new
 - Set framework preset: **Next.js**
 - Build command: `npm run build`
@@ -173,14 +189,17 @@ Follow the prompts:
 In Vercel dashboard → Settings → Environment Variables:
 
 **Production:**
+
 - `NEXT_PUBLIC_API_URL` = `https://your-api.railway.app`
 - `NEXT_PUBLIC_PRIVY_APP_ID` = `clxxx...`
 
 **Preview & Development:**
+
 - `NEXT_PUBLIC_API_URL` = `http://localhost:3000`
 - `NEXT_PUBLIC_PRIVY_APP_ID` = `clxxx...`
 
 #### 4. Deploy to Production
+
 ```bash
 vercel --prod
 ```
@@ -188,6 +207,7 @@ vercel --prod
 #### 5. Get Your Dashboard URL
 
 Vercel will output your production URL:
+
 ```
 https://indyfren.vercel.app
 ```
@@ -197,6 +217,7 @@ https://indyfren.vercel.app
 ## Database Setup (Supabase)
 
 ### 1. Create Supabase Project
+
 - Go to https://supabase.com
 - Create new project
 - Note your project URL and service key
@@ -204,11 +225,13 @@ https://indyfren.vercel.app
 ### 2. Initialize Schema
 
 Either use the Supabase SQL Editor:
+
 1. Open SQL Editor in Supabase dashboard
 2. Copy contents of `src/db/schema.sql`
 3. Execute
 
 Or use the init script (after backend deployed):
+
 ```bash
 railway run npm run db:init
 ```
@@ -216,6 +239,7 @@ railway run npm run db:init
 ### 3. Verify Tables
 
 Check these tables exist:
+
 - `creators`
 - `deals`
 - `transactions`
@@ -230,11 +254,13 @@ Check these tables exist:
 ### 1. Update Dashboard App URL
 
 In Railway, update `DASHBOARD_APP_URL`:
+
 ```bash
 railway variables set DASHBOARD_APP_URL=https://indyfren.vercel.app
 ```
 
 Redeploy if needed:
+
 ```bash
 railway up
 ```
@@ -244,11 +270,13 @@ railway up
 #### Telegram Bot
 
 Set webhook URL:
+
 ```bash
 curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-api.railway.app/webhooks/telegram"
 ```
 
 Verify webhook:
+
 ```bash
 curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
 ```
@@ -263,6 +291,7 @@ curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
 ### 3. Configure YouTube OAuth
 
 In Google Cloud Console:
+
 1. Add authorized redirect URI:
    - `https://your-api.railway.app/api/platforms/oauth/youtube/callback`
 2. Update `YOUTUBE_OAUTH_REDIRECT_URI` in Railway
@@ -278,11 +307,13 @@ If dashboard and API are on different domains, verify CORS headers in backend.
 ### Health Endpoints
 
 **Backend:**
+
 ```bash
 curl https://your-api.railway.app/health
 ```
 
 Expected:
+
 ```json
 {
   "status": "ok",
@@ -296,6 +327,7 @@ Expected:
 ```
 
 **Dashboard:**
+
 ```bash
 curl https://indyfren.vercel.app
 ```
@@ -305,6 +337,7 @@ Should return HTML.
 ### Railway Monitoring
 
 Railway provides:
+
 - CPU/Memory metrics
 - Deployment logs
 - Build logs
@@ -315,6 +348,7 @@ Access via: https://railway.app/project/{your-project}
 ### Vercel Monitoring
 
 Vercel provides:
+
 - Analytics
 - Web Vitals
 - Function logs
@@ -328,37 +362,43 @@ Access via: https://vercel.com/{your-team}/{project}
 
 ### Backend (Railway)
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | - | Claude API key |
-| `SUPABASE_URL` | Yes | - | Supabase project URL |
-| `SUPABASE_SERVICE_KEY` | Yes | - | Supabase service role key |
-| `PRIVY_APP_ID` | Yes | - | Privy application ID |
-| `PRIVY_APP_SECRET` | Yes | - | Privy application secret |
-| `PRIVY_JWT_VERIFICATION_KEY` | No | - | JWT verification key |
-| `REDIS_URL` | Yes | - | Redis connection URL |
-| `PORT` | No | 3000 | API server port |
-| `NODE_ENV` | No | development | Node environment |
-| `TELEGRAM_BOT_TOKEN` | No | - | Telegram bot token |
-| `WHATSAPP_PHONE_NUMBER_ID` | No | - | WhatsApp phone number ID |
-| `WHATSAPP_ACCESS_TOKEN` | No | - | WhatsApp access token |
-| `WHATSAPP_VERIFY_TOKEN` | No | - | WhatsApp verify token |
-| `WHATSAPP_WEBHOOK_SECRET` | No | - | WhatsApp webhook secret |
-| `GOOGLE_OAUTH_CLIENT_ID` | No | - | Google OAuth client ID |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | No | - | Google OAuth client secret |
-| `YOUTUBE_OAUTH_REDIRECT_URI` | No | - | YouTube OAuth redirect |
-| `DASHBOARD_APP_URL` | No | - | Dashboard URL for redirects |
-| `BROWSERBASE_API_KEY` | No | - | BrowserBase API key |
-| `BROWSERBASE_PROJECT_ID` | No | - | BrowserBase project ID |
-| `ENABLE_TELEGRAM_BOT` | No | true | Enable Telegram bot |
-| `ENABLE_JOBS` | No | true | Enable job queue |
+| Variable                     | Required      | Default     | Description                                                                   |
+| ---------------------------- | ------------- | ----------- | ----------------------------------------------------------------------------- |
+| `AI_PROVIDER`                | No            | anthropic   | Agent AI provider: `anthropic` or `openai`                                    |
+| `AI_API_KEY`                 | No            | -           | Provider-neutral API key override                                             |
+| `AI_BASE_URL`                | No            | -           | OpenAI-compatible or Anthropic-compatible provider base URL                   |
+| `AI_MODEL`                   | No            | -           | Default-tier model override                                                   |
+| `AI_FAST_MODEL`              | No            | -           | Fast-tier model override                                                      |
+| `ANTHROPIC_API_KEY`          | Conditionally | -           | Required when using the default Anthropic provider unless `AI_API_KEY` is set |
+| `OPENAI_API_KEY`             | Conditionally | -           | Required when `AI_PROVIDER=openai` unless `AI_API_KEY` is set                 |
+| `SUPABASE_URL`               | Yes           | -           | Supabase project URL                                                          |
+| `SUPABASE_SERVICE_KEY`       | Yes           | -           | Supabase service role key                                                     |
+| `PRIVY_APP_ID`               | Yes           | -           | Privy application ID                                                          |
+| `PRIVY_APP_SECRET`           | Yes           | -           | Privy application secret                                                      |
+| `PRIVY_JWT_VERIFICATION_KEY` | No            | -           | JWT verification key                                                          |
+| `REDIS_URL`                  | Yes           | -           | Redis connection URL                                                          |
+| `PORT`                       | No            | 3000        | API server port                                                               |
+| `NODE_ENV`                   | No            | development | Node environment                                                              |
+| `TELEGRAM_BOT_TOKEN`         | No            | -           | Telegram bot token                                                            |
+| `WHATSAPP_PHONE_NUMBER_ID`   | No            | -           | WhatsApp phone number ID                                                      |
+| `WHATSAPP_ACCESS_TOKEN`      | No            | -           | WhatsApp access token                                                         |
+| `WHATSAPP_VERIFY_TOKEN`      | No            | -           | WhatsApp verify token                                                         |
+| `WHATSAPP_WEBHOOK_SECRET`    | No            | -           | WhatsApp webhook secret                                                       |
+| `GOOGLE_OAUTH_CLIENT_ID`     | No            | -           | Google OAuth client ID                                                        |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | No            | -           | Google OAuth client secret                                                    |
+| `YOUTUBE_OAUTH_REDIRECT_URI` | No            | -           | YouTube OAuth redirect                                                        |
+| `DASHBOARD_APP_URL`          | No            | -           | Dashboard URL for redirects                                                   |
+| `BROWSERBASE_API_KEY`        | No            | -           | BrowserBase API key                                                           |
+| `BROWSERBASE_PROJECT_ID`     | No            | -           | BrowserBase project ID                                                        |
+| `ENABLE_TELEGRAM_BOT`        | No            | true        | Enable Telegram bot                                                           |
+| `ENABLE_JOBS`                | No            | true        | Enable job queue                                                              |
 
 ### Dashboard (Vercel)
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `NEXT_PUBLIC_API_URL` | Yes | - | Backend API URL |
-| `NEXT_PUBLIC_PRIVY_APP_ID` | Yes | - | Privy app ID (public) |
+| Variable                   | Required | Default | Description           |
+| -------------------------- | -------- | ------- | --------------------- |
+| `NEXT_PUBLIC_API_URL`      | Yes      | -       | Backend API URL       |
+| `NEXT_PUBLIC_PRIVY_APP_ID` | Yes      | -       | Privy app ID (public) |
 
 ---
 
@@ -378,6 +418,7 @@ Railway auto-scales based on load. Configure in `railway.json`:
 ```
 
 For high traffic:
+
 - Increase replicas: 2-4 instances
 - Upgrade Railway plan for more resources
 - Consider dedicated Redis instance
@@ -387,6 +428,7 @@ For high traffic:
 Vercel auto-scales globally via edge network. No configuration needed.
 
 For high traffic:
+
 - Upgrade Vercel plan for higher limits
 - Enable ISR (Incremental Static Regeneration) for cached routes
 
@@ -399,6 +441,7 @@ For high traffic:
 Supabase automatically backs up your database daily.
 
 Manual backup:
+
 1. Go to Supabase dashboard
 2. Database → Backups
 3. Download backup or enable Point-in-Time Recovery (PITR)
@@ -406,6 +449,7 @@ Manual backup:
 ### Code Backups
 
 All code is in Git. Tag releases:
+
 ```bash
 git tag -a v1.0.0 -m "Production release v1.0.0"
 git push origin v1.0.0
@@ -422,6 +466,7 @@ git push origin v1.0.0
 3. Click "Redeploy"
 
 Or via CLI:
+
 ```bash
 railway redeploy <deployment-id>
 ```
@@ -433,6 +478,7 @@ railway redeploy <deployment-id>
 3. Click "Promote to Production"
 
 Or via CLI:
+
 ```bash
 vercel rollback
 ```
@@ -444,11 +490,13 @@ vercel rollback
 ### Backend won't start
 
 **Check logs:**
+
 ```bash
 railway logs
 ```
 
 **Common issues:**
+
 - Missing environment variables → Add required vars
 - Database connection failed → Check Supabase credentials
 - Redis connection failed → Verify Redis service running
@@ -457,11 +505,13 @@ railway logs
 ### Dashboard won't build
 
 **Check build logs:**
+
 ```bash
 vercel logs
 ```
 
 **Common issues:**
+
 - Missing `NEXT_PUBLIC_API_URL` → Add to Vercel env vars
 - Build timeout → Increase timeout in `vercel.json`
 - API proxy failing → Verify backend is running
@@ -481,7 +531,7 @@ vercel logs
 
 ### Agent not responding
 
-1. Check Anthropic API key is valid
+1. Check the configured AI provider key is valid
 2. Verify credits or wallet balance
 3. Check tool execution logs
 4. Verify database connection

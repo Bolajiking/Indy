@@ -38,6 +38,7 @@ Authorization: Bearer <privy_access_token>
 Check API health and dependency status.
 
 **Response:** `200 OK`
+
 ```json
 {
   "status": "ok",
@@ -56,6 +57,7 @@ Check API health and dependency status.
 Readiness probe for deployment health checks.
 
 **Response:** `200 OK` or `503 Service Unavailable`
+
 ```json
 {
   "ready": true
@@ -71,12 +73,14 @@ Readiness probe for deployment health checks.
 Register a new creator (requires Privy token).
 
 **Headers:**
+
 ```
 Authorization: Bearer <privy_token>
 Content-Type: application/json
 ```
 
 **Request Body:**
+
 ```json
 {
   "display_name": "John Doe",
@@ -85,6 +89,7 @@ Content-Type: application/json
 ```
 
 **Response:** `201 Created`
+
 ```json
 {
   "id": "creator-123",
@@ -105,11 +110,13 @@ Content-Type: application/json
 Get current authenticated creator profile.
 
 **Headers:**
+
 ```
 Authorization: Bearer <privy_token>
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "creator": {
@@ -134,6 +141,7 @@ Authorization: Bearer <privy_token>
 ```
 
 **Error Responses:**
+
 - `401 Unauthorized` - Invalid or missing Privy token
 - `404 Not Found` - Creator not registered
 
@@ -142,6 +150,7 @@ Authorization: Bearer <privy_token>
 Complete creator onboarding (set niche, platforms, etc.).
 
 **Request Body:**
+
 ```json
 {
   "niche": "fitness coaching",
@@ -151,6 +160,7 @@ Complete creator onboarding (set niche, platforms, etc.).
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "success": true
@@ -162,6 +172,7 @@ Complete creator onboarding (set niche, platforms, etc.).
 Retry wallet provisioning if it failed during onboarding.
 
 **Response:** `200 OK`
+
 ```json
 {
   "success": true,
@@ -179,9 +190,11 @@ Retry wallet provisioning if it failed during onboarding.
 List all deals for the authenticated creator.
 
 **Query Parameters:**
+
 - `stage` (optional): Filter by stage (`discovered`, `pitched`, `negotiating`, `contracted`, `active`, `completed`, `rejected`)
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -204,6 +217,7 @@ List all deals for the authenticated creator.
 Create a new deal manually.
 
 **Request Body:**
+
 ```json
 {
   "brand_name": "FitnessBrand",
@@ -216,6 +230,7 @@ Create a new deal manually.
 ```
 
 **Response:** `201 Created`
+
 ```json
 {
   "id": "deal-2",
@@ -234,6 +249,7 @@ Create a new deal manually.
 Update an existing deal.
 
 **Request Body:**
+
 ```json
 {
   "stage": "negotiating",
@@ -242,6 +258,7 @@ Update an existing deal.
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "id": "deal-1",
@@ -260,6 +277,7 @@ Update an existing deal.
 List connected platforms for the authenticated creator.
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -281,6 +299,7 @@ List connected platforms for the authenticated creator.
 Connect a platform manually (token-based).
 
 **Request Body:**
+
 ```json
 {
   "platform": "youtube",
@@ -293,6 +312,7 @@ Connect a platform manually (token-based).
 ```
 
 **Response:** `200 OK`
+
 ```json
 {
   "success": true,
@@ -306,6 +326,7 @@ Connect a platform manually (token-based).
 Disconnect a platform.
 
 **Response:** `200 OK`
+
 ```json
 {
   "success": true
@@ -319,6 +340,7 @@ Disconnect a platform.
 Get available OAuth providers.
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -339,6 +361,7 @@ Get available OAuth providers.
 Start YouTube OAuth flow.
 
 **Response:** `200 OK`
+
 ```json
 {
   "authUrl": "https://accounts.google.com/o/oauth2/v2/auth?client_id=...",
@@ -347,6 +370,7 @@ Start YouTube OAuth flow.
 ```
 
 **Usage:**
+
 1. Call this endpoint
 2. Redirect user to `authUrl`
 3. Google will redirect back to `/api/platforms/oauth/youtube/callback`
@@ -357,11 +381,13 @@ Start YouTube OAuth flow.
 YouTube OAuth callback (called by Google, not directly).
 
 **Query Parameters:**
+
 - `code` - Authorization code from Google
 - `state` - Signed state token
 - `error` - Error code if user denied
 
 **Response:** Redirects to dashboard
+
 - Success: `/dashboard/settings?oauth=success`
 - Error: `/dashboard/settings?oauth=error&error=<reason>`
 
@@ -374,9 +400,11 @@ YouTube OAuth callback (called by Google, not directly).
 List wallet transactions for the authenticated creator.
 
 **Query Parameters:**
+
 - `limit` (optional, default: 50): Maximum number of results
 
 **Response:** `200 OK`
+
 ```json
 [
   {
@@ -405,6 +433,7 @@ List wallet transactions for the authenticated creator.
 ```
 
 **Transaction Types:**
+
 - `agent_tool_usage` - Paid tool call by agent
 - `credit_deduction` - Free credits spent
 - `wallet_funding` - Funds added to wallet
@@ -419,6 +448,7 @@ List wallet transactions for the authenticated creator.
 Get financial snapshot for the authenticated creator.
 
 **Response:** `200 OK`
+
 ```json
 {
   "creatorId": "creator-123",
@@ -456,6 +486,7 @@ Get financial snapshot for the authenticated creator.
 Get aggregated analytics across all connected platforms.
 
 **Response:** `200 OK`
+
 ```json
 {
   "creatorId": "creator-123",
@@ -485,6 +516,7 @@ Get aggregated analytics across all connected platforms.
 Get upcoming deadlines and scheduled tasks.
 
 **Response:** `200 OK`
+
 ```json
 {
   "upcoming": [
@@ -519,6 +551,7 @@ Get upcoming deadlines and scheduled tasks.
 Telegram bot webhook endpoint.
 
 **Setup:**
+
 ```bash
 curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-api.railway.app/webhooks/telegram"
 ```
@@ -532,6 +565,7 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https:
 WhatsApp webhook verification.
 
 **Query Parameters:**
+
 - `hub.mode=subscribe`
 - `hub.verify_token=<your_verify_token>`
 - `hub.challenge=<random_string>`
@@ -543,6 +577,7 @@ WhatsApp webhook verification.
 WhatsApp message webhook.
 
 **Headers:**
+
 - `x-hub-signature-256` - HMAC signature for verification
 
 **Request:** WhatsApp webhook payload
@@ -577,6 +612,7 @@ All error responses follow this format:
 ### Common Errors
 
 **Insufficient Credits:**
+
 ```json
 {
   "error": "Insufficient credits. Please fund your wallet.",
@@ -586,6 +622,7 @@ All error responses follow this format:
 ```
 
 **Rate Limited:**
+
 ```json
 {
   "error": "Too many requests. Please try again later.",
@@ -594,6 +631,7 @@ All error responses follow this format:
 ```
 
 **Wallet Not Provisioned:**
+
 ```json
 {
   "error": "Wallet provisioning in progress. Please wait.",
@@ -612,6 +650,7 @@ All error responses follow this format:
 - **10,000 requests per day** per creator
 
 Rate limit headers are included in responses:
+
 ```
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 95
@@ -625,10 +664,12 @@ X-RateLimit-Reset: 1710000000
 List endpoints support pagination:
 
 **Query Parameters:**
+
 - `limit` (default: 50, max: 100)
 - `offset` (default: 0)
 
 **Response Headers:**
+
 ```
 X-Total-Count: 234
 Link: </api/deals?limit=50&offset=50>; rel="next"
@@ -647,6 +688,7 @@ Telegram webhooks are verified automatically by the grammY framework.
 WhatsApp webhooks include an HMAC signature in the `x-hub-signature-256` header. The API verifies this using your `WHATSAPP_WEBHOOK_SECRET`.
 
 **Verification Process:**
+
 1. Extract raw request body
 2. Compute `HMAC-SHA256(secret, body)`
 3. Compare with provided signature
@@ -659,26 +701,26 @@ WhatsApp webhooks include an HMAC signature in the `x-hub-signature-256` header.
 
 ```typescript
 // Using fetch
-const response = await fetch('https://your-api.railway.app/api/deals', {
+const response = await fetch("https://your-api.railway.app/api/deals", {
   headers: {
-    'Authorization': `Bearer ${privyToken}`,
-    'Content-Type': 'application/json'
-  }
+    Authorization: `Bearer ${privyToken}`,
+    "Content-Type": "application/json",
+  },
 });
 const deals = await response.json();
 
 // Create a deal
-await fetch('https://your-api.railway.app/api/deals', {
-  method: 'POST',
+await fetch("https://your-api.railway.app/api/deals", {
+  method: "POST",
   headers: {
-    'Authorization': `Bearer ${privyToken}`,
-    'Content-Type': 'application/json'
+    Authorization: `Bearer ${privyToken}`,
+    "Content-Type": "application/json",
   },
   body: JSON.stringify({
-    brand_name: 'NewBrand',
-    stage: 'discovered',
-    estimated_value_cents: 200000
-  })
+    brand_name: "NewBrand",
+    stage: "discovered",
+    estimated_value_cents: 200000,
+  }),
 });
 ```
 

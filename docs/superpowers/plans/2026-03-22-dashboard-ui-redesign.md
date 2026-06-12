@@ -20,47 +20,48 @@
 
 ### New files to create
 
-| File | Responsibility |
-|------|---------------|
-| `dashboard/src/components/icons.tsx` | All 17 SVG icon components with shared `IconProps` interface |
-| `dashboard/src/components/tooltip.tsx` | Reusable hover tooltip wrapper |
-| `dashboard/src/components/top-nav.tsx` | Top navigation bar (replaces sidebar in layout) |
-| `dashboard/src/components/command-bar.tsx` | Search/ask command bar that scrolls to agent console |
-| `tests/unit/dashboard/icons.test.tsx` | Icon rendering tests |
-| `tests/unit/dashboard/tooltip.test.tsx` | Tooltip hover behavior tests |
-| `tests/unit/dashboard/top-nav.test.tsx` | Navigation, active tab, auth states |
-| `tests/unit/dashboard/command-bar.test.tsx` | Click-to-focus behavior |
+| File                                        | Responsibility                                               |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `dashboard/src/components/icons.tsx`        | All 17 SVG icon components with shared `IconProps` interface |
+| `dashboard/src/components/tooltip.tsx`      | Reusable hover tooltip wrapper                               |
+| `dashboard/src/components/top-nav.tsx`      | Top navigation bar (replaces sidebar in layout)              |
+| `dashboard/src/components/command-bar.tsx`  | Search/ask command bar that scrolls to agent console         |
+| `tests/unit/dashboard/icons.test.tsx`       | Icon rendering tests                                         |
+| `tests/unit/dashboard/tooltip.test.tsx`     | Tooltip hover behavior tests                                 |
+| `tests/unit/dashboard/top-nav.test.tsx`     | Navigation, active tab, auth states                          |
+| `tests/unit/dashboard/command-bar.test.tsx` | Click-to-focus behavior                                      |
 
 ### Files to modify
 
-| File | Changes |
-|------|---------|
-| `dashboard/src/app/globals.css` | Full replacement: old tokens/classes → new design tokens |
-| `dashboard/tailwind.config.ts` | Replace color palette with new token references |
-| `dashboard/src/app/dashboard/layout.tsx` | Replace sidebar grid → top-nav + single-column |
-| `dashboard/src/components/agent-console.tsx` | New message styling, icons on prompts, gradient approval, blue input focus |
-| `dashboard/src/components/dashboard-home-hero.tsx` | Gradient bg, time-aware greeting, colored stats, icon CTAs |
-| `dashboard/src/components/dashboard-support-rail.tsx` | Section icons, dividers, hover states, "View all" links |
-| `dashboard/src/components/dashboard-auth-gate.tsx` | Remove serif/uppercase, use new tokens |
-| `dashboard/src/components/deal-card.tsx` | Remove shadows, use tinted borders |
-| `dashboard/src/components/wallet-balance.tsx` | New color tokens |
-| `dashboard/src/components/morning-brief.tsx` | New color tokens |
-| `dashboard/src/components/platform-connect.tsx` | New color tokens |
-| `dashboard/src/components/profile-settings-form.tsx` | New color tokens |
-| `dashboard/src/app/dashboard/page.tsx` | Command bar, updated section labels + dividers |
-| `dashboard/src/app/dashboard/deals/page.tsx` | New tokens, icons, sentence case |
-| `dashboard/src/app/dashboard/wallet/page.tsx` | New tokens, icons |
-| `dashboard/src/app/dashboard/reports/page.tsx` | New tokens, icons |
-| `dashboard/src/app/dashboard/settings/page.tsx` | New tokens, icons, sign-out button |
-| `dashboard/src/lib/consumer-copy.ts` | Update copy for new nav (remove shell eyebrow/title) |
-| `tests/unit/dashboard/home-state.test.ts` | Update if hero model changes |
-| `tests/unit/dashboard/agent-console.test.tsx` | Update class/text assertions |
+| File                                                  | Changes                                                                    |
+| ----------------------------------------------------- | -------------------------------------------------------------------------- |
+| `dashboard/src/app/globals.css`                       | Full replacement: old tokens/classes → new design tokens                   |
+| `dashboard/tailwind.config.ts`                        | Replace color palette with new token references                            |
+| `dashboard/src/app/dashboard/layout.tsx`              | Replace sidebar grid → top-nav + single-column                             |
+| `dashboard/src/components/agent-console.tsx`          | New message styling, icons on prompts, gradient approval, blue input focus |
+| `dashboard/src/components/dashboard-home-hero.tsx`    | Gradient bg, time-aware greeting, colored stats, icon CTAs                 |
+| `dashboard/src/components/dashboard-support-rail.tsx` | Section icons, dividers, hover states, "View all" links                    |
+| `dashboard/src/components/dashboard-auth-gate.tsx`    | Remove serif/uppercase, use new tokens                                     |
+| `dashboard/src/components/deal-card.tsx`              | Remove shadows, use tinted borders                                         |
+| `dashboard/src/components/wallet-balance.tsx`         | New color tokens                                                           |
+| `dashboard/src/components/morning-brief.tsx`          | New color tokens                                                           |
+| `dashboard/src/components/platform-connect.tsx`       | New color tokens                                                           |
+| `dashboard/src/components/profile-settings-form.tsx`  | New color tokens                                                           |
+| `dashboard/src/app/dashboard/page.tsx`                | Command bar, updated section labels + dividers                             |
+| `dashboard/src/app/dashboard/deals/page.tsx`          | New tokens, icons, sentence case                                           |
+| `dashboard/src/app/dashboard/wallet/page.tsx`         | New tokens, icons                                                          |
+| `dashboard/src/app/dashboard/reports/page.tsx`        | New tokens, icons                                                          |
+| `dashboard/src/app/dashboard/settings/page.tsx`       | New tokens, icons, sign-out button                                         |
+| `dashboard/src/lib/consumer-copy.ts`                  | Update copy for new nav (remove shell eyebrow/title)                       |
+| `tests/unit/dashboard/home-state.test.ts`             | Update if hero model changes                                               |
+| `tests/unit/dashboard/agent-console.test.tsx`         | Update class/text assertions                                               |
 
 ---
 
 ## Task 1: Replace globals.css and Tailwind config
 
 **Files:**
+
 - Modify: `dashboard/src/app/globals.css`
 - Modify: `dashboard/tailwind.config.ts`
 
@@ -76,33 +77,34 @@ Replace with new design tokens:
 @tailwind utilities;
 
 :root {
-  --bg-canvas: #FFFFFF;
-  --bg-surface: #FAFAFA;
-  --bg-input: #F5F5F5;
-  --border-default: #EBEBEB;
-  --border-light: #E0E0E0;
-  --border-focus: #2D7CF6;
+  --bg-canvas: #ffffff;
+  --bg-surface: #fafafa;
+  --bg-input: #f5f5f5;
+  --border-default: #ebebeb;
+  --border-light: #e0e0e0;
+  --border-focus: #2d7cf6;
   --text-primary: #000000;
   --text-secondary: #555555;
-  --text-tertiary: #8E8E93;
-  --text-placeholder: #AEAEB2;
-  --text-muted: #C7C7CC;
-  --accent-pink: #FF2D78;
-  --accent-pink-bg: rgba(255,45,120,0.08);
-  --accent-pink-subtle: rgba(255,45,120,0.04);
-  --accent-pink-border: rgba(255,45,120,0.1);
-  --accent-pink-border-strong: rgba(255,45,120,0.2);
-  --accent-blue: #2D7CF6;
-  --accent-blue-hover: #1B6AE0;
-  --accent-blue-bg: rgba(45,124,246,0.04);
-  --accent-blue-border: rgba(45,124,246,0.1);
-  --accent-blue-border-strong: rgba(45,124,246,0.2);
-  --accent-green: #34C759;
-  --accent-green-hover: #2DB84E;
-  --accent-green-bg: rgba(52,199,89,0.1);
-  --accent-green-text: #2E7D32;
-  --bg-disconnected: #F5F5F5;
-  --font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+  --text-tertiary: #8e8e93;
+  --text-placeholder: #aeaeb2;
+  --text-muted: #c7c7cc;
+  --accent-pink: #ff2d78;
+  --accent-pink-bg: rgba(255, 45, 120, 0.08);
+  --accent-pink-subtle: rgba(255, 45, 120, 0.04);
+  --accent-pink-border: rgba(255, 45, 120, 0.1);
+  --accent-pink-border-strong: rgba(255, 45, 120, 0.2);
+  --accent-blue: #2d7cf6;
+  --accent-blue-hover: #1b6ae0;
+  --accent-blue-bg: rgba(45, 124, 246, 0.04);
+  --accent-blue-border: rgba(45, 124, 246, 0.1);
+  --accent-blue-border-strong: rgba(45, 124, 246, 0.2);
+  --accent-green: #34c759;
+  --accent-green-hover: #2db84e;
+  --accent-green-bg: rgba(52, 199, 89, 0.1);
+  --accent-green-text: #2e7d32;
+  --bg-disconnected: #f5f5f5;
+  --font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
   --space-page: 32px;
   --space-section: 24px;
   --space-card-padding: 20px;
@@ -121,15 +123,23 @@ Replace with new design tokens:
   --radius-chip: 8px;
   --radius-badge: 6px;
   --radius-logo: 8px;
-  --gradient-hero: linear-gradient(135deg, rgba(255,45,120,0.05), rgba(45,124,246,0.05));
-  --gradient-logo: linear-gradient(135deg, #FF2D78, #FF6B9D);
-  --gradient-avatar: linear-gradient(135deg, #2D7CF6, #6BA3FF);
+  --gradient-hero: linear-gradient(
+    135deg,
+    rgba(255, 45, 120, 0.05),
+    rgba(45, 124, 246, 0.05)
+  );
+  --gradient-logo: linear-gradient(135deg, #ff2d78, #ff6b9d);
+  --gradient-avatar: linear-gradient(135deg, #2d7cf6, #6ba3ff);
   --gradient-approval: linear-gradient(135deg, #1a1a2e, #16213e);
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html { background: var(--bg-canvas); }
+html {
+  background: var(--bg-canvas);
+}
 
 body {
   margin: 0;
@@ -139,18 +149,32 @@ body {
   min-height: 100vh;
 }
 
-a { color: inherit; text-decoration: none; }
+a {
+  color: inherit;
+  text-decoration: none;
+}
 
-::selection { background: rgba(45, 124, 246, 0.16); }
+::selection {
+  background: rgba(45, 124, 246, 0.16);
+}
 
 /* Shimmer animation for loading states */
 @keyframes shimmer {
-  0% { background-position: -200px 0; }
-  100% { background-position: calc(200px + 100%) 0; }
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
 }
 
 .shimmer {
-  background: linear-gradient(90deg, var(--bg-input) 0%, var(--border-default) 50%, var(--bg-input) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--bg-input) 0%,
+    var(--border-default) 50%,
+    var(--bg-input) 100%
+  );
   background-size: 200px 100%;
   animation: shimmer 1.5s ease infinite;
 }
@@ -234,6 +258,7 @@ git commit -m "feat: replace design tokens with vibrant creator minimalism palet
 ## Task 2: Icon system
 
 **Files:**
+
 - Create: `dashboard/src/components/icons.tsx`
 - Create: `tests/unit/dashboard/icons.test.tsx`
 
@@ -247,10 +272,23 @@ import React from "react";
 import { describe, expect, it } from "vitest";
 import { render } from "./test-helpers";
 import {
-  IconClock, IconCard, IconDocument, IconBarChart, IconGear,
-  IconCheck, IconX, IconSend, IconBell, IconSearch,
-  IconList, IconArrowUp, IconPulse, IconGrid, IconRefresh,
-  IconChevronRight, IconTrendUp,
+  IconClock,
+  IconCard,
+  IconDocument,
+  IconBarChart,
+  IconGear,
+  IconCheck,
+  IconX,
+  IconSend,
+  IconBell,
+  IconSearch,
+  IconList,
+  IconArrowUp,
+  IconPulse,
+  IconGrid,
+  IconRefresh,
+  IconChevronRight,
+  IconTrendUp,
 } from "../../../dashboard/src/components/icons";
 
 // Helper to render and get the SVG element
@@ -265,10 +303,23 @@ function renderIcon(Icon: React.FC<any>, props = {}) {
 describe("Icon system", () => {
   it("renders all 17 icons as SVGs", () => {
     const icons = [
-      IconClock, IconCard, IconDocument, IconBarChart, IconGear,
-      IconCheck, IconX, IconSend, IconBell, IconSearch,
-      IconList, IconArrowUp, IconPulse, IconGrid, IconRefresh,
-      IconChevronRight, IconTrendUp,
+      IconClock,
+      IconCard,
+      IconDocument,
+      IconBarChart,
+      IconGear,
+      IconCheck,
+      IconX,
+      IconSend,
+      IconBell,
+      IconSearch,
+      IconList,
+      IconArrowUp,
+      IconPulse,
+      IconGrid,
+      IconRefresh,
+      IconChevronRight,
+      IconTrendUp,
     ];
     for (const Icon of icons) {
       const { svg, container } = renderIcon(Icon);
@@ -295,7 +346,9 @@ describe("Icon system", () => {
   });
 
   it("passes className through", () => {
-    const { svg, container } = renderIcon(IconClock, { className: "text-accent-pink" });
+    const { svg, container } = renderIcon(IconClock, {
+      className: "text-accent-pink",
+    });
     expect(svg?.classList.contains("text-accent-pink")).toBe(true);
     container.remove();
   });
@@ -317,9 +370,15 @@ import { act } from "../../../dashboard/node_modules/react";
 
 export function render(element: React.ReactElement, container: HTMLElement) {
   const root = createRoot(container);
-  act(() => { root.render(element); });
+  act(() => {
+    root.render(element);
+  });
   return {
-    unmount: () => { act(() => { root.unmount(); }); },
+    unmount: () => {
+      act(() => {
+        root.unmount();
+      });
+    },
   };
 }
 ```
@@ -528,6 +587,7 @@ git commit -m "feat: add minimal SVG icon system with 17 icons"
 ## Task 3: Tooltip component
 
 **Files:**
+
 - Create: `dashboard/src/components/tooltip.tsx`
 - Create: `tests/unit/dashboard/tooltip.test.tsx`
 
@@ -546,7 +606,9 @@ function renderTooltip(label: string) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const { unmount } = render(
-    <Tooltip label={label}><button>Hover me</button></Tooltip>,
+    <Tooltip label={label}>
+      <button>Hover me</button>
+    </Tooltip>,
     container,
   );
   return { container, unmount };
@@ -641,7 +703,10 @@ export interface TooltipProps {
 
 export function Tooltip({ label, children }: TooltipProps) {
   return (
-    <div className="group" style={{ position: "relative", display: "inline-flex" }}>
+    <div
+      className="group"
+      style={{ position: "relative", display: "inline-flex" }}
+    >
       {children}
       <span
         className="pointer-events-none absolute bottom-full left-1/2 z-10 -translate-x-1/2 translate-y-1 whitespace-nowrap opacity-0 transition-all duration-150 ease-out group-hover:-translate-y-0 group-hover:opacity-100"
@@ -686,6 +751,7 @@ git commit -m "feat: add reusable tooltip component"
 ## Task 4: Top navigation component
 
 **Files:**
+
 - Create: `dashboard/src/components/top-nav.tsx`
 - Create: `tests/unit/dashboard/top-nav.test.tsx`
 
@@ -853,9 +919,7 @@ export function TopNav({ stage, displayName, onLogin, onLogout }: TopNavProps) {
                   color: active
                     ? "var(--accent-pink)"
                     : "var(--text-secondary)",
-                  background: active
-                    ? "var(--accent-pink-bg)"
-                    : "transparent",
+                  background: active ? "var(--accent-pink-bg)" : "transparent",
                   padding: "6px 16px",
                   borderRadius: "var(--radius-chip)",
                 }}
@@ -918,8 +982,7 @@ export function TopNav({ stage, displayName, onLogin, onLogout }: TopNavProps) {
                 width: 36,
                 height: 36,
                 borderRadius: "50%",
-                background:
-                  "linear-gradient(135deg, #2D7CF6, #6BA3FF)",
+                background: "linear-gradient(135deg, #2D7CF6, #6BA3FF)",
               }}
             >
               <span className="text-[12px] font-semibold text-white">
@@ -950,6 +1013,7 @@ git commit -m "feat: add top navigation bar with icon tabs and tooltips"
 ## Task 5: Command bar component
 
 **Files:**
+
 - Create: `dashboard/src/components/command-bar.tsx`
 - Create: `tests/unit/dashboard/command-bar.test.tsx`
 
@@ -1060,6 +1124,7 @@ git commit -m "feat: add command bar component"
 ## Task 6: Rewrite dashboard layout (sidebar → top nav)
 
 **Files:**
+
 - Modify: `dashboard/src/app/dashboard/layout.tsx`
 - Modify: `dashboard/src/lib/consumer-copy.ts`
 
@@ -1068,6 +1133,7 @@ git commit -m "feat: add command bar component"
 Replace the entire sidebar grid with the `TopNav` component + single-column content area. The layout keeps the auth state logic (login/logout/stage) but passes it to `TopNav` instead of rendering a sidebar.
 
 Key changes:
+
 - Remove `<aside>` with `surface-card`, `eyebrow`, `display-title`, nav links, workspace status, auth buttons
 - Remove the `md:grid-cols-[280px_minmax(0,1fr)]` grid
 - Add `<TopNav>` at the top
@@ -1092,7 +1158,9 @@ export default function DashboardLayout({
         stage={stage}
         displayName={creator?.display_name ?? null}
         onLogin={login}
-        onLogout={() => { void logout(); }}
+        onLogout={() => {
+          void logout();
+        }}
       />
       <div
         className="mx-auto max-w-[1200px]"
@@ -1127,12 +1195,14 @@ git commit -m "feat: replace sidebar layout with top navigation bar"
 ## Task 7: Rewrite dashboard-home-hero.tsx
 
 **Files:**
+
 - Modify: `dashboard/src/components/dashboard-home-hero.tsx`
 - Modify: `tests/unit/dashboard/home-state.test.ts` (if assertions change)
 
 - [ ] **Step 1: Rewrite the hero component**
 
 Replace the current paper-panel hero with the new gradient background hero. Key changes:
+
 - Background: `var(--gradient-hero)` with `var(--radius-hero)` radius and `var(--space-hero-padding)` padding
 - Greeting: time-aware ("Good morning/afternoon/evening, {name}") at 28px/700/-0.4px
 - Summary line: colored keywords — approvals in pink, follow-ups in blue
@@ -1160,11 +1230,13 @@ git commit -m "feat: rewrite hero with gradient bg, time-aware greeting, icon CT
 ## Task 8: Rewrite dashboard-support-rail.tsx
 
 **Files:**
+
 - Modify: `dashboard/src/components/dashboard-support-rail.tsx`
 
 - [ ] **Step 1: Rewrite the support rail**
 
 Replace the current `surface-card` sections with the new design:
+
 - Three sections separated by 1px `var(--border-default)` dividers with `var(--space-section)` spacing
 - Each section header: icon + label (left) + "View all →" link (right, `var(--accent-blue)`)
 - **Opportunities**: `IconCard` header, cards with `var(--radius-button)`, first card gets blue tint
@@ -1190,12 +1262,14 @@ git commit -m "feat: rewrite support rail with section icons, dividers, hover st
 ## Task 9: Rewrite agent-console.tsx
 
 **Files:**
+
 - Modify: `dashboard/src/components/agent-console.tsx`
 - Modify: `tests/unit/dashboard/agent-console.test.tsx`
 
 - [ ] **Step 1: Update agent console styling**
 
 Key changes to the existing agent console:
+
 - Container: `var(--bg-surface)` background, `var(--radius-card)` radius, 1px `var(--border-default)` border
 - Header: green dot + "Chat with Indyfren" + `<Tooltip label="View thread history"><IconList /></Tooltip>`
 - Quick prompts: add icons (`IconClock`, `IconCard`, `IconDocument`, `IconSend`), alternating pink/blue borders
@@ -1226,11 +1300,13 @@ git commit -m "feat: restyle agent console with new design tokens and icons"
 ## Task 10: Update dashboard home page (page.tsx)
 
 **Files:**
+
 - Modify: `dashboard/src/app/dashboard/page.tsx`
 
 - [ ] **Step 1: Update page layout**
 
 Add CommandBar between hero and workspace. Update section labels and dividers:
+
 - After hero: `<CommandBar />`
 - "Workspace" label + divider before the two-column grid
 - "At a glance" label + divider before insight cards
@@ -1256,11 +1332,13 @@ git commit -m "feat: update home page with command bar, section dividers, icon l
 ## Task 11: Update dashboard-auth-gate.tsx
 
 **Files:**
+
 - Modify: `dashboard/src/components/dashboard-auth-gate.tsx`
 
 - [ ] **Step 1: Replace old design classes**
 
 Replace all instances of:
+
 - `eyebrow` → remove (use heading-section style inline)
 - `display-title` → remove (use 28px/700 system font)
 - `bg-white/75` → `bg-canvas`
@@ -1291,6 +1369,7 @@ git commit -m "feat: restyle auth gate with new design tokens"
 ## Task 12: Update remaining components (deal-card, wallet-balance, morning-brief, platform-connect, profile-settings-form)
 
 **Files:**
+
 - Modify: `dashboard/src/components/deal-card.tsx`
 - Modify: `dashboard/src/components/wallet-balance.tsx`
 - Modify: `dashboard/src/components/morning-brief.tsx`
@@ -1333,6 +1412,7 @@ git commit -m "feat: restyle remaining components with new design tokens"
 ## Task 13: Update sub-pages (deals, wallet, reports, settings)
 
 **Files:**
+
 - Modify: `dashboard/src/app/dashboard/deals/page.tsx`
 - Modify: `dashboard/src/app/dashboard/wallet/page.tsx`
 - Modify: `dashboard/src/app/dashboard/reports/page.tsx`
@@ -1385,12 +1465,14 @@ Expected: Build succeeds with no errors
 - [ ] **Step 3: Visual check**
 
 Start the dev servers:
+
 ```bash
 npm run dev &
 cd dashboard && npm run dev &
 ```
 
 Open `http://localhost:3001/dashboard` and verify:
+
 - Top nav with icon tabs, pink active state, tooltips on hover
 - Hero with gradient background, time-aware greeting, colored summary
 - Command bar with ⌘K badge
@@ -1412,19 +1494,19 @@ git commit -m "fix: visual polish after full verification"
 
 ## Summary
 
-| Task | Description | New files | Modified files |
-|------|-------------|-----------|---------------|
-| 1 | Design tokens + Tailwind config | — | globals.css, tailwind.config.ts |
-| 2 | Icon system (17 icons) | icons.tsx, icons.test.tsx, test-helpers.tsx | — |
-| 3 | Tooltip component | tooltip.tsx, tooltip.test.tsx | — |
-| 4 | Top navigation | top-nav.tsx, top-nav.test.tsx | — |
-| 5 | Command bar | command-bar.tsx, command-bar.test.tsx | — |
-| 6 | Layout rewrite (sidebar → top nav) | — | layout.tsx, consumer-copy.ts |
-| 7 | Hero rewrite | — | dashboard-home-hero.tsx, home-state.test.ts |
-| 8 | Support rail rewrite | — | dashboard-support-rail.tsx |
-| 9 | Agent console restyle | — | agent-console.tsx, agent-console.test.tsx |
-| 10 | Home page update | — | page.tsx |
-| 11 | Auth gate restyle | — | dashboard-auth-gate.tsx |
-| 12 | Remaining components (5) | — | deal-card, wallet-balance, morning-brief, platform-connect, profile-settings-form |
-| 13 | Sub-pages (4) | — | deals, wallet, reports, settings pages |
-| 14 | Full verification | — | — |
+| Task | Description                        | New files                                   | Modified files                                                                    |
+| ---- | ---------------------------------- | ------------------------------------------- | --------------------------------------------------------------------------------- |
+| 1    | Design tokens + Tailwind config    | —                                           | globals.css, tailwind.config.ts                                                   |
+| 2    | Icon system (17 icons)             | icons.tsx, icons.test.tsx, test-helpers.tsx | —                                                                                 |
+| 3    | Tooltip component                  | tooltip.tsx, tooltip.test.tsx               | —                                                                                 |
+| 4    | Top navigation                     | top-nav.tsx, top-nav.test.tsx               | —                                                                                 |
+| 5    | Command bar                        | command-bar.tsx, command-bar.test.tsx       | —                                                                                 |
+| 6    | Layout rewrite (sidebar → top nav) | —                                           | layout.tsx, consumer-copy.ts                                                      |
+| 7    | Hero rewrite                       | —                                           | dashboard-home-hero.tsx, home-state.test.ts                                       |
+| 8    | Support rail rewrite               | —                                           | dashboard-support-rail.tsx                                                        |
+| 9    | Agent console restyle              | —                                           | agent-console.tsx, agent-console.test.tsx                                         |
+| 10   | Home page update                   | —                                           | page.tsx                                                                          |
+| 11   | Auth gate restyle                  | —                                           | dashboard-auth-gate.tsx                                                           |
+| 12   | Remaining components (5)           | —                                           | deal-card, wallet-balance, morning-brief, platform-connect, profile-settings-form |
+| 13   | Sub-pages (4)                      | —                                           | deals, wallet, reports, settings pages                                            |
+| 14   | Full verification                  | —                                           | —                                                                                 |

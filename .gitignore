@@ -12,3 +12,4 @@ dashboard/tsconfig.tsbuildinfo
 .claude/
 .superpowers/
 .vscode/
+.playwright-mcp/

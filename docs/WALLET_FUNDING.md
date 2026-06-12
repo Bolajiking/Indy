@@ -7,13 +7,17 @@ Every Indyfren creator gets a **Privy-managed server wallet** on the **Tempo Net
 ## Current State
 
 When your wallet is first provisioned, it has:
+
 - ✅ A valid Tempo Network address (0x...)
 - ✅ Spending limits configured (per-transaction, daily, monthly)
 - ❌ **Zero balance** in pathUSD (Tempo's stablecoin)
 
+Current sandbox limitation: Indyfren does not yet auto-fund newly provisioned Tempo wallets. A paid MPP smoke can reach the Tempo payment path and still fail with `InsufficientBalance` until an operator funds the creator wallet with testnet pathUSD.
+
 ## Why You Need to Fund Your Wallet
 
 The AI agent uses **MPP (Micropayment Protocol)** to pay for services like:
+
 - **Brand enrichment** (~$0.50 per lookup) - StableEnrich
 - **Web search** (~$0.10 per query) - Exa API
 - **Email sending** (~$0.05 per email) - StableEmail
@@ -21,38 +25,38 @@ The AI agent uses **MPP (Micropayment Protocol)** to pay for services like:
 - **Media kit generation** (~$1.00 per kit) - StableStudio
 
 Without funds, your agent can still:
+
 - ✅ Use free commands (calendar, finances, content plan)
 - ✅ Access your connected platform data
 - ❌ Cannot call paid research/automation APIs
 
 ## How to Fund Your Wallet (Testnet)
 
-### Option 1: Tempo Testnet Faucet (Recommended)
+### Option 1: Operator Sandbox Funding (Current Path)
 
 1. **Get your wallet address** from the dashboard:
    - Navigate to **Dashboard → Wallet**
    - Copy your Tempo wallet address (starts with `0x`)
 
-2. **Visit the Tempo Testnet Faucet:**
-   - URL: `https://faucet.tempo.xyz` (hypothetical - check Tempo docs for actual faucet)
-   - OR use the Moderato testnet faucet if Tempo provides one
+2. **Send the address to the Indyfren operator running the sandbox.**
+   - The operator funds the Privy server wallet with Tempo testnet pathUSD.
+   - After funding, rerun `npm run test:mpp` with `MPP_TEST_CREATOR_ID` set to that creator.
 
-3. **Request pathUSD:**
-   - Paste your wallet address
-   - Request testnet pathUSD
-   - Wait for transaction confirmation (usually <30 seconds)
-
-4. **Verify balance:**
+3. **Verify balance:**
    - Refresh your dashboard
    - Check **Wallet → Balance**
    - You should see your pathUSD balance
 
-### Option 2: Bridge from Another Testnet
+### Option 2: Tempo Faucet or Bridge (When Available)
+
+Tempo/Moderato faucet and bridge availability can change. Use official Tempo sandbox docs for the current funding route, then send testnet pathUSD directly to the Privy server wallet address shown in the dashboard.
+
+### Option 3: Bridge from Another Testnet
 
 If you have testnet USDC on another network (Base Sepolia, etc.):
 
 1. Use a testnet bridge to transfer to Tempo:
-   - Tempo Bridge: `https://bridge.tempo.xyz/testnet`
+   - Confirm the current Tempo testnet bridge URL from official Tempo docs
    - Connect your MetaMask or wallet
    - Bridge USDC → pathUSD on Tempo
 
@@ -61,7 +65,7 @@ If you have testnet USDC on another network (Base Sepolia, etc.):
    - Send testnet pathUSD directly to that address
    - The transaction will show up in your wallet activity
 
-### Option 3: Request from Indyfren Team
+### Option 4: Request from Indyfren Team
 
 For early beta users:
 
@@ -72,6 +76,7 @@ For early beta users:
 ## Recommended Funding Amounts
 
 For testing and evaluation:
+
 - **$10 in pathUSD** - Good for ~20-40 agent actions
 - **$50 in pathUSD** - Good for heavy testing (100+ actions)
 
@@ -80,11 +85,13 @@ Remember: This is **testnet**, so these tokens have no real-world value.
 ## Checking Your Balance
 
 ### In the Dashboard
+
 1. Go to **Dashboard → Wallet**
 2. Your balance shows in USD equivalent
 3. Transaction history shows all funding and spending
 
 ### Via API
+
 ```bash
 curl -H "Authorization: Bearer <your_privy_token>" \
   https://your-api.railway.app/api/wallet/balance
@@ -111,11 +118,13 @@ You can adjust these limits in **Dashboard → Settings → Spending Controls**.
 ## What Happens When Balance is Low?
 
 When your wallet balance drops below $1:
+
 - ⚠️ Dashboard shows a warning banner
 - 📧 You'll receive a notification via your bot (Telegram/WhatsApp)
 - 🤖 Agent switches to free-only mode until funded
 
 When balance reaches $0:
+
 - ❌ Paid tool calls are blocked
 - ✅ Free features continue working
 - 💬 Bot notifies you to fund your wallet
@@ -123,6 +132,7 @@ When balance reaches $0:
 ## Mainnet (Production) - Coming Soon
 
 When Indyfren launches on mainnet:
+
 - Wallets will be on **Tempo Mainnet** (not testnet)
 - pathUSD will be **real USDC** with actual value
 - You'll fund via:
@@ -131,6 +141,7 @@ When Indyfren launches on mainnet:
   - Direct USDC transfer
 
 Spending will be tracked for:
+
 - Tax reporting
 - Business expense tracking
 - ROI analysis ($ spent on agent vs. $ earned from deals)
@@ -157,9 +168,26 @@ Spending will be tracked for:
 3. View transaction history for failed attempts
 4. Try again - network issues can cause temporary failures
 
+### Inspecting payment attempts
+
+Paid MPP calls create rows in the `payment_attempts` table as soon as a request starts. Check that ledger when a paid tool fails:
+
+- `started` means the service call was attempted.
+- `challenge_created` means the paid endpoint returned a Tempo payment challenge and Indyfren recorded the quote.
+- `credential_created` means the wallet created the payment credential.
+- `succeeded` includes the receipt/transaction reference and linked wallet transaction.
+- `failed` includes the error text, including current sandbox `InsufficientBalance` failures.
+
+If the table is missing in a live environment, set `DATABASE_URL` to a working Supabase direct or pooler Postgres URL and run:
+
+```bash
+npm run db:migrate:payment-attempts
+```
+
 ## Support
 
 Need help with wallet funding?
+
 - 📧 Email: support@indyfren.xyz
 - 💬 Telegram: @indyfren_support
 - 📖 Docs: https://docs.indyfren.xyz/wallet
@@ -167,6 +195,7 @@ Need help with wallet funding?
 ## Security Note
 
 Your wallet is a **Privy server wallet** with:
+
 - ✅ **Policy-based spending controls** (you set the limits)
 - ✅ **No seed phrase to manage** (Privy handles key security)
 - ✅ **Scoped to agent actions only** (can't be used for other purposes)

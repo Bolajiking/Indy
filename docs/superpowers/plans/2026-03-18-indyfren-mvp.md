@@ -11,6 +11,7 @@
 **Note on OpenClaw:** OpenClaw was originally planned as the agent framework but it is designed as a personal assistant daemon (SKILL.md files, local process) — not a multi-tenant SaaS backend. We instead build a custom orchestrator using the same ReAct pattern but with programmatic tool registration, multi-creator isolation, and approval queues. OpenClaw could be revisited later as a distribution channel (creators install an OpenClaw skill that connects to Indyfren's backend).
 
 **Review Fixes Applied:**
+
 1. Removed OpenClaw dependency — using custom orchestrator with Claude API
 2. Added Tempo chain configuration to Privy wallet setup
 3. Added conversation history persistence (new `messages` table)
@@ -31,6 +32,7 @@
 ## Current Open Gaps
 
 **Shipped in the latest hardening slice:**
+
 - Reworked creator onboarding around durable Privy identity plus resumable wallet provisioning. New creators are now keyed by `privy_user_id`, profile creation is no longer blocked on a single inline wallet call, and pending creators automatically resume wallet setup on authenticated `/api/auth/me` reads.
 - Added `src/wallet/provisioning.ts` as the persistent wallet-onboarding manager. It records provisioning attempts in creator settings, prevents duplicate concurrent attempts, retries stale `wallet_provisioning_in_progress` states after cooldown, and marks onboarding back to `active` once Privy wallet creation succeeds.
 - Added `POST /api/auth/me/wallet/retry` so creators can explicitly resume wallet setup from the dashboard instead of waiting on a passive pending state.
@@ -84,6 +86,7 @@
 - Live bearer-auth now fails cleanly with the right boundary. With the currently stale `SMOKE_PRIVY_ACCESS_TOKEN`, `GET /api/auth/me` now returns a proper `401 Invalid bearer token` rather than a misleading auth/profile-service mix-up.
 
 **Still pending:**
+
 - Provider-specific OAuth handshakes for additional platform connections (Instagram, TikTok, etc.); YouTube OAuth is already shipped
 - Refreshing `SMOKE_PRIVY_ACCESS_TOKEN` and rerunning live auth smoke; the stored token in `.env.local` is now stale and `npm run smoke:auth` currently returns `401 Invalid bearer token`
 - Funding newly provisioned creator wallets with pathUSD on Tempo testnet, or adding an operator-funded/faucet bootstrap step so first paid MPP calls succeed without a manual top-up
@@ -98,6 +101,7 @@
 - Live device/browser validation of the new dashboard-issued Telegram and WhatsApp connect flow with real messaging accounts, now that the backend, dashboard, and bot linking path are wired and covered by regression tests
 
 **Verification:**
+
 - Root `npm test`: **46** files / **199** tests passing
 - Root `npm run build`: passing
 - `npm run build --prefix dashboard`: passing
@@ -127,10 +131,12 @@
 - Multi-creator regression verification: `npm test -- tests/unit/dashboard/auth-state.test.ts tests/unit/api/auth.test.ts` → **2** files / **18** tests passing, covering second-user creator registration and cross-user dashboard state isolation
 
 **External blockers:**
+
 - Newly provisioned Tempo wallets start with `0` pathUSD on testnet, so paid MPP calls still require funding (or an automated testnet funding bootstrap) before they can succeed end to end.
 - `.env.local` still pins `MPP_TEST_CREATOR_ID` to the seeded demo creator (`79d76413-a087-49a3-8868-ae6955799a40`), so local MPP smoke runs will keep defaulting to the wrong row until that override is removed or updated.
 
 **Previously shipped foundation and feature milestones:**
+
 - Database setup: `IF NOT EXISTS` idempotent schema, RLS policies (service_role allow / anon deny), `updated_at` triggers, `deduct_credits` atomic RPC, `scripts/init-db.ts`, `npm run db:init`
 - Enhanced seed script: 2 creators (Telegram + WhatsApp), 7 deals across all stages, transactions, platform connections, conversation history
 - Dashboard platform connect/disconnect: manual token-based connect form, disconnect button, wired to backend `/api/platforms/connect` and `DELETE /api/platforms/:platform`
@@ -204,22 +210,24 @@ The plan below has started execution. Current repo status:
    - Installed the dashboard dependencies, cached the required Next tarballs, and verified a successful production build with `npm run build` inside `dashboard/`.
 
 10. **Task 11 code-side wiring is now complete.**
-   - Added `scripts/test-mpp.ts` and the root `test:mpp` script for wallet/payment smoke testing.
-   - Added `scripts/preflight.ts` and the root `smoke:preflight` script for environment and DNS readiness checks.
-   - Made Telegram startup conditional so the API can boot even when bot credentials are not configured.
-   - Added `ENABLE_TELEGRAM_BOT` and `ENABLE_JOBS` flags for safer local startup and smoke testing.
-   - Fixed Telegram approval callback payloads to include creator-scoped action IDs and added focused tests for the Telegram approval path.
+
+- Added `scripts/test-mpp.ts` and the root `test:mpp` script for wallet/payment smoke testing.
+- Added `scripts/preflight.ts` and the root `smoke:preflight` script for environment and DNS readiness checks.
+- Made Telegram startup conditional so the API can boot even when bot credentials are not configured.
+- Added `ENABLE_TELEGRAM_BOT` and `ENABLE_JOBS` flags for safer local startup and smoke testing.
+- Fixed Telegram approval callback payloads to include creator-scoped action IDs and added focused tests for the Telegram approval path.
 
 11. **Post-MVP features — Phase 2 (P1) implementation started.**
-   - Added `src/agent/skills/contract-reviewer.ts` — Claude-powered contract analysis with risk scoring, issue flagging, and missing clause detection.
-   - Added `src/agent/tools/email-sender.ts` — StableEmail MPP tool (hybrid autonomy, requires creator approval).
-   - Added `src/agent/tools/platform-analytics.ts` — StableSocial MPP tool for pulling social stats across 6 platforms.
-   - Added `src/api/middleware/auth.ts` — Hono auth middleware (X-Creator-Id header for MVP, Privy JWT placeholder).
-   - Added `src/api/routes/auth.ts` — Creator registration, profile get/update endpoints.
-   - Added `src/api/routes/platforms.ts` — Platform connection CRUD (connect, list, disconnect).
-   - Added `src/jobs/invoice-reminder.ts` — Overdue payment reminders via Telegram/WhatsApp (Monday 10am cron).
-   - Added dashboard components: `deal-card`, `wallet-balance`, `morning-brief`, `platform-connect`, settings page, API proxy, Privy provider stub.
-   - Wired conversation history persistence into the bot handler and orchestrator (multi-turn context).
+
+- Added `src/agent/skills/contract-reviewer.ts` — Claude-powered contract analysis with risk scoring, issue flagging, and missing clause detection.
+- Added `src/agent/tools/email-sender.ts` — StableEmail MPP tool (hybrid autonomy, requires creator approval).
+- Added `src/agent/tools/platform-analytics.ts` — StableSocial MPP tool for pulling social stats across 6 platforms.
+- Added `src/api/middleware/auth.ts` — Hono auth middleware (X-Creator-Id header for MVP, Privy JWT placeholder).
+- Added `src/api/routes/auth.ts` — Creator registration, profile get/update endpoints.
+- Added `src/api/routes/platforms.ts` — Platform connection CRUD (connect, list, disconnect).
+- Added `src/jobs/invoice-reminder.ts` — Overdue payment reminders via Telegram/WhatsApp (Monday 10am cron).
+- Added dashboard components: `deal-card`, `wallet-balance`, `morning-brief`, `platform-connect`, settings page, API proxy, Privy provider stub.
+- Wired conversation history persistence into the bot handler and orchestrator (multi-turn context).
 
 12. **Phase 2 continued — P1 skills, tools, and jobs.**
     - Added `src/agent/skills/revenue-advisor.ts` — Weekly revenue diversification analysis with current streams, suggestions, and risk assessment.
@@ -249,7 +257,7 @@ The plan below has started execution. Current repo status:
     - Added unit tests: `seo-optimizer.test.ts` (type shape), `reports.test.ts` (financial endpoint, analytics endpoint, SEO 400 validation).
     - Current verification: `npm run build` passes, **29 test files / 77 tests all passing**.
 
-13. **Phase 2 continued — Ops Agent skills, Dashboard reports, API expansion.**
+15. **Phase 2 continued — Ops Agent skills, Dashboard reports, API expansion.**
     - Added `src/agent/skills/calendar-manager.ts` — Generates calendar view from deal pipeline: upcoming deadlines, overdue items, content delivery dates, invoice reminders. Derives events from deal stage transitions (discovered→pitch in 3d, pitched→follow-up in 5d, negotiating→finalize in 7d, active→deliver in 14d, active→invoice in 30d).
     - Added `src/agent/skills/inbox-triager.ts` — Claude Haiku-powered message categorization: brand_deal, collaboration, fan_mail, spam, urgent, general. Priority scoring and suggested actions.
     - Added `dashboard/src/app/dashboard/reports/page.tsx` — Reports dashboard page with financial snapshot (income/expenses/net/pipeline/forecast stats) and platform analytics (per-platform follower counts and engagement rates).
@@ -259,13 +267,13 @@ The plan below has started execution. Current repo status:
     - Added unit tests: `calendar-manager.test.ts` (event generation from deals, overdue detection, completed deal exclusion), `inbox-triager.test.ts` (type shape validation).
     - Current verification: `npm run build` passes, **31 test files / 80 tests all passing**.
 
-14. **Phase 2 continued — Bot quick-commands, dashboard verification.**
+16. **Phase 2 continued — Bot quick-commands, dashboard verification.**
     - Added quick-command routing in `src/bot/handler.ts` for: "calendar"/"deadlines", "finances"/"financial"/"money", "content plan"/"content strategy". These bypass the full agent loop for instant formatted responses.
     - Updated welcome message to list all available commands.
     - Dashboard build verified: `npm run build` in `dashboard/` passes with all 6 pages (overview, deals, wallet, reports, settings + root).
     - Current verification: root `npm run build` passes, **31 test files / 80 tests all passing**, `dashboard/npm run build` passes.
 
-15. **Complete inventory — all implemented components:**
+17. **Complete inventory — all implemented components:**
 
     **Agent Skills (11):**
     - `brand-deal-scanner.ts` — P0 brand deal discovery
@@ -311,7 +319,7 @@ The plan below has started execution. Current repo status:
     **Test files:** 31 files, 90 tests
     **Dashboard:** 14 files (pages, components, lib, API proxy)
 
-16. **Telegram bot hardening — end-to-end tightening.**
+18. **Telegram bot hardening — end-to-end tightening.**
     - Fixed approval execution flow: `callback_query:data` handler now actually executes approved tools via `getTool()` + `tool.execute()` with MPP context from creator wallet.
     - Added Telegram webhook route: `POST /webhooks/telegram` using grammY's `webhookCallback("hono")`, wired via `setTelegramBotForWebhook()` in `src/index.ts`.
     - Added `splitMessage()` utility for Telegram's 4096-char limit: splits at newlines → spaces → hard break.
@@ -321,7 +329,7 @@ The plan below has started execution. Current repo status:
     - Added comprehensive bot tests: `splitMessage` edge cases, quick-command routing (calendar, finances, aliases), onboarding error handling.
     - Current verification: `npm run build` passes, **31 test files / 90 tests all passing**.
 
-17. **Remaining for future phases:**
+19. **Remaining for future phases:**
     - External/manual smoke checks that require real credentials and live services.
     - Vector store / RAG integration for agent memory (Pinecone or pgvector).
     - Revenue share smart contract on Tempo Network.
@@ -461,6 +469,7 @@ indyfren/
 ### Task 1: Project Scaffold & Configuration ✅ COMPLETE
 
 **Files:**
+
 - Create: `package.json`
 - Create: `tsconfig.json`
 - Create: `.gitignore`
@@ -597,7 +606,9 @@ const envSchema = z.object({
   BROWSERBASE_API_KEY: z.string().default(""),
   BROWSERBASE_PROJECT_ID: z.string().default(""),
   PORT: z.string().default("3000").transform(Number),
-  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
+  NODE_ENV: z
+    .enum(["development", "production", "test"])
+    .default("development"),
 });
 
 export const env = envSchema.parse(process.env);
@@ -639,6 +650,7 @@ export type DealStage = (typeof DEAL_STAGES)[number];
 - [x] **Step 9: Add scripts to package.json**
 
 Add to package.json `scripts`:
+
 ```json
 {
   "scripts": {
@@ -664,6 +676,7 @@ git commit -m "feat: project scaffold with config, env validation, constants"
 ### Task 2: Database Schema & Queries ✅ COMPLETE
 
 **Files:**
+
 - Create: `src/db/schema.sql`
 - Create: `src/db/client.ts`
 - Create: `src/db/queries/creators.ts`
@@ -781,7 +794,10 @@ ALTER TABLE agent_actions ENABLE ROW LEVEL SECURITY;
 import { createClient } from "@supabase/supabase-js";
 import { env } from "../config/env.js";
 
-export const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_KEY);
+export const supabase = createClient(
+  env.SUPABASE_URL,
+  env.SUPABASE_SERVICE_KEY,
+);
 ```
 
 - [x] **Step 3: Create src/db/queries/creators.ts**
@@ -804,7 +820,9 @@ export interface Creator {
   updated_at: string;
 }
 
-export async function findCreatorByTelegram(chatId: string): Promise<Creator | null> {
+export async function findCreatorByTelegram(
+  chatId: string,
+): Promise<Creator | null> {
   const { data } = await supabase
     .from("creators")
     .select("*")
@@ -813,7 +831,9 @@ export async function findCreatorByTelegram(chatId: string): Promise<Creator | n
   return data;
 }
 
-export async function findCreatorByWhatsApp(phone: string): Promise<Creator | null> {
+export async function findCreatorByWhatsApp(
+  phone: string,
+): Promise<Creator | null> {
   const { data } = await supabase
     .from("creators")
     .select("*")
@@ -841,7 +861,7 @@ export async function createCreator(params: {
 
 export async function updateCreator(
   id: string,
-  params: Partial<Omit<Creator, "id" | "created_at">>
+  params: Partial<Omit<Creator, "id" | "created_at">>,
 ): Promise<Creator> {
   const { data, error } = await supabase
     .from("creators")
@@ -853,14 +873,20 @@ export async function updateCreator(
   return data;
 }
 
-export async function deductCredits(id: string, amountCents: number): Promise<boolean> {
+export async function deductCredits(
+  id: string,
+  amountCents: number,
+): Promise<boolean> {
   const creator = await supabase
     .from("creators")
     .select("free_credits_remaining_cents")
     .eq("id", id)
     .single();
 
-  if (!creator.data || creator.data.free_credits_remaining_cents < amountCents) {
+  if (
+    !creator.data ||
+    creator.data.free_credits_remaining_cents < amountCents
+  ) {
     return false;
   }
 
@@ -922,7 +948,7 @@ export async function createDeal(params: {
 export async function updateDealStage(
   dealId: string,
   stage: DealStage,
-  extra?: Partial<Deal>
+  extra?: Partial<Deal>,
 ): Promise<Deal> {
   const { data, error } = await supabase
     .from("deals")
@@ -936,7 +962,7 @@ export async function updateDealStage(
 
 export async function getDealsForCreator(
   creatorId: string,
-  stage?: DealStage
+  stage?: DealStage,
 ): Promise<Deal[]> {
   let query = supabase
     .from("deals")
@@ -952,7 +978,11 @@ export async function getDealsForCreator(
 }
 
 export async function getDealById(dealId: string): Promise<Deal | null> {
-  const { data } = await supabase.from("deals").select("*").eq("id", dealId).single();
+  const { data } = await supabase
+    .from("deals")
+    .select("*")
+    .eq("id", dealId)
+    .single();
   return data;
 }
 ```
@@ -994,7 +1024,7 @@ export async function logTransaction(params: {
 
 export async function getTransactionsForCreator(
   creatorId: string,
-  limit = 50
+  limit = 50,
 ): Promise<Transaction[]> {
   const { data, error } = await supabase
     .from("transactions")
@@ -1059,7 +1089,7 @@ export async function upsertConnection(params: {
 }
 
 export async function getConnectionsForCreator(
-  creatorId: string
+  creatorId: string,
 ): Promise<PlatformConnection[]> {
   const { data, error } = await supabase
     .from("platform_connections")
@@ -1071,7 +1101,7 @@ export async function getConnectionsForCreator(
 
 export async function getConnection(
   creatorId: string,
-  platform: string
+  platform: string,
 ): Promise<PlatformConnection | null> {
   const { data } = await supabase
     .from("platform_connections")
@@ -1109,9 +1139,8 @@ describe("creator queries", () => {
     };
     vi.mocked(supabase.from).mockReturnValue(mockChain as any);
 
-    const { findCreatorByTelegram } = await import(
-      "../../../src/db/queries/creators.js"
-    );
+    const { findCreatorByTelegram } =
+      await import("../../../src/db/queries/creators.js");
     const result = await findCreatorByTelegram("12345");
     expect(result).toBeNull();
   });
@@ -1158,12 +1187,14 @@ git commit -m "feat: database schema, client, and query layer"
 ### Task 3: Wallet Layer (Privy + MPP) ✅ COMPLETE
 
 **Implementation note (2026-03-19):**
+
 - The wallet layer now uses **policy-backed Privy server wallets** aligned with the official Privy agentic-wallet skill, rather than creator-linked embedded wallets.
 - `src/wallet/privy-provisioning.ts` defines the default Privy policy payload and wallet create params.
 - `src/wallet/mpp.ts` is wired to `Mppx.create({ polyfill: false, methods: [tempo({ account })] })`.
 - Additional tests now cover `tests/unit/wallet/mpp.test.ts` and `tests/unit/wallet/privy-provisioning.test.ts`.
 
 **Files:**
+
 - Create: `src/wallet/privy.ts`
 - Create: `src/wallet/privy-provisioning.ts`
 - Create: `src/wallet/mpp.ts`
@@ -1206,14 +1237,19 @@ export function createPrivyAccount(walletId: string, address: `0x${string}`) {
   return toAccount({
     address,
     async signMessage({ message }) {
-      const result = await privy.wallets().ethereum().signMessage(walletId, {
-        message: typeof message === "string" ? message : (message.raw as string),
-      });
+      const result = await privy
+        .wallets()
+        .ethereum()
+        .signMessage(walletId, {
+          message:
+            typeof message === "string" ? message : (message.raw as string),
+        });
       return result.signature as `0x${string}`;
     },
     async signTransaction(transaction, options) {
       const serializer = options?.serializer;
-      if (!serializer) throw new Error("Serializer required for Tempo transactions");
+      if (!serializer)
+        throw new Error("Serializer required for Tempo transactions");
       const unsignedSerialized = await serializer(transaction);
       const hash = keccak256(unsignedSerialized);
       const result = await privy
@@ -1249,7 +1285,7 @@ const log = pino({ name: "wallet:mpp" });
 export async function createMppClient(
   creatorId: string,
   walletId: string,
-  address: `0x${string}`
+  address: `0x${string}`,
 ) {
   const account = createPrivyAccount(walletId, address);
 
@@ -1279,7 +1315,10 @@ export async function createMppClient(
           service: new URL(url).hostname,
           tx_hash: parsed.txHash,
         });
-        log.info({ creatorId, amount: parsed.amount, tx: parsed.txHash }, "MPP payment");
+        log.info(
+          { creatorId, amount: parsed.amount, tx: parsed.txHash },
+          "MPP payment",
+        );
       }
 
       return response;
@@ -1299,9 +1338,11 @@ export class SpendingLimitExceeded extends Error {
   constructor(
     public limit: string,
     public current: number,
-    public max: number
+    public max: number,
   ) {
-    super(`Spending limit exceeded: ${limit}. Current: $${(current / 100).toFixed(2)}, Max: $${(max / 100).toFixed(2)}`);
+    super(
+      `Spending limit exceeded: ${limit}. Current: $${(current / 100).toFixed(2)}, Max: $${(max / 100).toFixed(2)}`,
+    );
     this.name = "SpendingLimitExceeded";
   }
 }
@@ -1313,7 +1354,7 @@ export async function checkSpendingLimits(creatorId: string): Promise<void> {
     throw new SpendingLimitExceeded(
       "daily",
       todaySpendCents,
-      SPENDING_LIMITS.DAILY_USD * 100
+      SPENDING_LIMITS.DAILY_USD * 100,
     );
   }
 }
@@ -1321,7 +1362,7 @@ export async function checkSpendingLimits(creatorId: string): Promise<void> {
 export function canAffordTransaction(
   amountCents: number,
   freeCreditsRemainingCents: number,
-  walletBalanceCents: number
+  walletBalanceCents: number,
 ): { canAfford: boolean; useCredits: boolean; shortfall: number } {
   if (freeCreditsRemainingCents >= amountCents) {
     return { canAfford: true, useCredits: true, shortfall: 0 };
@@ -1329,7 +1370,11 @@ export function canAffordTransaction(
 
   const totalAvailable = freeCreditsRemainingCents + walletBalanceCents;
   if (totalAvailable >= amountCents) {
-    return { canAfford: true, useCredits: freeCreditsRemainingCents > 0, shortfall: 0 };
+    return {
+      canAfford: true,
+      useCredits: freeCreditsRemainingCents > 0,
+      shortfall: 0,
+    };
   }
 
   return {
@@ -1406,6 +1451,7 @@ git commit -m "feat: wallet layer — Privy, MPP client, spending controls"
 ### Task 4: Agent Orchestrator & Memory ✅ COMPLETE
 
 **Files:**
+
 - Create: `src/agent/orchestrator.ts`
 - Create: `src/agent/memory.ts`
 - Create: `src/agent/tools/registry.ts`
@@ -1423,8 +1469,14 @@ export interface AgentTool {
   autonomyLevel: AutonomyLevel;
   costCategory: CostCategory;
   maxCostPerUseCents: number;
-  parameters: Record<string, { type: string; description: string; required?: boolean }>;
-  execute: (params: Record<string, unknown>, context: ToolContext) => Promise<ToolResult>;
+  parameters: Record<
+    string,
+    { type: string; description: string; required?: boolean }
+  >;
+  execute: (
+    params: Record<string, unknown>,
+    context: ToolContext,
+  ) => Promise<ToolResult>;
 }
 
 export interface ToolContext {
@@ -1456,7 +1508,11 @@ export function getAllTools(): AgentTool[] {
 export function getToolsForLLM(): Array<{
   name: string;
   description: string;
-  input_schema: { type: "object"; properties: Record<string, unknown>; required: string[] };
+  input_schema: {
+    type: "object";
+    properties: Record<string, unknown>;
+    required: string[];
+  };
 }> {
   return getAllTools().map((tool) => ({
     name: tool.name,
@@ -1467,7 +1523,7 @@ export function getToolsForLLM(): Array<{
         Object.entries(tool.parameters).map(([key, val]) => [
           key,
           { type: val.type, description: val.description },
-        ])
+        ]),
       ),
       required: Object.entries(tool.parameters)
         .filter(([, v]) => v.required)
@@ -1480,7 +1536,11 @@ export function getToolsForLLM(): Array<{
 - [x] **Step 2: Create src/agent/memory.ts**
 
 ```typescript
-import { findCreatorByTelegram, findCreatorByWhatsApp, type Creator } from "../db/queries/creators.js";
+import {
+  findCreatorByTelegram,
+  findCreatorByWhatsApp,
+  type Creator,
+} from "../db/queries/creators.js";
 import { getDealsForCreator } from "../db/queries/deals.js";
 import { getConnectionsForCreator } from "../db/queries/platform-connections.js";
 import { getTransactionsForCreator } from "../db/queries/transactions.js";
@@ -1509,7 +1569,14 @@ export async function assembleContext(creatorId: string): Promise<string> {
   const transactions = await getTransactionsForCreator(creatorId, 10);
 
   const activeDeals = deals.filter((d) =>
-    ["discovered", "pitched", "responded", "negotiating", "contracted", "active"].includes(d.stage)
+    [
+      "discovered",
+      "pitched",
+      "responded",
+      "negotiating",
+      "contracted",
+      "active",
+    ].includes(d.stage),
   );
 
   return `
@@ -1526,7 +1593,14 @@ ${connections.length > 0 ? connections.map((c) => `- ${c.platform}: @${c.platfor
 ${activeDeals.length > 0 ? activeDeals.map((d) => `- ${d.brand_name} [${d.stage}] est. $${((d.estimated_value_cents ?? 0) / 100).toFixed(0)}`).join("\n") : "- No active deals"}
 
 ## Recent Agent Spending
-${transactions.length > 0 ? transactions.slice(0, 5).map((t) => `- ${t.description}: $${(t.amount_cents / 100).toFixed(2)}`).join("\n") : "- No spending yet"}
+${
+  transactions.length > 0
+    ? transactions
+        .slice(0, 5)
+        .map((t) => `- ${t.description}: $${(t.amount_cents / 100).toFixed(2)}`)
+        .join("\n")
+    : "- No spending yet"
+}
 `.trim();
 }
 ```
@@ -1584,7 +1658,7 @@ export async function runAgent(
   creatorId: string,
   userMessage: string,
   walletId?: string,
-  walletAddress?: string
+  walletAddress?: string,
 ): Promise<AgentResponse> {
   log.info({ creatorId, message: userMessage.slice(0, 100) }, "Agent invoked");
 
@@ -1597,7 +1671,7 @@ export async function runAgent(
     const mppClient = await createMppClient(
       creatorId,
       walletId,
-      walletAddress as `0x${string}`
+      walletAddress as `0x${string}`,
     );
     toolContext = { creatorId, mppFetch: mppClient.fetch };
   }
@@ -1619,10 +1693,13 @@ export async function runAgent(
 
   // ReAct loop — execute tools until agent produces final text
   let steps = 0;
-  while (response.stop_reason === "tool_use" && steps < AGENT.MAX_STEPS_PER_TASK) {
+  while (
+    response.stop_reason === "tool_use" &&
+    steps < AGENT.MAX_STEPS_PER_TASK
+  ) {
     steps++;
     const toolUseBlocks = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+      (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
     );
 
     const toolResults: Anthropic.ToolResultBlockParam[] = [];
@@ -1657,7 +1734,8 @@ export async function runAgent(
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
-          content: "Error: No wallet configured. Ask the creator to set up their wallet first.",
+          content:
+            "Error: No wallet configured. Ask the creator to set up their wallet first.",
           is_error: true,
         });
         continue;
@@ -1666,7 +1744,7 @@ export async function runAgent(
       try {
         const result = await tool.execute(
           toolUse.input as Record<string, unknown>,
-          toolContext
+          toolContext,
         );
         toolResults.push({
           type: "tool_result",
@@ -1674,7 +1752,10 @@ export async function runAgent(
           content: JSON.stringify(result.data),
         });
       } catch (err: any) {
-        log.error({ tool: toolUse.name, error: err.message }, "Tool execution failed");
+        log.error(
+          { tool: toolUse.name, error: err.message },
+          "Tool execution failed",
+        );
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
@@ -1697,11 +1778,13 @@ export async function runAgent(
   }
 
   const textBlocks = response.content.filter(
-    (b): b is Anthropic.TextBlock => b.type === "text"
+    (b): b is Anthropic.TextBlock => b.type === "text",
   );
 
   return {
-    text: textBlocks.map((b) => b.text).join("\n") || "I couldn't generate a response. Please try again.",
+    text:
+      textBlocks.map((b) => b.text).join("\n") ||
+      "I couldn't generate a response. Please try again.",
     requiresApproval: false,
   };
 }
@@ -1713,7 +1796,12 @@ Create `tests/unit/agent/orchestrator.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi } from "vitest";
-import { getAllTools, registerTool, getToolsForLLM, type AgentTool } from "../../../src/agent/tools/registry.js";
+import {
+  getAllTools,
+  registerTool,
+  getToolsForLLM,
+  type AgentTool,
+} from "../../../src/agent/tools/registry.js";
 
 describe("tool registry", () => {
   it("registers and retrieves tools", () => {
@@ -1723,7 +1811,9 @@ describe("tool registry", () => {
       autonomyLevel: "autonomous",
       costCategory: "free",
       maxCostPerUseCents: 0,
-      parameters: { query: { type: "string", description: "Search query", required: true } },
+      parameters: {
+        query: { type: "string", description: "Search query", required: true },
+      },
       execute: async () => ({ success: true, data: "result" }),
     };
 
@@ -1762,11 +1852,13 @@ git commit -m "feat: agent orchestrator with tool registry, memory, and ReAct lo
 ### Task 5: Agent Skills (P0 — Money Engine) ✅ FOUNDATION COMPLETE
 
 **Implementation note (2026-03-19):**
+
 - The P0 skill files and tool registrations listed in this task now exist in the repo.
 - The current implementation is backend-only foundation work; bot and API surfaces that expose these skills are still pending in later tasks.
 - The code has been verified with unit tests and a successful TypeScript build.
 
 **Files:**
+
 - Create: `src/agent/skills/brand-deal-scanner.ts`
 - Create: `src/agent/skills/rate-calculator.ts`
 - Create: `src/agent/skills/pitch-generator.ts`
@@ -1790,11 +1882,18 @@ registerTool({
   costCategory: "mpp",
   maxCostPerUseCents: 50,
   parameters: {
-    company_name: { type: "string", description: "Brand or company name to research", required: true },
+    company_name: {
+      type: "string",
+      description: "Brand or company name to research",
+      required: true,
+    },
     domain: { type: "string", description: "Company website domain if known" },
   },
   async execute(params, context) {
-    const { company_name, domain } = params as { company_name: string; domain?: string };
+    const { company_name, domain } = params as {
+      company_name: string;
+      domain?: string;
+    };
 
     try {
       // Use StableEnrich via MPP for company data
@@ -1804,7 +1903,11 @@ registerTool({
 
       const response = await context.mppFetch(url.toString());
       if (!response.ok) {
-        return { success: false, data: null, error: `Enrichment failed: ${response.status}` };
+        return {
+          success: false,
+          data: null,
+          error: `Enrichment failed: ${response.status}`,
+        };
       }
 
       const data = await response.json();
@@ -1830,10 +1933,16 @@ registerTool({
   maxCostPerUseCents: 25,
   parameters: {
     query: { type: "string", description: "Search query", required: true },
-    num_results: { type: "number", description: "Number of results (default 5)" },
+    num_results: {
+      type: "number",
+      description: "Number of results (default 5)",
+    },
   },
   async execute(params, context) {
-    const { query, num_results } = params as { query: string; num_results?: number };
+    const { query, num_results } = params as {
+      query: string;
+      num_results?: number;
+    };
 
     try {
       const url = new URL("https://stableenrich.dev/api/exa/search");
@@ -1842,7 +1951,11 @@ registerTool({
 
       const response = await context.mppFetch(url.toString());
       if (!response.ok) {
-        return { success: false, data: null, error: `Search failed: ${response.status}` };
+        return {
+          success: false,
+          data: null,
+          error: `Search failed: ${response.status}`,
+        };
       }
 
       const data = await response.json();
@@ -1882,7 +1995,7 @@ export interface ScanResult {
 export async function scanForBrandDeals(
   creatorId: string,
   niche: string,
-  platforms: string[]
+  platforms: string[],
 ): Promise<ScanResult> {
   log.info({ creatorId, niche }, "Starting brand deal scan");
 
@@ -1909,7 +2022,8 @@ Return ONLY valid JSON: { "opportunities": [...] }`,
     ],
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
 
   try {
     const parsed = JSON.parse(text) as ScanResult;
@@ -1928,7 +2042,10 @@ Return ONLY valid JSON: { "opportunities": [...] }`,
       });
     }
 
-    log.info({ creatorId, count: parsed.opportunities.length }, "Brand deals discovered");
+    log.info(
+      { creatorId, count: parsed.opportunities.length },
+      "Brand deals discovered",
+    );
     return parsed;
   } catch {
     log.error({ creatorId, text }, "Failed to parse scan results");
@@ -1961,7 +2078,7 @@ export async function calculateRates(
   followerCount: number,
   engagementRate: number,
   niche: string,
-  platforms: string[]
+  platforms: string[],
 ): Promise<RateCard[]> {
   const context = await assembleContext(creatorId);
 
@@ -1990,7 +2107,8 @@ Return ONLY valid JSON: [{ "platform": "...", "contentType": "...", "recommended
     ],
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "[]";
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "[]";
   try {
     return JSON.parse(text) as RateCard[];
   } catch {
@@ -2018,7 +2136,7 @@ export interface PitchDraft {
 
 export async function generatePitch(
   creatorId: string,
-  dealId: string
+  dealId: string,
 ): Promise<PitchDraft | null> {
   const deal = await getDealById(dealId);
   if (!deal) return null;
@@ -2048,7 +2166,8 @@ Return ONLY valid JSON: { "subject": "...", "body": "..." }`,
     ],
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
   try {
     const parsed = JSON.parse(text) as { subject: string; body: string };
 
@@ -2086,7 +2205,9 @@ export interface MorningBrief {
   closingNote: string;
 }
 
-export async function generateMorningBrief(creatorId: string): Promise<MorningBrief> {
+export async function generateMorningBrief(
+  creatorId: string,
+): Promise<MorningBrief> {
   log.info({ creatorId }, "Generating morning brief");
 
   const context = await assembleContext(creatorId);
@@ -2094,7 +2215,7 @@ export async function generateMorningBrief(creatorId: string): Promise<MorningBr
 
   const newDeals = deals.filter((d) => d.stage === "discovered");
   const activeDeals = deals.filter((d) =>
-    ["pitched", "responded", "negotiating"].includes(d.stage)
+    ["pitched", "responded", "negotiating"].includes(d.stage),
   );
 
   const response = await anthropic.messages.create({
@@ -2120,12 +2241,21 @@ Be specific, not generic. Reference actual deal names and numbers.`,
     messages: [
       {
         role: "user",
-        content: `Context:\n${context}\n\nNew opportunities: ${newDeals.length}\nActive deals: ${activeDeals.length}\n\nNew deals:\n${newDeals.slice(0, 5).map((d) => `- ${d.brand_name} (fit: ${d.fit_score}, est: $${((d.estimated_value_cents ?? 0) / 100).toFixed(0)})`).join("\n")}\n\nActive deals:\n${activeDeals.map((d) => `- ${d.brand_name} [${d.stage}]`).join("\n")}`,
+        content: `Context:\n${context}\n\nNew opportunities: ${newDeals.length}\nActive deals: ${activeDeals.length}\n\nNew deals:\n${newDeals
+          .slice(0, 5)
+          .map(
+            (d) =>
+              `- ${d.brand_name} (fit: ${d.fit_score}, est: $${((d.estimated_value_cents ?? 0) / 100).toFixed(0)})`,
+          )
+          .join(
+            "\n",
+          )}\n\nActive deals:\n${activeDeals.map((d) => `- ${d.brand_name} [${d.stage}]`).join("\n")}`,
       },
     ],
   });
 
-  const text = response.content[0].type === "text" ? response.content[0].text : "";
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
   try {
     return JSON.parse(text) as MorningBrief;
   } catch {
@@ -2148,7 +2278,17 @@ import { describe, it, expect, vi } from "vitest";
 // Test that scan result shape is correct
 describe("ScanResult shape", () => {
   it("has opportunities array", () => {
-    const result = { opportunities: [{ brandName: "TestBrand", fitScore: 85, estimatedValueCents: 250000, reason: "Good fit", source: "manual" }] };
+    const result = {
+      opportunities: [
+        {
+          brandName: "TestBrand",
+          fitScore: 85,
+          estimatedValueCents: 250000,
+          reason: "Good fit",
+          source: "manual",
+        },
+      ],
+    };
     expect(result.opportunities).toHaveLength(1);
     expect(result.opportunities[0].fitScore).toBeGreaterThanOrEqual(0);
     expect(result.opportunities[0].fitScore).toBeLessThanOrEqual(100);
@@ -2188,7 +2328,14 @@ describe("MorningBrief shape", () => {
   it("has greeting, items, and closing note", () => {
     const brief: MorningBrief = {
       greeting: "Good morning!",
-      items: [{ emoji: "🔥", title: "New deal", detail: "Brand X wants to work with you", actionPrompt: "Want me to pitch?" }],
+      items: [
+        {
+          emoji: "🔥",
+          title: "New deal",
+          detail: "Brand X wants to work with you",
+          actionPrompt: "Want me to pitch?",
+        },
+      ],
       closingNote: "You're doing great!",
     };
     expect(brief.items.length).toBeLessThanOrEqual(3);
@@ -2217,6 +2364,7 @@ git commit -m "feat: P0 agent skills — brand deal scanner, rate calculator, pi
 ### Task 6: Bot Layer (Telegram + WhatsApp)
 
 **Files:**
+
 - Create: `src/bot/handler.ts`
 - Create: `src/bot/telegram.ts`
 - Create: `src/bot/whatsapp.ts`
@@ -2241,7 +2389,8 @@ export function formatMorningBrief(brief: MorningBrief): string {
 }
 
 export function formatRateCard(rates: RateCard[]): string {
-  if (rates.length === 0) return "Couldn't calculate rates. Connect a platform first so I can see your stats.";
+  if (rates.length === 0)
+    return "Couldn't calculate rates. Connect a platform first so I can see your stats.";
 
   let msg = "*Your Rate Card*\n\n";
   for (const r of rates) {
@@ -2254,7 +2403,8 @@ export function formatRateCard(rates: RateCard[]): string {
 }
 
 export function formatScanResults(results: ScanResult): string {
-  if (results.opportunities.length === 0) return "No new opportunities found this scan. I'll keep looking.";
+  if (results.opportunities.length === 0)
+    return "No new opportunities found this scan. I'll keep looking.";
 
   let msg = `*Found ${results.opportunities.length} opportunities:*\n\n`;
   for (const opp of results.opportunities) {
@@ -2272,7 +2422,7 @@ export function formatDealCount(active: number, total: number): string {
 
 export function formatWalletBalance(
   freeCredits: number,
-  address: string | null
+  address: string | null,
 ): string {
   let msg = `*Wallet*\n`;
   msg += `Free credits: *$${(freeCredits / 100).toFixed(2)}*\n`;
@@ -2314,9 +2464,11 @@ export function removePendingApproval(key: string): void {
   pendingApprovals.delete(key);
 }
 
-export function getPendingApprovalsForCreator(creatorId: string): ApprovalAction[] {
+export function getPendingApprovalsForCreator(
+  creatorId: string,
+): ApprovalAction[] {
   return Array.from(pendingApprovals.values()).filter(
-    (a) => a.creatorId === creatorId
+    (a) => a.creatorId === creatorId,
   );
 }
 ```
@@ -2351,8 +2503,13 @@ export interface OutgoingMessage {
   buttons?: Array<{ text: string; callbackData: string }>;
 }
 
-export async function handleMessage(msg: IncomingMessage): Promise<OutgoingMessage> {
-  log.info({ platform: msg.platform, user: msg.platformUserId }, "Incoming message");
+export async function handleMessage(
+  msg: IncomingMessage,
+): Promise<OutgoingMessage> {
+  log.info(
+    { platform: msg.platform, user: msg.platformUserId },
+    "Incoming message",
+  );
 
   // 1. Find or create creator
   let creator: Creator | null = null;
@@ -2367,8 +2524,10 @@ export async function handleMessage(msg: IncomingMessage): Promise<OutgoingMessa
     // New user — onboard
     creator = await createCreator({
       display_name: msg.displayName,
-      telegram_chat_id: msg.platform === "telegram" ? msg.platformUserId : undefined,
-      whatsapp_phone: msg.platform === "whatsapp" ? msg.platformUserId : undefined,
+      telegram_chat_id:
+        msg.platform === "telegram" ? msg.platformUserId : undefined,
+      whatsapp_phone:
+        msg.platform === "whatsapp" ? msg.platformUserId : undefined,
     });
 
     // Create wallet
@@ -2395,7 +2554,7 @@ export async function handleMessage(msg: IncomingMessage): Promise<OutgoingMessa
     creator.id,
     msg.text,
     creator.wallet_id ?? undefined,
-    creator.wallet_address ?? undefined
+    creator.wallet_address ?? undefined,
   );
 
   if (agentResponse.requiresApproval && agentResponse.pendingAction) {
@@ -2403,8 +2562,14 @@ export async function handleMessage(msg: IncomingMessage): Promise<OutgoingMessa
       text: `${agentResponse.text}\n\n_This action needs your approval._`,
       parseMode: "Markdown",
       buttons: [
-        { text: "Approve", callbackData: `approve:${agentResponse.pendingAction.id}` },
-        { text: "Skip", callbackData: `skip:${agentResponse.pendingAction.id}` },
+        {
+          text: "Approve",
+          callbackData: `approve:${agentResponse.pendingAction.id}`,
+        },
+        {
+          text: "Skip",
+          callbackData: `skip:${agentResponse.pendingAction.id}`,
+        },
       ],
     };
   }
@@ -2431,8 +2596,7 @@ export function createTelegramBot(): Bot {
 
   bot.on("message:text", async (ctx) => {
     const chatId = String(ctx.chat.id);
-    const displayName =
-      ctx.from?.first_name ?? ctx.from?.username ?? "Creator";
+    const displayName = ctx.from?.first_name ?? ctx.from?.username ?? "Creator";
 
     try {
       const response = await handleMessage({
@@ -2487,7 +2651,7 @@ async function sendTelegramResponse(ctx: any, response: OutgoingMessage) {
 export async function sendMessageToCreator(
   bot: Bot,
   chatId: string,
-  response: OutgoingMessage
+  response: OutgoingMessage,
 ) {
   const options: any = {};
   if (response.parseMode) options.parse_mode = response.parseMode;
@@ -2559,7 +2723,10 @@ export async function handleWebhook(req: Request, res: Response) {
 
         await sendWhatsAppMessage(from, response);
       } catch (err: any) {
-        log.error({ error: err.message, from }, "Error handling WhatsApp message");
+        log.error(
+          { error: err.message, from },
+          "Error handling WhatsApp message",
+        );
         await sendWhatsAppMessage(from, {
           text: "Something went wrong. Please try again.",
         });
@@ -2570,7 +2737,10 @@ export async function handleWebhook(req: Request, res: Response) {
   res.sendStatus(200);
 }
 
-export async function sendWhatsAppMessage(to: string, response: OutgoingMessage) {
+export async function sendWhatsAppMessage(
+  to: string,
+  response: OutgoingMessage,
+) {
   if (!env.WHATSAPP_ACCESS_TOKEN) {
     log.warn("WhatsApp not configured — skipping send");
     return;
@@ -2596,10 +2766,13 @@ export async function sendWhatsAppMessage(to: string, response: OutgoingMessage)
           Authorization: `Bearer ${env.WHATSAPP_ACCESS_TOKEN}`,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   } catch (err: any) {
-    log.error({ error: err.response?.data ?? err.message }, "WhatsApp send failed");
+    log.error(
+      { error: err.response?.data ?? err.message },
+      "WhatsApp send failed",
+    );
   }
 }
 ```
@@ -2610,7 +2783,10 @@ Create `tests/unit/bot/handler.test.ts`:
 
 ```typescript
 import { describe, it, expect, vi } from "vitest";
-import type { IncomingMessage, OutgoingMessage } from "../../../src/bot/handler.js";
+import type {
+  IncomingMessage,
+  OutgoingMessage,
+} from "../../../src/bot/handler.js";
 
 describe("message handler types", () => {
   it("IncomingMessage has required fields", () => {
@@ -2657,6 +2833,7 @@ git commit -m "feat: Telegram and WhatsApp bot layer with shared message handler
 ### Task 7: API Server & Entry Point
 
 **Files:**
+
 - Create: `src/api/server.ts`
 - Create: `src/api/routes/webhooks.ts`
 - Create: `src/api/routes/deals.ts`
@@ -2677,7 +2854,7 @@ export function createApiServer() {
   app.use("*", cors());
 
   app.get("/health", (c) =>
-    c.json({ status: "ok", timestamp: new Date().toISOString() })
+    c.json({ status: "ok", timestamp: new Date().toISOString() }),
   );
 
   return app;
@@ -2725,7 +2902,8 @@ webhooks.post("/whatsapp", async (c) => {
 
       const from = message.from;
       const text = message.text?.body ?? "";
-      const contactName = change.value.contacts?.[0]?.profile?.name ?? "Creator";
+      const contactName =
+        change.value.contacts?.[0]?.profile?.name ?? "Creator";
 
       // Fire and forget — we already returned 200
       handleMessage({
@@ -2857,6 +3035,7 @@ git commit -m "feat: API server, webhook routes, and main entry point"
 ### Task 8: Job Queue (Morning Scan & Brief)
 
 **Files:**
+
 - Create: `src/jobs/queue.ts`
 - Create: `src/jobs/morning-scan.ts`
 - Create: `src/jobs/morning-brief.ts`
@@ -2896,7 +3075,7 @@ export function startWorkers() {
           log.warn({ jobName: job.name }, "Unknown job type");
       }
     },
-    { connection, concurrency: 5 }
+    { connection, concurrency: 5 },
   );
 
   worker.on("failed", (job, err) => {
@@ -2915,7 +3094,7 @@ export async function scheduleRecurringJobs() {
     {
       repeat: { pattern: "0 6 * * *" }, // 6:00 AM daily
       removeOnComplete: true,
-    }
+    },
   );
 
   log.info("Recurring jobs scheduled");
@@ -2939,7 +3118,9 @@ export async function runMorningScan(creatorId?: string) {
   }
 
   // Scan all creators
-  const { data: creators } = await supabase.from("creators").select("id, niche");
+  const { data: creators } = await supabase
+    .from("creators")
+    .select("id, niche");
 
   for (const creator of creators ?? []) {
     try {
@@ -2993,7 +3174,10 @@ export async function runMorningBrief(creatorId?: string) {
     try {
       await briefSingleCreator(creator.id);
     } catch (err: any) {
-      log.error({ creatorId: creator.id, error: err.message }, "Brief generation failed");
+      log.error(
+        { creatorId: creator.id, error: err.message },
+        "Brief generation failed",
+      );
     }
   }
 }
@@ -3036,8 +3220,12 @@ Add to `src/index.ts` after the Telegram bot start:
 
 ```typescript
 // 4. Start job workers (only in production or if Redis is available)
-if (env.NODE_ENV === "production" || env.REDIS_URL !== "redis://localhost:6379") {
-  const { startWorkers, scheduleRecurringJobs } = await import("./jobs/queue.js");
+if (
+  env.NODE_ENV === "production" ||
+  env.REDIS_URL !== "redis://localhost:6379"
+) {
+  const { startWorkers, scheduleRecurringJobs } =
+    await import("./jobs/queue.js");
   startWorkers();
   await scheduleRecurringJobs();
 }
@@ -3055,6 +3243,7 @@ git commit -m "feat: job queue — morning scan and brief cron jobs"
 ### Task 9: Integration Test — Full Bot-to-Agent Flow
 
 **Files:**
+
 - Create: `tests/integration/bot-to-agent.test.ts`
 - Create: `scripts/seed-db.ts`
 
@@ -3158,6 +3347,7 @@ git commit -m "feat: integration test contracts and database seed script"
 ### Task 10: Dashboard Scaffold (Next.js — Week 7-8)
 
 **Files:**
+
 - Create: `dashboard/package.json`
 - Create: `dashboard/next.config.ts`
 - Create: `dashboard/tailwind.config.ts`
@@ -3200,19 +3390,27 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100 p-8">
       <h1 className="text-2xl font-bold mb-2">Indyfren Dashboard</h1>
-      <p className="text-gray-500 mb-8">Your AI business manager at a glance.</p>
+      <p className="text-gray-500 mb-8">
+        Your AI business manager at a glance.
+      </p>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-          <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-1">Active Deals</h3>
+          <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-1">
+            Active Deals
+          </h3>
           <p className="text-3xl font-bold text-green-400">0</p>
         </div>
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-          <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-1">Free Credits</h3>
+          <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-1">
+            Free Credits
+          </h3>
           <p className="text-3xl font-bold text-indigo-400">$10.00</p>
         </div>
         <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-          <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-1">Platforms</h3>
+          <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-1">
+            Platforms
+          </h3>
           <p className="text-3xl font-bold text-pink-400">0</p>
         </div>
       </div>
@@ -3241,8 +3439,13 @@ export default function DealsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {["Discovered", "Pitched", "Negotiating", "Active"].map((stage) => (
-          <div key={stage} className="bg-gray-900 rounded-xl p-4 border border-gray-800">
-            <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-3">{stage}</h3>
+          <div
+            key={stage}
+            className="bg-gray-900 rounded-xl p-4 border border-gray-800"
+          >
+            <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-3">
+              {stage}
+            </h3>
             <p className="text-gray-600 text-sm">No deals yet</p>
           </div>
         ))}
@@ -3261,14 +3464,20 @@ export default function WalletPage() {
       <h1 className="text-2xl font-bold mb-6">Wallet & Transactions</h1>
 
       <div className="bg-gray-900 rounded-xl p-6 border border-gray-800 mb-6">
-        <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-1">Balance</h3>
+        <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-1">
+          Balance
+        </h3>
         <p className="text-4xl font-bold text-green-400">$10.00</p>
         <p className="text-gray-500 text-sm mt-1">Free credits remaining</p>
       </div>
 
       <div className="bg-gray-900 rounded-xl p-6 border border-gray-800">
-        <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-3">Recent Transactions</h3>
-        <p className="text-gray-600 text-sm">No transactions yet. Your agent will log spending here.</p>
+        <h3 className="text-sm text-gray-500 uppercase tracking-wider mb-3">
+          Recent Transactions
+        </h3>
+        <p className="text-gray-600 text-sm">
+          No transactions yet. Your agent will log spending here.
+        </p>
       </div>
     </div>
   );
@@ -3297,6 +3506,7 @@ git commit -m "feat: Next.js companion dashboard scaffold with deals and wallet 
 ### Task 11: Final Wiring & Smoke Test
 
 **Files:**
+
 - Modify: `src/index.ts` (final wiring)
 - Create: `scripts/test-mpp.ts`
 
@@ -3317,7 +3527,7 @@ async function testMpp() {
     const mpp = await createMppClient(
       "test-creator-id",
       wallet.walletId,
-      wallet.address as `0x${string}`
+      wallet.address as `0x${string}`,
     );
 
     // Test with a free SIWX endpoint first
@@ -3362,24 +3572,24 @@ git commit -m "feat: Indyfren MVP — AI agent for content creators with Telegra
 
 ### Current Snapshot
 
-| Status | Scope | Notes |
-|--------|-------|-------|
-| ✅ Done | Tasks 1-4 | Scaffold, DB, policy-backed Privy wallet layer, orchestrator/memory |
-| ✅ Done | Task 5 foundation | P0 skill and tool files implemented and tested |
-| ✅ Done | Tasks 6-8 | Bot layer, API server, webhook routes, job queue, morning cron |
-| ✅ Done | Task 9 | Integration test coverage for webhook-to-handler flow plus seed script |
-| ✅ Done | Task 10 | Dashboard scaffold implemented and production build verified |
-| ✅ Done | Task 11 wiring | MPP smoke script, startup hardening, approval callback fix, automated verification |
-| ⏳ Pending | Manual smoke | Telegram bot and live MPP checks with real credentials |
+| Status     | Scope             | Notes                                                                              |
+| ---------- | ----------------- | ---------------------------------------------------------------------------------- |
+| ✅ Done    | Tasks 1-4         | Scaffold, DB, policy-backed Privy wallet layer, orchestrator/memory                |
+| ✅ Done    | Task 5 foundation | P0 skill and tool files implemented and tested                                     |
+| ✅ Done    | Tasks 6-8         | Bot layer, API server, webhook routes, job queue, morning cron                     |
+| ✅ Done    | Task 9            | Integration test coverage for webhook-to-handler flow plus seed script             |
+| ✅ Done    | Task 10           | Dashboard scaffold implemented and production build verified                       |
+| ✅ Done    | Task 11 wiring    | MPP smoke script, startup hardening, approval callback fix, automated verification |
+| ⏳ Pending | Manual smoke      | Telegram bot and live MPP checks with real credentials                             |
 
-| Week | Tasks | What's Working |
-|------|-------|----------------|
-| 1 | Tasks 1-2 | Project scaffold, database schema, query layer |
-| 2 | Tasks 3-4 | Policy-backed Privy agent wallet, MPP payments, agent orchestrator with ReAct loop |
-| 3 | Task 5 | P0 skills: brand deal scanner, rate calculator, pitch generator, morning brief |
-| 4 | Task 6 | Telegram + WhatsApp bots with shared handler, approval flow |
-| 5 | Tasks 7-8 | API server, webhook routes, job queue, morning cron |
-| 6 | Task 9 | Integration tests, seed script, smoke testing |
-| 7-8 | Tasks 10-11 | Next.js dashboard, final wiring, manual testing, launch |
+| Week | Tasks       | What's Working                                                                     |
+| ---- | ----------- | ---------------------------------------------------------------------------------- |
+| 1    | Tasks 1-2   | Project scaffold, database schema, query layer                                     |
+| 2    | Tasks 3-4   | Policy-backed Privy agent wallet, MPP payments, agent orchestrator with ReAct loop |
+| 3    | Task 5      | P0 skills: brand deal scanner, rate calculator, pitch generator, morning brief     |
+| 4    | Task 6      | Telegram + WhatsApp bots with shared handler, approval flow                        |
+| 5    | Tasks 7-8   | API server, webhook routes, job queue, morning cron                                |
+| 6    | Task 9      | Integration tests, seed script, smoke testing                                      |
+| 7-8  | Tasks 10-11 | Next.js dashboard, final wiring, manual testing, launch                            |
 
 **Total: 11 tasks, ~85 steps, shipping a working MVP in 8 weeks.**

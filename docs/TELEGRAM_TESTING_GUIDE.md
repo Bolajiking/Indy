@@ -18,6 +18,7 @@
 ### 2. Set Environment Variable
 
 Add to your `.env`:
+
 ```bash
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 ```
@@ -25,11 +26,13 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 ### 3. Configure Bot Commands
 
 Send to @BotFather:
+
 ```
 /setcommands
 ```
 
 Select your bot, then paste:
+
 ```
 start - Welcome message
 help - Show available commands
@@ -49,6 +52,7 @@ brief - Morning brief
 ```
 
 Paste:
+
 ```
 I'm Indyfren, your AI business manager. I help content creators find brand deals, negotiate rates, and manage their creator business.
 ```
@@ -60,8 +64,9 @@ I'm Indyfren, your AI business manager. I help content creators find brand deals
 ```
 
 Paste:
+
 ```
-AI business manager for content creators. Powered by Claude.
+AI business manager for content creators. Powered by a configurable AI provider.
 ```
 
 ---
@@ -77,6 +82,7 @@ npm run dev
 The bot will automatically start in long-polling mode if `TELEGRAM_BOT_TOKEN` is configured.
 
 **Look for this in logs:**
+
 ```
 {"name":"indyfren","msg":"Telegram bot started (long-polling mode)"}
 ```
@@ -90,6 +96,7 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https:
 ```
 
 Verify webhook:
+
 ```bash
 curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
 ```
@@ -105,6 +112,7 @@ curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
    - Send `/start` or just say "Hello"
 
 2. **Expected Response:**
+
    ```
    👋 Hey [Your Name]! I'm *Indyfren* — your AI business manager.
 
@@ -137,6 +145,7 @@ curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
 Send: `calendar` or `/calendar`
 
 **Expected:**
+
 ```
 Upcoming Deadlines
 
@@ -151,6 +160,7 @@ Upcoming Deadlines
 ```
 
 or if no deadlines:
+
 ```
 Upcoming Deadlines
 
@@ -162,6 +172,7 @@ No upcoming deadlines. Your calendar is clear!
 Send: `finances` or `/finances`
 
 **Expected:**
+
 ```
 💰 Financial Snapshot
 
@@ -182,6 +193,7 @@ Pipeline: 5 active deals worth $10,000.00
 Send: `content plan` or `/content`
 
 **Expected:**
+
 ```
 📅 Content Strategy
 
@@ -200,6 +212,7 @@ Next Week:
 Send: `/help` or `help`
 
 **Expected:**
+
 ```
 👋 Welcome back, [Name]! What can I help with?
 
@@ -227,9 +240,11 @@ Type /help anytime to see this menu.
 Send: `What brand deals are available for a tech YouTuber with 50k subscribers?`
 
 **Expected:**
+
 1. Bot shows typing indicator
 2. Agent processes the request
 3. Response with brand suggestions:
+
    ```
    I found 5 brand opportunities for tech creators:
 
@@ -245,9 +260,10 @@ Send: `What brand deals are available for a tech YouTuber with 50k subscribers?`
    ```
 
 **Verify:**
+
 - ✅ Agent responds (not just canned message)
 - ✅ Response is relevant to query
-- ✅ No Claude API errors
+- ✅ No AI provider API errors
 - ✅ Response time < 5 seconds
 
 #### Test: Follow-up Questions
@@ -255,6 +271,7 @@ Send: `What brand deals are available for a tech YouTuber with 50k subscribers?`
 Send: `Tell me more about TechCorp`
 
 **Expected:**
+
 ```
 TechCorp is a hardware manufacturer looking for tech reviewers.
 
@@ -266,6 +283,7 @@ Want me to draft a pitch?
 ```
 
 **Verify:**
+
 - ✅ Agent maintains context from previous message
 - ✅ Response is personalized
 - ✅ Conversation history persists
@@ -277,8 +295,10 @@ Want me to draft a pitch?
 Send: `Draft a pitch email for TechCorp`
 
 **Expected:**
+
 1. Agent generates pitch
 2. Requests approval with buttons:
+
    ```
    I've drafted this pitch to TechCorp:
 
@@ -291,11 +311,13 @@ Send: `Draft a pitch email for TechCorp`
 
    ⚡ _This action needs your approval._
    ```
+
    **[✅ Send] [❌ Skip]**
 
 3. Click **✅ Send** button
 
 **Expected After Approval:**
+
 ```
 ⚡ *Approved.* Executing now...
 
@@ -307,11 +329,13 @@ Send: `Draft a pitch email for TechCorp`
 4. Click **❌ Skip** button
 
 **Expected:**
+
 ```
 ✅ Got it. I skipped that action.
 ```
 
 **Verify:**
+
 - ✅ Buttons appear
 - ✅ Button clicks register
 - ✅ Action executes on approval
@@ -325,6 +349,7 @@ Send: `Draft a pitch email for TechCorp`
 Send: `randomnonexistentcommand123`
 
 **Expected:**
+
 ```
 I'm not sure what you mean. Try one of these:
 
@@ -341,6 +366,7 @@ Or just ask me a question!
 Disconnect internet → Send message
 
 **Expected:**
+
 ```
 Something went wrong on my end. Please try again in a moment.
 ```
@@ -350,6 +376,7 @@ Something went wrong on my end. Please try again in a moment.
 If bot response has invalid Markdown, should fall back to plain text automatically.
 
 **Verify:**
+
 - ✅ No crash
 - ✅ Message still delivered
 - ✅ Error logged but user sees friendly message
@@ -361,12 +388,14 @@ If bot response has invalid Markdown, should fall back to plain text automatical
 ### Bot doesn't respond
 
 **Check:**
+
 1. Bot token is correct: `echo $TELEGRAM_BOT_TOKEN`
 2. Backend is running: `curl http://localhost:3000/health`
 3. No error in logs: Check terminal output
 4. Network connectivity: Can you reach api.telegram.org?
 
 **Fix:**
+
 ```bash
 # Restart backend
 npm run dev
@@ -378,11 +407,13 @@ curl "https://api.telegram.org/bot<TOKEN>/getMe"
 ### Webhook not working (production)
 
 **Check webhook status:**
+
 ```bash
 curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
 ```
 
 **Should return:**
+
 ```json
 {
   "url": "https://your-api.railway.app/webhooks/telegram",
@@ -393,6 +424,7 @@ curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
 ```
 
 **If webhook fails:**
+
 ```bash
 # Delete old webhook
 curl -X POST "https://api.telegram.org/bot<TOKEN>/deleteWebhook"
@@ -416,6 +448,7 @@ Then restart local server.
 Long messages (>4096 chars) should auto-split.
 
 **Verify:**
+
 - Multiple messages delivered
 - Buttons only on last message
 - No content lost
@@ -423,11 +456,13 @@ Long messages (>4096 chars) should auto-split.
 ### Buttons not working
 
 **Check:**
+
 1. Callback data format: `approve:creatorId:actionId` or `skip:creatorId:actionId`
 2. Action exists in database
 3. Callback query handler registered
 
 **Debug:**
+
 ```bash
 # Check pending approvals
 psql $DATABASE_URL -c "SELECT * FROM agent_actions WHERE status = 'pending';"
@@ -464,18 +499,19 @@ The following UX improvements have been shipped:
 
 ## Performance Benchmarks
 
-| Operation | Target | Acceptable |
-|-----------|--------|------------|
-| Simple command (calendar, finances) | <1s | <2s |
-| Agent query (with LLM) | <3s | <5s |
-| Tool execution (web search) | <2s | <4s |
-| Message delivery | <500ms | <1s |
+| Operation                           | Target | Acceptable |
+| ----------------------------------- | ------ | ---------- |
+| Simple command (calendar, finances) | <1s    | <2s        |
+| Agent query (with LLM)              | <3s    | <5s        |
+| Tool execution (web search)         | <2s    | <4s        |
+| Message delivery                    | <500ms | <1s        |
 
 ---
 
 ## Testing Checklist
 
 ### Basic Functionality
+
 - [ ] Bot responds to /start
 - [ ] Bot responds to /help
 - [ ] Onboarding flow works for new users
@@ -484,6 +520,7 @@ The following UX improvements have been shipped:
 - [ ] Long messages split correctly
 
 ### Commands
+
 - [ ] `/calendar` shows deadlines
 - [ ] `/finances` shows financial snapshot
 - [ ] `/content` shows content strategy
@@ -492,13 +529,15 @@ The following UX improvements have been shipped:
 - [ ] `/deals` shows deal pipeline
 
 ### Agent Interaction
+
 - [ ] Natural language queries work
 - [ ] Agent maintains context
 - [ ] Conversation history persists
 - [ ] Agent responses are relevant
-- [ ] No Claude API errors
+- [ ] No AI provider API errors
 
 ### Approval Flow
+
 - [ ] Hybrid tools request approval
 - [ ] Buttons appear correctly
 - [ ] "Send" button executes action
@@ -507,6 +546,7 @@ The following UX improvements have been shipped:
 - [ ] Action logged in database
 
 ### Error Handling
+
 - [ ] Invalid commands handled gracefully
 - [ ] Network errors don't crash bot
 - [ ] Markdown parse errors fall back
@@ -514,6 +554,7 @@ The following UX improvements have been shipped:
 - [ ] Errors logged but not exposed to user
 
 ### Performance
+
 - [ ] Response time < 2s for quick commands
 - [ ] Response time < 5s for agent queries
 - [ ] No memory leaks on long conversations
@@ -526,11 +567,13 @@ The following UX improvements have been shipped:
 ### Load Testing
 
 Send 10 messages rapidly:
+
 ```bash
 for i in {1..10}; do echo "Test message $i"; sleep 0.5; done
 ```
 
 **Verify:**
+
 - All messages processed
 - Responses in correct order
 - No errors or timeouts
@@ -546,6 +589,7 @@ for i in {1..10}; do echo "Test message $i"; sleep 0.5; done
 Send 20+ messages in single conversation.
 
 **Verify:**
+
 - Context maintained
 - Memory doesn't grow unbounded
 - Old messages summarized
@@ -557,13 +601,15 @@ Send 20+ messages in single conversation.
 ### Log Levels
 
 **Info (30):** Normal operation
+
 ```json
-{"level":30,"name":"bot:telegram","msg":"Incoming message"}
+{ "level": 30, "name": "bot:telegram", "msg": "Incoming message" }
 ```
 
 **Error (50):** Action failed
+
 ```json
-{"level":50,"name":"bot:telegram","msg":"Failed to send message"}
+{ "level": 50, "name": "bot:telegram", "msg": "Failed to send message" }
 ```
 
 ### Key Metrics to Watch
@@ -585,7 +631,7 @@ Before going live:
 - [ ] Health checks passing
 - [ ] Database connected
 - [ ] Redis connected
-- [ ] Claude API working
+- [ ] Configured AI provider working
 - [ ] Bot commands set in @BotFather
 - [ ] Bot description set
 - [ ] Error monitoring enabled

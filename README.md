@@ -1,7 +1,7 @@
 # Indyfren
 
 [![CI/CD](https://github.com/your-org/indyfren/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/indyfren/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-186%20passing-success)](./docs/TEST_RESULTS.md)
+[![Tests](https://img.shields.io/badge/tests-316%20passing-success)](./docs/TEST_RESULTS.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 AI business manager for independent content creators. Manages brand deals, rate negotiations, pitching, financial tracking, and content strategy through Telegram/WhatsApp chat and a companion web dashboard.
@@ -16,17 +16,19 @@ AI business manager for independent content creators. Manages brand deals, rate 
 
 ## 📊 Status
 
-- ✅ **186/186 tests passing**
-- ✅ **Production ready** (90% complete)
+- ⚠️ **Consumer readiness in progress**
+- ✅ Automated unit/build coverage for core backend and dashboard flows
 - ✅ Core agent system operational
 - ✅ Telegram + WhatsApp bots working
 - ✅ Dashboard with Privy auth
-- ✅ Wallet provisioning & MPP payments
+- ⚠️ Wallet provisioning is wired, but paid MPP calls still require funded Tempo sandbox wallets
+- ✅ CI formatting and root npm audit are blocking gates; dashboard high/critical audit is enforced
+- ⚠️ Dashboard still has a moderate Next-bundled PostCSS advisory with no safe current Next upgrade path
 - ⏳ Additional platform OAuth (Instagram, TikTok, Twitter)
 
 ## Architecture
 
-- **Backend**: Hono API server (port 3000) with Claude-powered agent orchestrator
+- **Backend**: Hono API server (port 3000) with a configurable AI-provider agent orchestrator
 - **Dashboard**: Next.js 15 app (port 3001) with Privy auth
 - **Bot transports**: Telegram (grammY) + WhatsApp (Meta Cloud API)
 - **Database**: Supabase (PostgreSQL)
@@ -39,21 +41,24 @@ AI business manager for independent content creators. Manages brand deals, rate 
 - Redis (for job queue)
 - Supabase project
 - Privy account (app ID + secret)
-- Anthropic API key
+- AI provider API key (`ANTHROPIC_API_KEY` by default, or `AI_PROVIDER=openai` with `AI_API_KEY` / `OPENAI_API_KEY`)
 
 ## 🚀 Production Deployment
 
 **Quick Deploy:**
+
 1. Push to GitHub
 2. GitHub Actions automatically deploys to Railway (backend) and Vercel (dashboard)
 3. See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed instructions
 
 **Required Setup:**
+
 - Railway account for backend hosting
 - Vercel account for dashboard hosting
 - Configure GitHub Secrets (see [deployment guide](docs/DEPLOYMENT.md#github-secrets))
 
 **Manual Deploy:**
+
 ```bash
 # Backend (Railway)
 railway login
@@ -102,7 +107,7 @@ Boundary note:
 
 ```bash
 cp .env.example .env
-# Fill in all required values: ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_KEY, PRIVY_APP_ID, PRIVY_APP_SECRET
+# Fill in all required values: AI provider key, SUPABASE_URL, SUPABASE_SERVICE_KEY, PRIVY_APP_ID, PRIVY_APP_SECRET
 ```
 
 If you start or build the dashboard from `dashboard/` directly, also provide its public envs in that process. The simplest local option is `dashboard/.env.local` with at least:
@@ -171,7 +176,9 @@ Use these commands when you want to validate the live Privy-backed auth path bef
 
 ```bash
 npm run smoke:preflight
+node --import tsx scripts/smoke-health.ts
 npm run smoke:auth
+npm run test:mpp
 ```
 
 `npm run smoke:auth` checks the authenticated `GET /api/auth/me` flow with a real bearer token. It requires:
@@ -183,42 +190,54 @@ Optional:
 
 - Set `SMOKE_CHECK_DASHBOARD_PROXY=true` to also verify the dashboard proxy at `/api/proxy/api/auth/me`
 - Use `SMOKE_DASHBOARD_URL` to override the dashboard origin for that proxy check
+- Set `SMOKE_REQUIRE_DASHBOARD=true` for `scripts/smoke-health.ts` when dashboard health must be part of the gate
+- Set `MPP_TEST_CREATOR_ID` to a real Privy-backed creator with a funded Tempo testnet wallet before running `npm run test:mpp`
+- Set `MPP_SMOKE_ALLOW_UNFUNDED=true` only for sandbox diagnostics where an `InsufficientBalance` result is expected and should not block local investigation
 
 This is useful for separating operator issues:
 
 - If `smoke:preflight` fails, env or DNS is still incomplete.
+- If `scripts/smoke-health.ts` fails, the backend readiness route or dashboard runtime is not healthy.
 - If `smoke:auth` fails on the direct API call, bearer auth or backend config is the issue.
 - If the direct API call passes but the proxy check fails, the dashboard/runtime wiring is the issue.
+- If `test:mpp` fails with `InsufficientBalance`, wallet provisioning reached Tempo but the creator wallet needs pathUSD funding before paid requests can settle.
+
+MPP payment attempts are now recorded in the `payment_attempts` ledger before settlement. The ledger tracks the service URL/host, challenge and credential stages, quoted and actual cents, receipt reference, linked transaction, and failure text, so failed paid calls are observable instead of disappearing into logs.
+
+If a live MPP smoke reports that `payment_attempts` is missing, set `DATABASE_URL` to a working Supabase direct or pooler Postgres URL and run `npm run db:migrate:payment-attempts`.
 
 ## Scripts
 
-| Script | Description |
-|--------|-------------|
-| `npm run dev` | Start backend with hot reload |
-| `npm run dev:all` | Start backend + dashboard together |
-| `npm run build` | TypeScript compile |
-| `npm test` | Run all tests |
-| `npm run db:init` | Print/verify database schema |
-| `npm run db:seed` | Seed demo data |
-| `npm run smoke:preflight` | Check env vars and DNS |
-| `npm run smoke:auth` | Validate Privy bearer auth on `/api/auth/me` and optionally the dashboard proxy |
-| `npm run dashboard:dev` | Start dashboard dev server |
-| `npm run dashboard:build` | Production build dashboard |
+| Script                                      | Description                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------------- |
+| `npm run dev`                               | Start backend with hot reload                                                   |
+| `npm run dev:all`                           | Start backend + dashboard together                                              |
+| `npm run build`                             | TypeScript compile                                                              |
+| `npm test`                                  | Run all tests                                                                   |
+| `npm run db:init`                           | Print/verify database schema                                                    |
+| `npm run db:migrate:payment-attempts`       | Apply the MPP payment-attempt ledger table/index/RLS slice                      |
+| `npm run db:seed`                           | Seed demo data                                                                  |
+| `npm run smoke:preflight`                   | Check env vars and DNS                                                          |
+| `node --import tsx scripts/smoke-health.ts` | Validate API `/health`, `/health/ready`, and optional dashboard health          |
+| `npm run smoke:auth`                        | Validate Privy bearer auth on `/api/auth/me` and optionally the dashboard proxy |
+| `npm run test:mpp`                          | Validate a live funded Tempo MPP paid ping                                      |
+| `npm run dashboard:dev`                     | Start dashboard dev server                                                      |
+| `npm run dashboard:build`                   | Production build dashboard                                                      |
 
 ## API Endpoints
 
-| Route | Description |
-|-------|-------------|
-| `GET /health` | Health check with dependency status |
-| `GET /health/ready` | Readiness probe |
-| `POST /webhooks/telegram` | Telegram webhook |
-| `GET/POST /webhooks/whatsapp` | WhatsApp webhook |
-| `POST /api/auth/register` | Creator registration |
-| `GET /api/auth/me` | Current creator profile |
-| `GET /api/deals` | List deals |
-| `GET /api/wallet/transactions` | Wallet activity |
-| `GET /api/platforms` | Connected platforms |
-| `GET /api/reports/*` | Financial, analytics, calendar, SEO reports |
+| Route                          | Description                                 |
+| ------------------------------ | ------------------------------------------- |
+| `GET /health`                  | Health check with dependency status         |
+| `GET /health/ready`            | Readiness probe                             |
+| `POST /webhooks/telegram`      | Telegram webhook                            |
+| `GET/POST /webhooks/whatsapp`  | WhatsApp webhook                            |
+| `POST /api/auth/register`      | Creator registration                        |
+| `GET /api/auth/me`             | Current creator profile                     |
+| `GET /api/deals`               | List deals                                  |
+| `GET /api/wallet/transactions` | Wallet activity                             |
+| `GET /api/platforms`           | Connected platforms                         |
+| `GET /api/reports/*`           | Financial, analytics, calendar, SEO reports |
 
 ## Bot Commands
 
@@ -236,5 +255,7 @@ Send these via Telegram or WhatsApp:
 ## Testing
 
 ```bash
-npm test           # 40 test files, 164 tests
+npm test
+npm run build
+npm run dashboard:build
 ```

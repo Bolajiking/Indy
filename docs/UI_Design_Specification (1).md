@@ -1,4 +1,5 @@
 # UI/UX Design Specification
+
 ## Extracted from Messaging App Interface Analysis
 
 ---
@@ -21,33 +22,33 @@ The interface follows what can be described as **"Playful Minimalism"** — a st
 
 ### 2.1 Background & Surfaces
 
-| Token | Hex Value | Usage |
-|-------|-----------|-------|
+| Token             | Hex Value | Usage                                                    |
+| ----------------- | --------- | -------------------------------------------------------- |
 | `surface-primary` | `#FFFFFF` | Main background — used everywhere, no secondary surfaces |
-| `surface-input` | `#F5F5F5` | Search bar fill, input fields |
-| `surface-badge` | `#E8EDF2` | Timestamp badges, metadata chips |
-| `surface-overlay` | `#FFFFFF` | Modal/sheet backgrounds (New Chat screen) |
+| `surface-input`   | `#F5F5F5` | Search bar fill, input fields                            |
+| `surface-badge`   | `#E8EDF2` | Timestamp badges, metadata chips                         |
+| `surface-overlay` | `#FFFFFF` | Modal/sheet backgrounds (New Chat screen)                |
 
 **Key decision:** There is NO secondary surface color. No cards, no elevated containers. Content sits directly on white. This is a deliberate design choice that creates the app's distinctive airiness.
 
 ### 2.2 Text Colors
 
-| Token | Hex Value | Usage |
-|-------|-----------|-------|
-| `text-primary` | `#000000` | Page titles ("Home"), chat names ("Notebook", "patchland"), tab labels |
-| `text-secondary` | `#8E8E93` | Subtitles, timestamps, metadata ("controlla:", "iragaki: hmm"), inactive tabs ("For You") |
-| `text-placeholder` | `#C7C7CC` | Search placeholder text ("Search or jump to", "Search people") |
-| `text-on-action` | `#FFFFFF` | Text/icons inside blue action buttons |
+| Token              | Hex Value | Usage                                                                                     |
+| ------------------ | --------- | ----------------------------------------------------------------------------------------- |
+| `text-primary`     | `#000000` | Page titles ("Home"), chat names ("Notebook", "patchland"), tab labels                    |
+| `text-secondary`   | `#8E8E93` | Subtitles, timestamps, metadata ("controlla:", "iragaki: hmm"), inactive tabs ("For You") |
+| `text-placeholder` | `#C7C7CC` | Search placeholder text ("Search or jump to", "Search people")                            |
+| `text-on-action`   | `#FFFFFF` | Text/icons inside blue action buttons                                                     |
 
 ### 2.3 Accent & Action Colors
 
-| Token | Hex Value | Usage |
-|-------|-----------|-------|
+| Token            | Hex Value                    | Usage                                                          |
+| ---------------- | ---------------------------- | -------------------------------------------------------------- |
 | `accent-primary` | `#FF2D78` (hot pink/magenta) | Active tab indicator underline ONLY — used extremely sparingly |
-| `action-primary` | `#2D7CF6` | CTA icons (Create private/public chat circles) |
-| `status-online` | `#34C759` | Online presence dot |
-| `border-input` | `#E5E5EA` | Search field border, section dividers |
-| `icon-secondary` | `#C7C7CC` | Chevrons, "+" buttons, secondary action icons |
+| `action-primary` | `#2D7CF6`                    | CTA icons (Create private/public chat circles)                 |
+| `status-online`  | `#34C759`                    | Online presence dot                                            |
+| `border-input`   | `#E5E5EA`                    | Search field border, section dividers                          |
+| `icon-secondary` | `#C7C7CC`                    | Chevrons, "+" buttons, secondary action icons                  |
 
 ### 2.4 Color Usage Rules
 
@@ -66,27 +67,27 @@ The interface follows what can be described as **"Playful Minimalism"** — a st
 The app uses the iOS system font (SF Pro). For cross-platform replication:
 
 ```
-font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", 
-             "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", 
+font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+             "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue",
              Arial, sans-serif;
 ```
 
 ### 3.2 Type Scale
 
-| Element | Size (pt) | Weight | Letter Spacing | Color |
-|---------|-----------|--------|----------------|-------|
-| Page title ("Home") | 34pt | Bold (700) | -0.4px | `#000000` |
-| Modal title ("New chat") | 17pt | Semibold (600) | -0.2px | `#000000` |
-| Chat name ("Notebook") | 16pt | Semibold (600) | 0 | `#000000` |
-| Action row label ("Create a private group chat") | 16pt | Regular (400) | 0 | `#000000` |
-| Contact name in list ("nebula") | 16pt | Regular (400) | 0 | `#000000` |
-| Avatar carousel label ("Explore", "Your profile") | 12pt | Regular (400) | 0 | `#000000` |
-| Chat subtitle ("controlla: wojak") | 14pt | Regular (400) | 0 | `#8E8E93` |
-| Timestamp ("3h") | 13pt | Regular (400) | 0 | `#8E8E93` |
-| Search placeholder | 16pt | Regular (400) | 0 | `#C7C7CC` |
-| Tab label active ("Chats") | 16pt | Bold (700) | 0 | `#000000` |
-| Tab label inactive ("For You") | 16pt | Regular (400) | 0 | `#8E8E93` |
-| Button text ("New") | 14pt | Regular (400) | 0 | `#8E8E93` |
+| Element                                           | Size (pt) | Weight         | Letter Spacing | Color     |
+| ------------------------------------------------- | --------- | -------------- | -------------- | --------- |
+| Page title ("Home")                               | 34pt      | Bold (700)     | -0.4px         | `#000000` |
+| Modal title ("New chat")                          | 17pt      | Semibold (600) | -0.2px         | `#000000` |
+| Chat name ("Notebook")                            | 16pt      | Semibold (600) | 0              | `#000000` |
+| Action row label ("Create a private group chat")  | 16pt      | Regular (400)  | 0              | `#000000` |
+| Contact name in list ("nebula")                   | 16pt      | Regular (400)  | 0              | `#000000` |
+| Avatar carousel label ("Explore", "Your profile") | 12pt      | Regular (400)  | 0              | `#000000` |
+| Chat subtitle ("controlla: wojak")                | 14pt      | Regular (400)  | 0              | `#8E8E93` |
+| Timestamp ("3h")                                  | 13pt      | Regular (400)  | 0              | `#8E8E93` |
+| Search placeholder                                | 16pt      | Regular (400)  | 0              | `#C7C7CC` |
+| Tab label active ("Chats")                        | 16pt      | Bold (700)     | 0              | `#000000` |
+| Tab label inactive ("For You")                    | 16pt      | Regular (400)  | 0              | `#8E8E93` |
+| Button text ("New")                               | 14pt      | Regular (400)  | 0              | `#8E8E93` |
 
 ### 3.3 Typography Rules
 
@@ -101,12 +102,12 @@ font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display",
 
 ### 4.1 Grid System
 
-| Property | Value |
-|----------|-------|
-| Screen padding (horizontal) | 16px left and right |
-| Section gap (vertical space between major sections) | 24px |
-| List item vertical padding | 16px top and bottom |
-| Avatar carousel item gap | 16–20px between items |
+| Property                                            | Value                 |
+| --------------------------------------------------- | --------------------- |
+| Screen padding (horizontal)                         | 16px left and right   |
+| Section gap (vertical space between major sections) | 24px                  |
+| List item vertical padding                          | 16px top and bottom   |
+| Avatar carousel item gap                            | 16–20px between items |
 
 ### 4.2 Home Screen Layout (Top to Bottom)
 
@@ -410,23 +411,23 @@ Corners: Rounded (2px radius on line endings)
 Size: 20–24px (contextual)
 Color: Matches text hierarchy
 ├── Primary icons (header): #3C3C43
-├── Secondary icons (actions): #8E8E93  
+├── Secondary icons (actions): #8E8E93
 ├── Tertiary icons (add buttons, chevrons): #C7C7CC
 └── Inverse icons (on blue circles): #FFFFFF
 ```
 
 ### 6.2 Identified Icons
 
-| Location | Icon | Description |
-|----------|------|-------------|
-| Header, right | Chat bubble with corners | Message/conversations |
-| Header, right | Person with magnifying glass | Find people/contacts |
-| Tab bar, "New" button | Pen on paper / compose | Create new item |
-| New Chat, action row | Padlock (locked) | Private group |
-| New Chat, action row | Globe with download arrow | Public/open group |
-| Contact list | Plus sign in circle | Add to conversation |
-| Search bars | Magnifying glass | Search |
-| New Chat header | X mark | Close/dismiss |
+| Location              | Icon                         | Description           |
+| --------------------- | ---------------------------- | --------------------- |
+| Header, right         | Chat bubble with corners     | Message/conversations |
+| Header, right         | Person with magnifying glass | Find people/contacts  |
+| Tab bar, "New" button | Pen on paper / compose       | Create new item       |
+| New Chat, action row  | Padlock (locked)             | Private group         |
+| New Chat, action row  | Globe with download arrow    | Public/open group     |
+| Contact list          | Plus sign in circle          | Add to conversation   |
+| Search bars           | Magnifying glass             | Search                |
+| New Chat header       | X mark                       | Close/dismiss         |
 
 ---
 
@@ -437,18 +438,21 @@ Color: Matches text hierarchy
 The app supports multiple avatar styles which is key to its personality:
 
 **Illustrated / Artwork avatars (chat thumbnails):**
+
 - Highly textured, detailed illustrations
 - Examples: composition notebook with "SUP" sticker, retro Macintosh computer with smiley face
 - These are NOT generic icons — they feel hand-crafted, almost collectible
 - Displayed as rounded squares (12px radius) at 56×56px
 
 **Profile/Space avatars (carousel and contact list):**
+
 - Simpler, often abstract or logo-based
 - Soft pastel fills (#D0D8E8 light blue, #DDD5F3 lavender)
 - Some use pixel art or grayscale imagery
 - Displayed as circles at 64px (carousel) or 40px (contact list)
 
 **Profile avatar (header):**
+
 - User's own avatar, photographic or illustrated
 - Circular, 32px, positioned in top-right header
 
@@ -542,17 +546,17 @@ Tapping search bar:
 
 ## 9. BORDER RADIUS SYSTEM
 
-| Element | Radius | Notes |
-|---------|--------|-------|
-| Chat thumbnails | 12px | Rounded square — distinctive choice vs. circles |
-| Profile avatars (carousel) | 50% | Perfect circle |
-| Contact avatars (list) | 50% | Perfect circle |
-| Search bars | 12px | Matches thumbnail radius |
-| "New" button pill | 16px | Fully rounded pill |
-| Timestamp badge | 10px | Small pill |
-| Inline text badge | 10px | Small pill |
-| Action button circle | 50% | Blue CTA buttons |
-| "+" add button | 50% | Circle |
+| Element                    | Radius | Notes                                           |
+| -------------------------- | ------ | ----------------------------------------------- |
+| Chat thumbnails            | 12px   | Rounded square — distinctive choice vs. circles |
+| Profile avatars (carousel) | 50%    | Perfect circle                                  |
+| Contact avatars (list)     | 50%    | Perfect circle                                  |
+| Search bars                | 12px   | Matches thumbnail radius                        |
+| "New" button pill          | 16px   | Fully rounded pill                              |
+| Timestamp badge            | 10px   | Small pill                                      |
+| Inline text badge          | 10px   | Small pill                                      |
+| Action button circle       | 50%    | Blue CTA buttons                                |
+| "+" add button             | 50%    | Circle                                          |
 
 **Pattern:** Circular for people/identities, rounded-rect for content/containers.
 
@@ -570,6 +574,7 @@ Tapping search bar:
 - The search field border is the only depth cue (and it's a 1px line, not a shadow)
 
 **Elevation is communicated through:**
+
 - The modal overlay (New Chat screen dims the background)
 - Z-ordering during transitions
 - That's it.
@@ -580,15 +585,15 @@ Tapping search bar:
 
 While the screenshots show light mode only, the design system implies these dark mode mappings:
 
-| Light Token | Dark Equivalent |
-|-------------|-----------------|
-| `#FFFFFF` background | `#000000` (true black, OLED-friendly) |
-| `#000000` text | `#FFFFFF` |
-| `#8E8E93` secondary | `#98989D` |
-| `#F5F5F5` input bg | `#1C1C1E` |
-| `#E5E5EA` borders | `#38383A` |
-| `#FF2D78` accent | `#FF2D78` (unchanged — hot pink works on dark) |
-| `#2D7CF6` action | `#4D9FFF` (slightly brighter for dark contrast) |
+| Light Token          | Dark Equivalent                                 |
+| -------------------- | ----------------------------------------------- |
+| `#FFFFFF` background | `#000000` (true black, OLED-friendly)           |
+| `#000000` text       | `#FFFFFF`                                       |
+| `#8E8E93` secondary  | `#98989D`                                       |
+| `#F5F5F5` input bg   | `#1C1C1E`                                       |
+| `#E5E5EA` borders    | `#38383A`                                       |
+| `#FF2D78` accent     | `#FF2D78` (unchanged — hot pink works on dark)  |
+| `#2D7CF6` action     | `#4D9FFF` (slightly brighter for dark contrast) |
 
 ---
 
@@ -614,18 +619,23 @@ Screen size adaptation:
 ## 13. MICRO-INTERACTION DETAILS
 
 ### Tab underline animation
+
 The pink underline bar smoothly translates horizontally when switching tabs, scaling its width to match the new tab's text width. Duration ~250ms with ease-in-out.
 
 ### Long press on chat item
+
 Likely reveals a context menu (iOS style: blurred background, menu pops from the pressed item with spring animation). Options might include: Pin, Mute, Archive, Delete.
 
 ### Avatar carousel scroll
+
 Uses deceleration rate of ~0.998 (standard iOS momentum). No "snap to item" behavior — items can rest at any position. The partial visibility of the last item on the right serves as a scroll affordance.
 
 ### Message badge (unread indicator)
+
 The "3h" timestamp badge would likely be replaced or accompanied by an unread count badge (blue filled circle with white number) when there are unread messages.
 
 ### Pull to refresh
+
 Standard iOS pull-to-refresh with a subtle spinner appearing above the content. No custom animation — follows system convention.
 
 ---
@@ -635,51 +645,53 @@ Standard iOS pull-to-refresh with a subtle spinner appearing above the content. 
 ```css
 :root {
   /* Colors */
-  --color-bg-primary: #FFFFFF;
-  --color-bg-input: #F5F5F5;
-  --color-bg-badge: #E8EDF2;
-  
+  --color-bg-primary: #ffffff;
+  --color-bg-input: #f5f5f5;
+  --color-bg-badge: #e8edf2;
+
   --color-text-primary: #000000;
-  --color-text-secondary: #8E8E93;
-  --color-text-placeholder: #C7C7CC;
-  --color-text-inverse: #FFFFFF;
-  
-  --color-accent-pink: #FF2D78;
-  --color-action-blue: #2D7CF6;
-  --color-status-online: #34C759;
-  
-  --color-border-default: #E5E5EA;
-  --color-border-subtle: #F0F0F0;
-  --color-icon-secondary: #C7C7CC;
-  --color-icon-primary: #3C3C43;
-  
+  --color-text-secondary: #8e8e93;
+  --color-text-placeholder: #c7c7cc;
+  --color-text-inverse: #ffffff;
+
+  --color-accent-pink: #ff2d78;
+  --color-action-blue: #2d7cf6;
+  --color-status-online: #34c759;
+
+  --color-border-default: #e5e5ea;
+  --color-border-subtle: #f0f0f0;
+  --color-icon-secondary: #c7c7cc;
+  --color-icon-primary: #3c3c43;
+
   /* Typography */
-  --font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Segoe UI", Roboto, sans-serif;
   --font-size-title: 34px;
   --font-size-heading: 17px;
   --font-size-body: 16px;
   --font-size-caption: 14px;
   --font-size-small: 13px;
   --font-size-tiny: 12px;
-  
+
   --font-weight-bold: 700;
   --font-weight-semibold: 600;
   --font-weight-regular: 400;
-  
+
   /* Spacing */
   --spacing-screen-padding: 16px;
   --spacing-section-gap: 24px;
   --spacing-list-item-padding: 16px;
   --spacing-carousel-gap: 16px;
   --spacing-inline-gap: 12px;
-  
+
   /* Radii */
   --radius-thumbnail: 12px;
   --radius-circle: 50%;
   --radius-input: 12px;
   --radius-pill: 16px;
   --radius-badge: 10px;
-  
+
   /* Sizes */
   --size-avatar-carousel: 64px;
   --size-avatar-list: 40px;
@@ -689,7 +701,7 @@ Standard iOS pull-to-refresh with a subtle spinner appearing above the content. 
   --size-icon-default: 24px;
   --size-icon-small: 20px;
   --size-search-height: 48px;
-  
+
   /* Animation */
   --transition-fast: 150ms ease-out;
   --transition-normal: 250ms ease-in-out;
@@ -720,6 +732,7 @@ Standard iOS pull-to-refresh with a subtle spinner appearing above the content. 
 ## 16. IMPLEMENTATION NOTES FOR CROSS-PLATFORM
 
 ### iOS (SwiftUI / UIKit)
+
 - Use native UINavigationBar styling with large titles
 - SF Symbols for all icons
 - Native UISearchBar with custom styling
@@ -727,6 +740,7 @@ Standard iOS pull-to-refresh with a subtle spinner appearing above the content. 
 - Standard UITableView for chat list (no custom cells needed beyond layout)
 
 ### Android (Jetpack Compose / Material)
+
 - Disable Material elevation/shadows globally
 - Override ripple with opacity feedback
 - Use custom TopAppBar (don't use Material3 default)
@@ -734,12 +748,14 @@ Standard iOS pull-to-refresh with a subtle spinner appearing above the content. 
 - Match iOS spring curves with Android spring animation API
 
 ### React Native
+
 - Use react-native-reanimated for spring animations
 - Custom tab bar component (don't use react-navigation default tabs)
 - FlatList with horizontal scroll for carousel
 - SectionList for chat list with proper spacing
 
 ### Web (React)
+
 - Tailwind CSS maps directly to the token system above
 - Use framer-motion for transitions
 - CSS scroll-snap: none for carousel (free scroll)
@@ -747,4 +763,4 @@ Standard iOS pull-to-refresh with a subtle spinner appearing above the content. 
 
 ---
 
-*This specification provides sufficient detail to recreate the visual and interactive design of this interface in any platform or framework. The key to nailing this aesthetic is restraint — resist the urge to add shadows, gradients, or extra color. Let the avatars be the color. Let the whitespace be the structure.*
+_This specification provides sufficient detail to recreate the visual and interactive design of this interface in any platform or framework. The key to nailing this aesthetic is restraint — resist the urge to add shadows, gradients, or extra color. Let the avatars be the color. Let the whitespace be the structure._

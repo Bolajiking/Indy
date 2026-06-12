@@ -5,6 +5,7 @@
 ## Pre-Testing Setup
 
 ### Environment Variables
+
 - [ ] `.env` file configured with all required vars
 - [ ] `ANTHROPIC_API_KEY` set and valid
 - [ ] `SUPABASE_URL` and `SUPABASE_SERVICE_KEY` set
@@ -13,11 +14,20 @@
 - [ ] Dashboard `.env.local` configured (if running separately)
 
 ### Services Running
+
 - [ ] Redis running (`docker run -d -p 6379:6379 redis:7-alpine` or local)
 - [ ] Supabase database accessible
 - [ ] Schema initialized (`npm run db:init`)
 
+### Quality Gates
+
+- [ ] `npx prettier --check "src/**/*.ts" "tests/**/*.ts"` passes
+- [ ] `npm audit --audit-level=moderate` passes at the root
+- [ ] `cd dashboard && npm audit --audit-level=high` passes
+- [ ] Dashboard moderate audit has no advisories other than the known current Next-bundled PostCSS advisory
+
 ### Optional (for full testing)
+
 - [ ] `TELEGRAM_BOT_TOKEN` set (for Telegram tests)
 - [ ] `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID` set (for WhatsApp tests)
 - [ ] `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` set (for YouTube OAuth)
@@ -27,17 +37,22 @@
 ## 1. Backend API Tests
 
 ### Health Checks
+
 - [ ] Start backend: `npm run dev`
 - [ ] `curl http://localhost:3000/health` returns 200 with status "ok"
 - [ ] `curl http://localhost:3000/health/ready` returns 200
+- [ ] `node --import tsx scripts/smoke-health.ts` passes for API health/readiness
+- [ ] `SMOKE_REQUIRE_DASHBOARD=true node --import tsx scripts/smoke-health.ts` passes when dashboard runtime health is part of the release gate
 - [ ] Health response includes uptime and dependencies
 
 ### Database Connection
+
 - [ ] Health check shows `"database": "ok"`
 - [ ] Can query Supabase from backend
 - [ ] No connection errors in logs
 
 ### Redis Connection
+
 - [ ] Health check shows `"redis": "ok"` (or skipped if jobs disabled)
 - [ ] Job queue can connect
 - [ ] No Redis errors in logs
@@ -47,13 +62,17 @@
 ## 2. Authentication Flow
 
 ### Privy Token Verification
+
 - [ ] Get fresh Privy token from dashboard sign-in
 - [ ] Update `SMOKE_PRIVY_ACCESS_TOKEN` in `.env.local`
 - [ ] Run `npm run smoke:auth`
+- [ ] Run `MPP_TEST_CREATOR_ID=<funded_creator_id> npm run test:mpp`
+- [ ] If MPP fails, inspect `payment_attempts` for `failed`, quoted amount, challenge, receipt, and `InsufficientBalance` details before calling the flow ready
 - [ ] Smoke test passes with 200 response
 - [ ] `/api/auth/me` returns creator profile
 
 ### Creator Registration
+
 - [ ] Sign in to dashboard with NEW Privy account
 - [ ] Registration form appears for unregistered user
 - [ ] Submit registration with display name and niche
@@ -61,6 +80,7 @@
 - [ ] Wallet provisioning starts (status: "wallet_pending" or "active")
 
 ### Creator Profile Access
+
 - [ ] `GET /api/auth/me` returns correct creator data
 - [ ] Creator ID matches database
 - [ ] Privy user ID is stored
@@ -71,6 +91,7 @@
 ## 3. Dashboard Tests
 
 ### Authentication States
+
 - [ ] Start dashboard: `npm run dashboard:dev`
 - [ ] Visit `http://localhost:3001`
 - [ ] Sign in with Privy (Google, Email, or Wallet)
@@ -78,6 +99,7 @@
 - [ ] Creator profile syncs from backend
 
 ### Dashboard Pages
+
 - [ ] **Overview** (`/dashboard`) - Loads with deals and metrics
 - [ ] **Deals** (`/dashboard/deals`) - Shows deal pipeline
 - [ ] **Wallet** (`/dashboard/wallet`) - Shows transactions
@@ -85,12 +107,14 @@
 - [ ] **Settings** (`/dashboard/settings`) - Shows profile and platform connections
 
 ### Wallet Page Specific
+
 - [ ] Funding banner shows if no transactions
 - [ ] Wallet address displayed correctly
 - [ ] Transaction list loads (or shows empty state)
 - [ ] "Get Testnet Funds" link works
 
 ### Settings Page Specific
+
 - [ ] Profile form loads with current data
 - [ ] Can update display name
 - [ ] Can update niche
@@ -102,25 +126,29 @@
 ## 4. Agent Orchestrator Tests
 
 ### Agent Invocation
+
 - [ ] Create test creator in DB or use existing
 - [ ] Call agent via bot handler or direct API
 - [ ] Agent responds with text
 - [ ] No LLM errors in logs
-- [ ] Claude API calls succeed
+- [ ] Configured AI provider calls succeed
 
 ### Tool Execution
+
 - [ ] Agent can call autonomous tools (web_search, enrichment)
 - [ ] Tool results returned to agent
 - [ ] Agent incorporates tool results in response
 - [ ] Credit deduction happens for paid tools
 
 ### Hybrid Tools (Approval Flow)
+
 - [ ] Agent requests approval for hybrid tools (e.g., send_email)
 - [ ] Approval request returned to user
 - [ ] Approval action stored in database
 - [ ] Can approve/skip via bot buttons (if Telegram configured)
 
 ### Memory & Context
+
 - [ ] Agent maintains conversation history
 - [ ] Context assembled from creator profile
 - [ ] Recent messages included in prompts
@@ -133,17 +161,20 @@
 **Note:** Requires `TELEGRAM_BOT_TOKEN` and network access
 
 ### Bot Startup
+
 - [ ] Bot starts successfully (long-polling mode)
 - [ ] No errors in startup logs
 - [ ] Bot responds to `/start` command
 
 ### New User Onboarding
+
 - [ ] Send "Hello" from new Telegram account
 - [ ] Bot creates creator profile
 - [ ] Receives onboarding message
 - [ ] Wallet provisioning triggered in background
 
 ### Commands
+
 - [ ] `scan for deals` - Agent scans and responds
 - [ ] `calendar` - Shows upcoming deadlines
 - [ ] `finances` - Shows financial snapshot
@@ -152,11 +183,13 @@
 - [ ] `my deals` - Shows deal pipeline
 
 ### Message Splitting
+
 - [ ] Long agent responses split correctly (<4096 chars)
 - [ ] All message chunks delivered
 - [ ] Formatting preserved across chunks
 
 ### Approval Buttons
+
 - [ ] Agent requests approval
 - [ ] Inline keyboard buttons appear
 - [ ] Click "Approve" - action executes
@@ -170,10 +203,12 @@
 **Note:** Requires WhatsApp Business API setup
 
 ### Webhook Verification
+
 - [ ] `GET /webhooks/whatsapp` with correct verify_token returns challenge
 - [ ] Incorrect verify_token returns 403
 
 ### Message Receiving
+
 - [ ] Send message to WhatsApp bot number
 - [ ] Webhook receives message
 - [ ] Signature verification passes
@@ -181,6 +216,7 @@
 - [ ] Creator profile created/found
 
 ### Message Sending
+
 - [ ] Bot sends response message
 - [ ] Response delivered to WhatsApp
 - [ ] No send errors in logs
@@ -191,6 +227,7 @@
 ## 7. Platform Integration Tests
 
 ### YouTube OAuth
+
 - [ ] Click "Connect YouTube" in dashboard settings
 - [ ] Redirected to Google OAuth
 - [ ] Complete consent flow
@@ -200,12 +237,14 @@
 - [ ] Access token encrypted in database
 
 ### Manual Platform Connection
+
 - [ ] Use manual token entry form
 - [ ] Enter platform credentials
 - [ ] Connection saved successfully
 - [ ] Shows in connected platforms list
 
 ### Platform Disconnect
+
 - [ ] Click disconnect on connected platform
 - [ ] Confirmation (if implemented)
 - [ ] Platform removed from list
@@ -216,6 +255,7 @@
 ## 8. Wallet & Transaction Tests
 
 ### Wallet Provisioning
+
 - [ ] New creator triggers provisioning
 - [ ] Privy creates server wallet
 - [ ] Policy created with spending limits
@@ -223,6 +263,7 @@
 - [ ] Onboarding status updates to "active"
 
 ### Wallet Retry
+
 - [ ] Force wallet provisioning failure (disconnect network)
 - [ ] Status shows "wallet_pending"
 - [ ] Click "Retry Wallet Setup" in dashboard
@@ -230,6 +271,7 @@
 - [ ] Status updates to "active"
 
 ### Credit Deduction
+
 - [ ] Creator has free credits
 - [ ] Agent uses paid tool
 - [ ] Credits deducted from balance
@@ -237,6 +279,7 @@
 - [ ] Credit balance updates correctly
 
 ### Spending Limits
+
 - [ ] Set per-transaction limit to $0.50
 - [ ] Try tool that costs $1.00
 - [ ] Tool call blocked
@@ -248,12 +291,14 @@
 ## 9. Jobs & Automation Tests
 
 ### Job Queue
+
 - [ ] Jobs system enabled (`ENABLE_JOBS=true`)
 - [ ] Redis connection established
 - [ ] Workers start successfully
 - [ ] No queue errors in logs
 
 ### Morning Scan
+
 - [ ] Job scheduled for 6:00 AM
 - [ ] OR trigger manually: `bullmq run morning-scan`
 - [ ] Job executes for creators with niche
@@ -261,6 +306,7 @@
 - [ ] Deals saved to database
 
 ### Morning Brief
+
 - [ ] Job scheduled for 7:00 AM
 - [ ] OR trigger manually
 - [ ] Brief generated for each creator
@@ -268,6 +314,7 @@
 - [ ] Brief includes deals, calendar, finances
 
 ### Invoice Reminders
+
 - [ ] Create overdue invoice
 - [ ] Job triggers on Monday 10 AM
 - [ ] Reminder sent via bot
@@ -278,23 +325,27 @@
 ## 10. API Route Tests
 
 ### Deals API
+
 - [ ] `GET /api/deals` returns creator's deals
 - [ ] `POST /api/deals` creates new deal
 - [ ] `PATCH /api/deals/:id` updates deal
 - [ ] Unauthorized access blocked (401)
 
 ### Platforms API
+
 - [ ] `GET /api/platforms` returns connections
 - [ ] `POST /api/platforms/connect` saves manual connection
 - [ ] `DELETE /api/platforms/:platform` removes connection
 - [ ] OAuth routes work (tested above)
 
 ### Wallet API
+
 - [ ] `GET /api/wallet/transactions` returns transactions
 - [ ] Pagination works (`?limit=10`)
 - [ ] Filtered by creator correctly
 
 ### Reports API
+
 - [ ] `GET /api/reports/financial` returns snapshot
 - [ ] `GET /api/reports/analytics` aggregates platform data
 - [ ] `GET /api/reports/calendar` shows deadlines
@@ -305,24 +356,28 @@
 ## 11. Error Handling Tests
 
 ### Invalid Auth
+
 - [ ] Request without token returns 401
 - [ ] Invalid/expired token returns 401
 - [ ] Wrong creator's data blocked
 
 ### Invalid Input
+
 - [ ] Malformed JSON returns 400
 - [ ] Missing required fields returns 400
 - [ ] Invalid deal stage returns 400
 
 ### Rate Limiting
+
 - [ ] Rapid requests trigger rate limit
 - [ ] 429 status returned
 - [ ] Retry-After header included
 
 ### Service Failures
+
 - [ ] Database down - graceful error
 - [ ] Redis down - jobs disabled but API works
-- [ ] Claude API down - error returned to user
+- [ ] Configured AI provider down - error returned to user
 - [ ] No crashes or panics
 
 ---
@@ -330,12 +385,14 @@
 ## 12. Integration Tests (Automated)
 
 ### Test Suite
+
 - [ ] Run `npm test`
 - [ ] All test files pass
 - [ ] No flaky tests
 - [ ] Coverage reasonable (>70%)
 
 ### Specific Test Files
+
 - [ ] `tests/integration/bot-to-agent.test.ts` - Passes
 - [ ] `tests/integration/full-flow.test.ts` - Passes
 - [ ] `tests/unit/api/*.test.ts` - All pass
@@ -347,17 +404,20 @@
 ## 13. Performance Tests
 
 ### Response Times
+
 - [ ] Health check < 100ms
 - [ ] `/api/auth/me` < 200ms
 - [ ] `/api/deals` < 300ms
 - [ ] Agent response < 5s (with tools)
 
 ### Load
+
 - [ ] 10 concurrent requests handled
 - [ ] No timeouts under normal load
 - [ ] Memory usage stable
 
 ### Database
+
 - [ ] Queries use indexes
 - [ ] No N+1 query issues
 - [ ] Connection pool stable
@@ -367,21 +427,25 @@
 ## 14. Security Tests
 
 ### Authentication
+
 - [ ] Can't access other creator's data
 - [ ] JWT verification works
 - [ ] Expired tokens rejected
 
 ### Secrets
+
 - [ ] Platform tokens encrypted at rest
 - [ ] No secrets in logs
 - [ ] No secrets in error messages
 
 ### Webhooks
+
 - [ ] WhatsApp signature verification works
 - [ ] Invalid signatures rejected
 - [ ] Telegram webhooks validated
 
 ### Spending Controls
+
 - [ ] Can't exceed per-transaction limit
 - [ ] Can't exceed daily limit
 - [ ] Can't exceed monthly limit
@@ -391,18 +455,21 @@
 ## 15. Build & Deployment Tests
 
 ### Backend Build
+
 - [ ] `npm run build` succeeds
 - [ ] No TypeScript errors
 - [ ] `dist/` directory created
 - [ ] `node dist/index.js` runs
 
 ### Dashboard Build
+
 - [ ] `cd dashboard && npm run build` succeeds
 - [ ] No Next.js errors
 - [ ] `.next/` directory created
 - [ ] `npm run start` works
 
 ### Docker Build
+
 - [ ] Backend Dockerfile builds: `docker build -t indyfren-api .`
 - [ ] Dashboard Dockerfile builds
 - [ ] `docker-compose up` starts all services
@@ -413,19 +480,22 @@
 ## Issues Found
 
 ### Critical Issues
-*Record any critical bugs that block core functionality*
+
+_Record any critical bugs that block core functionality_
 
 - [ ] Issue 1:
 - [ ] Issue 2:
 
 ### Medium Issues
-*Record bugs that affect user experience but have workarounds*
+
+_Record bugs that affect user experience but have workarounds_
 
 - [ ] Issue 1:
 - [ ] Issue 2:
 
 ### Minor Issues
-*Record cosmetic issues or minor bugs*
+
+_Record cosmetic issues or minor bugs_
 
 - [ ] Issue 1:
 - [ ] Issue 2:
@@ -434,8 +504,8 @@
 
 ## Test Results Summary
 
-**Date:** ___________
-**Tester:** ___________
+**Date:**
+**Tester:**
 
 **Backend API:** ☐ Pass ☐ Fail ☐ With Issues
 **Dashboard:** ☐ Pass ☐ Fail ☐ With Issues
@@ -448,7 +518,4 @@
 
 **Overall:** ☐ Ready for Production ☐ Needs Fixes ☐ Major Issues
 
-**Notes:**
-___________________________________________________________________________
-___________________________________________________________________________
-___________________________________________________________________________
+**Notes:** Add release notes, blockers, and owner follow-ups here.
