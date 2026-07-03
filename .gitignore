@@ -13,3 +13,4 @@ dashboard/tsconfig.tsbuildinfo
 .superpowers/
 .vscode/
 .playwright-mcp/
+.worktrees/
