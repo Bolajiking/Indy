@@ -18,6 +18,13 @@ export interface AuthContext {
 export const requirePrivyAuth = createMiddleware<{
   Variables: { auth: AuthContext };
 }>(async (c, next) => {
+  // A parent router may authenticate before applying creator-scoped policies.
+  // Reuse only request-local auth established by that trusted middleware.
+  if (c.get("auth")) {
+    await next();
+    return;
+  }
+
   const authorization = c.req.header("Authorization");
 
   if (!authorization?.startsWith("Bearer ")) {
