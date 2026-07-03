@@ -1,7 +1,7 @@
 -- Indyfren Database Schema
 -- Run via: npm run db:init
--- Ordered migrations are authoritative for upgrades; this is the clean-install snapshot
--- of all migrations through 0002_public_launch_readiness.sql.
+-- Ordered migrations are authoritative for upgrades; this clean-install snapshot is generated
+-- and must be updated (including ledger checksums below) with every migration.
 
 -- Creators table
 CREATE TABLE IF NOT EXISTS creators (
@@ -356,3 +356,16 @@ RETURNS TABLE(
   WHERE creators.id = creator_id
   RETURNING creators.id, creators.free_credits_remaining_cents;
 $$ LANGUAGE sql VOLATILE;
+
+-- Snapshot-to-migration handoff. A database installed from this file is current
+-- through 0002 and can immediately use db:migrate or db:migrate:check.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version TEXT PRIMARY KEY,
+  checksum TEXT NOT NULL,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO schema_migrations (version, checksum) VALUES
+  ('0001', 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94'),
+  ('0002', '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906')
+ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum;

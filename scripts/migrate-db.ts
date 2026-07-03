@@ -349,6 +349,13 @@ const LEDGER_SQL = `CREATE TABLE IF NOT EXISTS schema_migrations (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )`;
 
+// Stable session-level lock key for all Indy schema migration decisions.
+export const MIGRATION_ADVISORY_LOCK_KEY = 1229866073;
+const LOCK_SQL = "SELECT pg_advisory_lock($1)";
+const UNLOCK_SQL = "SELECT pg_advisory_unlock($1)";
+const LEDGER_EXISTS_SQL =
+  "SELECT to_regclass(current_schema() || '.schema_migrations') AS ledger";
+
 export const BASELINE_INVENTORY_SQL = `
 -- baseline_schema_inventory
 SELECT 'table'::text AS kind, c.relname::text AS identity, 'present'::text AS definition
@@ -455,6 +462,21 @@ export function verifyBaselineInventory(
       );
     }
   }
+  const expectedPolicies = new Set(
+    BASELINE_MANIFEST.filter(({ kind }) => kind === "policy").map(
+      ({ identity }) => identity,
+    ),
+  );
+  for (const object of inventory) {
+    const [table] = object.identity.split(".");
+    if (
+      object.kind === "policy" &&
+      BASELINE_TABLES.includes(table as (typeof BASELINE_TABLES)[number]) &&
+      !expectedPolicies.has(object.identity)
+    ) {
+      problems.push(`unexpected policy ${object.identity}`);
+    }
+  }
   if (problems.length > 0) {
     throw new Error(`Baseline verification failed: ${problems.join("; ")}`);
   }
@@ -470,11 +492,65 @@ export async function runMigrations(
   migrations: readonly Migration[],
   options: MigrationOptions = {},
 ): Promise<{ applied: string[] }> {
-  await db.query(LEDGER_SQL);
-  const { rows } = await db.query<{ version: string; checksum: string }>(
-    "SELECT version, checksum FROM schema_migrations ORDER BY version",
-  );
+  await db.query(LOCK_SQL, [MIGRATION_ADVISORY_LOCK_KEY]);
+  let result: { applied: string[] } | undefined;
+  let primaryError: unknown;
+  try {
+    result = await runMigrationsWithLock(db, migrations, options);
+  } catch (error) {
+    primaryError = error;
+  }
+  try {
+    await db.query(UNLOCK_SQL, [MIGRATION_ADVISORY_LOCK_KEY]);
+  } catch (unlockError) {
+    if (primaryError !== undefined) {
+      throw new AggregateError(
+        [primaryError, unlockError],
+        errorMessage(primaryError),
+        { cause: primaryError },
+      );
+    }
+    throw unlockError;
+  }
+  if (primaryError !== undefined) throw primaryError;
+  return result!;
+}
+
+async function runMigrationsWithLock(
+  db: DatabaseClient,
+  migrations: readonly Migration[],
+  options: MigrationOptions,
+): Promise<{ applied: string[] }> {
+  let rows: { version: string; checksum: string }[];
+  if (options.checkOnly) {
+    const existence = await db.query<{ ledger: string | null }>(
+      LEDGER_EXISTS_SQL,
+    );
+    rows = existence.rows[0]?.ledger
+      ? (
+          await db.query<{ version: string; checksum: string }>(
+            "SELECT version, checksum FROM schema_migrations ORDER BY version",
+          )
+        ).rows
+      : [];
+  } else {
+    await db.query(LEDGER_SQL);
+    rows = (
+      await db.query<{ version: string; checksum: string }>(
+        "SELECT version, checksum FROM schema_migrations ORDER BY version",
+      )
+    ).rows;
+  }
   const recorded = new Map(rows.map((row) => [row.version, row.checksum]));
+  const localVersions = new Set(migrations.map(({ version }) => version));
+  const ahead = rows
+    .map(({ version }) => version)
+    .filter((version) => !localVersions.has(version));
+  if (ahead.length > 0) {
+    throw new Error(
+      `Database is ahead of local migrations; unknown versions: ${ahead.join(", ")}`,
+    );
+  }
 
   for (const migration of migrations) {
     const checksum = recorded.get(migration.version);
@@ -511,11 +587,21 @@ export async function runMigrations(
       await db.query("COMMIT");
       applied.push(migration.version);
     } catch (error) {
-      await db.query("ROLLBACK");
+      try {
+        await db.query("ROLLBACK");
+      } catch (rollbackError) {
+        throw new AggregateError([error, rollbackError], errorMessage(error), {
+          cause: error,
+        });
+      }
       throw error;
     }
   }
   return { applied };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function main(): Promise<void> {

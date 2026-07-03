@@ -77,9 +77,38 @@ describe("database migration files", () => {
       "tsx scripts/migrate-db.ts --check",
     );
   });
+
+  it("records exact migration checksums in the clean-install snapshot", async () => {
+    const schema = await readFile(
+      resolve(import.meta.dirname, "../../../src/db/schema.sql"),
+      "utf8",
+    );
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const snapshotRows = new Map(
+      [...schema.matchAll(/\('([0-9]{4})',\s*'([a-f0-9]{64})'\)/g)].map(
+        (match) => [match[1], match[2]],
+      ),
+    );
+
+    expect(schema).toMatch(/CREATE TABLE IF NOT EXISTS schema_migrations/i);
+    expect(snapshotRows).toEqual(
+      new Map(migrations.map(({ version, checksum }) => [version, checksum])),
+    );
+  });
 });
 
 describe("database migration runner", () => {
+  it("holds a stable advisory lock around ledger bootstrap and migrations", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const db = new FakeDatabase();
+
+    await runMigrations(db, migrations);
+
+    expect(db.queryEvents[0]).toBe("LOCK");
+    expect(db.queryEvents[1]).toBe("LEDGER_CREATE");
+    expect(db.queryEvents.at(-1)).toBe("UNLOCK");
+  });
+
   it("executes the exact migration files in lexical order and records each transaction", async () => {
     const migrations = await discoverMigrations(migrationsDirectory);
     const db = new FakeDatabase();
@@ -116,6 +145,85 @@ describe("database migration runner", () => {
       "ROLLBACK",
     ]);
     expect(db.applied.has("0002")).toBe(false);
+    expect(db.queryEvents.at(-1)).toBe("UNLOCK");
+  });
+
+  it("keeps check mode read-only when the ledger is absent", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const db = new FakeDatabase({}, { ledgerExists: false });
+
+    await expect(
+      runMigrations(db, migrations, { checkOnly: true }),
+    ).rejects.toThrow(/pending migrations.*0001.*0002/i);
+    expect(db.queryEvents).toEqual(["LOCK", "LEDGER_EXISTS", "UNLOCK"]);
+    expect(db.transactionEvents).toEqual([]);
+  });
+
+  it("reads but never mutates an existing ledger in check mode", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const db = new FakeDatabase(
+      Object.fromEntries(
+        migrations.map(({ version, checksum }) => [version, checksum]),
+      ),
+      { ledgerExists: true },
+    );
+
+    expect(await runMigrations(db, migrations, { checkOnly: true })).toEqual({
+      applied: [],
+    });
+    expect(db.queryEvents).toEqual([
+      "LOCK",
+      "LEDGER_EXISTS",
+      "LEDGER_SELECT",
+      "UNLOCK",
+    ]);
+    expect(db.transactionEvents).toEqual([]);
+  });
+
+  it.each([false, true])(
+    "rejects database-ahead ledger versions when checkOnly=%s",
+    async (checkOnly) => {
+      const migrations = await discoverMigrations(migrationsDirectory);
+      const db = new FakeDatabase(
+        {
+          ...Object.fromEntries(
+            migrations.map(({ version, checksum }) => [version, checksum]),
+          ),
+          "9999": "future-checksum",
+        },
+        { ledgerExists: true },
+      );
+
+      await expect(
+        runMigrations(db, migrations, { checkOnly }),
+      ).rejects.toThrow(/database.*ahead.*9999/i);
+      expect(db.queryEvents.at(-1)).toBe("UNLOCK");
+    },
+  );
+
+  it("preserves the migration error when rollback also fails", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const db = new FakeDatabase(
+      {},
+      { failSql: migrations[0].sql, failRollback: true },
+    );
+    let caught: unknown;
+    try {
+      await runMigrations(db, migrations);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(AggregateError);
+    expect((caught as AggregateError).message).toMatch(/migration failed/i);
+    expect((caught as AggregateError).cause).toBeInstanceOf(Error);
+    expect((caught as AggregateError).errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ message: "migration failed" }),
+        expect.objectContaining({ message: "rollback failed" }),
+      ]),
+    );
+    expect(db.queryEvents.at(-1)).toBe("UNLOCK");
   });
 
   it("does not execute actual migration SQL again on a second run", async () => {
@@ -350,6 +458,22 @@ describe("baseline definition verification", () => {
       );
     }
   });
+
+  it("rejects an unexpected permissive anon policy during adoption", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const catalog = catalogFromManifest();
+    catalog.push({
+      kind: "policy",
+      identity: "creators.extra_anon_read",
+      definition: "permissive;select;{anon};using=true;check=true",
+    });
+    const db = new FakeDatabase({}, { catalog });
+
+    await expect(
+      runMigrations(db, migrations, { adoptBaseline: true }),
+    ).rejects.toThrow(/unexpected policy creators\.extra_anon_read/i);
+    expect(db.queryEvents.at(-1)).toBe("UNLOCK");
+  });
 });
 
 function catalogFromManifest(): CatalogObject[] {
@@ -374,35 +498,62 @@ function escapeRegExp(value: string): string {
 }
 
 class FakeDatabase implements DatabaseClient {
+  readonly queryEvents: string[] = [];
   readonly transactionEvents: string[] = [];
   readonly applied: Map<string, string>;
   private readonly failSql?: string;
   private readonly catalog: CatalogObject[];
+  private readonly failRollback: boolean;
+  private ledgerExists: boolean;
   private stagedInsert?: [string, string];
 
   constructor(
     applied: Record<string, string> = {},
-    options: { failSql?: string; catalog?: CatalogObject[] } = {},
+    options: {
+      failSql?: string;
+      catalog?: CatalogObject[];
+      failRollback?: boolean;
+      ledgerExists?: boolean;
+    } = {},
   ) {
     this.applied = new Map(Object.entries(applied));
     this.failSql = options.failSql;
     this.catalog = options.catalog ?? [];
+    this.failRollback = options.failRollback ?? false;
+    this.ledgerExists = options.ledgerExists ?? Object.keys(applied).length > 0;
   }
 
   async query<T extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
     values: readonly unknown[] = [],
   ): Promise<{ rows: T[] }> {
+    if (text.startsWith("SELECT pg_advisory_lock")) {
+      this.queryEvents.push("LOCK");
+      return { rows: [] };
+    }
+    if (text.startsWith("SELECT pg_advisory_unlock")) {
+      this.queryEvents.push("UNLOCK");
+      return { rows: [] };
+    }
+    if (text.startsWith("SELECT to_regclass")) {
+      this.queryEvents.push("LEDGER_EXISTS");
+      return {
+        rows: [
+          { ledger: this.ledgerExists ? "schema_migrations" : null },
+        ] as unknown as T[],
+      };
+    }
     if (text.includes("baseline_schema_inventory")) {
       this.transactionEvents.push("CATALOG");
-      return { rows: this.catalog as T[] };
+      return { rows: this.catalog as unknown as T[] };
     }
     if (text.startsWith("SELECT version, checksum")) {
+      this.queryEvents.push("LEDGER_SELECT");
       return {
         rows: [...this.applied].map(([version, checksum]) => ({
           version,
           checksum,
-        })) as T[],
+        })) as unknown as T[],
       };
     }
     if (text === "BEGIN") {
@@ -418,6 +569,7 @@ class FakeDatabase implements DatabaseClient {
     if (text === "ROLLBACK") {
       this.transactionEvents.push(text);
       this.stagedInsert = undefined;
+      if (this.failRollback) throw new Error("rollback failed");
       return { rows: [] };
     }
     if (text.startsWith("INSERT INTO schema_migrations")) {
@@ -427,6 +579,8 @@ class FakeDatabase implements DatabaseClient {
       return { rows: [] };
     }
     if (text.startsWith("CREATE TABLE IF NOT EXISTS schema_migrations")) {
+      this.queryEvents.push("LEDGER_CREATE");
+      this.ledgerExists = true;
       return { rows: [] };
     }
     this.transactionEvents.push(text);
