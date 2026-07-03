@@ -1,4 +1,4 @@
-import type { Env } from "./env.js";
+import type { Env } from "./env-schema.js";
 
 export type ProductionEnvironment = Pick<
   Env,

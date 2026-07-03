@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { envSchema } from "../../../src/config/env.js";
+import { envSchema } from "../../../src/config/env-schema.js";
 import {
   validateProductionEnv,
   type ProductionEnvironment,
