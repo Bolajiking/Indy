@@ -8,6 +8,29 @@ export interface RateLimitStore {
   close?(): Promise<void>;
 }
 
+export interface RateLimitRuntimeConfig {
+  nodeEnv: "development" | "production" | "test";
+  distributed: boolean;
+  redisUrl: string;
+}
+
+export function createConfiguredRateLimitStore(
+  config: RateLimitRuntimeConfig,
+  createRedisStore: (redisUrl: string) => RateLimitStore = (redisUrl) =>
+    new RedisRateLimitStore(redisUrl),
+): RateLimitStore {
+  if (config.nodeEnv === "production" && !config.distributed) {
+    throw new Error("Distributed rate limiting must be enabled in production");
+  }
+  if (config.distributed) {
+    if (!config.redisUrl.trim()) {
+      throw new Error("REDIS_URL is required for distributed rate limiting");
+    }
+    return createRedisStore(config.redisUrl);
+  }
+  return new InMemoryRateLimitStore();
+}
+
 interface MemoryBucket {
   count: number;
   resetAt: number;

@@ -5,6 +5,7 @@ vi.mock("../../../src/auth/session.js", () => ({
   authenticateAccessToken: vi.fn(),
 }));
 import {
+  createConfiguredRateLimitStore,
   InMemoryRateLimitStore,
   type RateLimitStore,
 } from "../../../src/api/rate-limit-store.js";
@@ -45,6 +46,37 @@ describe("distributed API rate limiting", () => {
 
     expect((await app.request("/health")).status).toBe(200);
     expect((await app.request("/health")).status).toBe(429);
+  });
+
+  it("never creates a process-local production rate-limit store", () => {
+    expect(() =>
+      createConfiguredRateLimitStore({
+        nodeEnv: "production",
+        distributed: false,
+        redisUrl: "redis://redis:6379",
+      }),
+    ).toThrow(/distributed rate limiting/i);
+
+    const redisStore: RateLimitStore = {
+      increment: async () => ({ count: 1, resetAt: Date.now() + 60_000 }),
+    };
+    expect(
+      createConfiguredRateLimitStore(
+        {
+          nodeEnv: "production",
+          distributed: true,
+          redisUrl: "redis://redis:6379",
+        },
+        () => redisStore,
+      ),
+    ).toBe(redisStore);
+    expect(
+      createConfiguredRateLimitStore({
+        nodeEnv: "test",
+        distributed: false,
+        redisUrl: "",
+      }),
+    ).toBeInstanceOf(InMemoryRateLimitStore);
   });
 
   it("cannot bypass an IP quota by rotating spoofed forwarding headers", async () => {
@@ -180,6 +212,99 @@ describe("distributed API rate limiting", () => {
     expect(authenticateAccessToken).toHaveBeenCalledTimes(1);
     expect((await request()).status).toBe(429);
     expect(authenticateAccessToken).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not require creator auth for the signed platform OAuth callback", async () => {
+    const app = createApiServer({
+      rateLimitStore: new InMemoryRateLimitStore(),
+      anonymousPolicy: { ...oneRequest, name: "outer", limit: 100 },
+      getSocketAddress: () => "203.0.113.20",
+    });
+    installCreatorRateLimits(app, {
+      store: new InMemoryRateLimitStore(),
+    });
+    app.get("/api/platforms/oauth/:platform/callback", (c) =>
+      c.text("provider callback reached"),
+    );
+
+    const response = await app.request(
+      "/api/platforms/oauth/youtube/callback?code=provider-code&state=signed",
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("provider callback reached");
+    expect(authenticateAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("uses a conservative creator quota for Composio OAuth initiation", async () => {
+    const app = createApiServer({
+      rateLimitStore: new InMemoryRateLimitStore(),
+      anonymousPolicy: { ...oneRequest, name: "outer", limit: 100 },
+      getSocketAddress: () => "203.0.113.21",
+    });
+    installCreatorRateLimits(app, {
+      store: new InMemoryRateLimitStore(),
+    });
+    app.post("/api/connections/:toolkit/initiate", (c) => c.text("started"));
+
+    const request = () =>
+      app.request("/api/connections/gmail/initiate", {
+        method: "POST",
+        headers: { Authorization: "Bearer valid-token" },
+      });
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      expect((await request()).status).toBe(200);
+    }
+    expect((await request()).status).toBe(429);
+  });
+
+  it("applies creator quotas to existing-creator auth routes only", async () => {
+    const app = createApiServer({
+      rateLimitStore: new InMemoryRateLimitStore(),
+      anonymousPolicy: { ...oneRequest, name: "outer", limit: 100 },
+      getSocketAddress: () => "203.0.113.22",
+    });
+    installCreatorRateLimits(app, {
+      store: new InMemoryRateLimitStore(),
+      policy: oneRequest,
+    });
+    app.get("/api/auth/me", (c) => c.text("profile"));
+    app.post("/api/auth/register", (c) => c.text("register"));
+
+    const profileRequest = () =>
+      app.request("/api/auth/me", {
+        headers: { Authorization: "Bearer valid-token" },
+      });
+    expect((await profileRequest()).status).toBe(200);
+    expect((await profileRequest()).status).toBe(429);
+
+    vi.mocked(authenticateAccessToken).mockResolvedValue({
+      creatorId: null,
+      privyUserId: "did:privy:new-user",
+    });
+    const newUserApp = createApiServer({
+      rateLimitStore: new InMemoryRateLimitStore(),
+      anonymousPolicy: { ...oneRequest, name: "outer-new", limit: 100 },
+      getSocketAddress: () => "203.0.113.23",
+    });
+    installCreatorRateLimits(newUserApp, {
+      store: new InMemoryRateLimitStore(),
+      policy: oneRequest,
+    });
+    newUserApp.get("/api/auth/me", (c) => c.text("unregistered profile"));
+    newUserApp.post("/api/auth/register", (c) => c.text("register"));
+
+    expect(
+      (
+        await newUserApp.request("/api/auth/me", {
+          headers: { Authorization: "Bearer valid-token" },
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (await newUserApp.request("/api/auth/register", { method: "POST" }))
+        .status,
+    ).toBe(200);
   });
 
   it("gives agent messages a stricter creator policy than authenticated reads", async () => {

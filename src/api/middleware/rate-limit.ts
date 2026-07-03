@@ -5,7 +5,12 @@ import {
   InMemoryRateLimitStore,
   type RateLimitStore,
 } from "../rate-limit-store.js";
-import { getRequiredCreatorId, requireCreatorAuth } from "./auth.js";
+import {
+  getAuthContext,
+  getRequiredCreatorId,
+  requireCreatorAuth,
+  requirePrivyAuth,
+} from "./auth.js";
 
 const log = pino({ name: "api:rate-limit" });
 
@@ -51,6 +56,12 @@ export const RATE_LIMIT_POLICIES = {
   agentMessage: {
     name: "creator-agent-message",
     limit: 12,
+    windowMs: 60_000,
+    failClosed: true,
+  },
+  creatorOAuthStart: {
+    name: "creator-oauth-start",
+    limit: 10,
     windowMs: 60_000,
     failClosed: true,
   },
@@ -192,6 +203,9 @@ export function creatorPolicyFor(context: Context): RateLimitPolicy {
   if (method === "POST" && path === "/api/agent/messages") {
     return RATE_LIMIT_POLICIES.agentMessage;
   }
+  if (method === "POST" && /^\/api\/connections\/[^/]+\/initiate$/.test(path)) {
+    return RATE_LIMIT_POLICIES.creatorOAuthStart;
+  }
   if (path === "/api/reports" || path.startsWith("/api/reports/")) {
     return RATE_LIMIT_POLICIES.reportGeneration;
   }
@@ -213,20 +227,30 @@ export function createBoundedFallbackStore() {
   return new InMemoryRateLimitStore({ maxEntries: 5_000 });
 }
 
-const DEFAULT_CREATOR_PATHS = [
-  "/api/agent",
-  "/api/deals",
+const DEFAULT_CREATOR_PATTERNS = [
+  "/api/agent/*",
+  "/api/deals/*",
+  "/api/reports/*",
+  "/api/wallet/*",
+  "/api/messaging-links/*",
+  "/api/connections/*",
   "/api/platforms",
-  "/api/reports",
-  "/api/wallet",
-  "/api/messaging-links",
-  "/api/connections",
+  "/api/platforms/connect",
+  "/api/platforms/oauth/providers",
+  "/api/platforms/oauth/:platform/start",
+  "/api/platforms/:platform",
+];
+
+const DEFAULT_OPTIONAL_CREATOR_PATTERNS = [
+  "/api/auth/me/*",
+  "/api/auth/onboarding",
 ];
 
 interface InstallCreatorRateLimitsOptions {
   store: RateLimitStore;
   policy?: PolicyResolver;
   paths?: string[];
+  optionalPaths?: string[];
 }
 
 /** Installs authentication before creator-keyed quotas and mounted routers. */
@@ -244,7 +268,28 @@ export function installCreatorRateLimits(
       )}`,
   });
 
-  for (const path of options.paths ?? DEFAULT_CREATOR_PATHS) {
-    app.use(`${path}/*`, requireCreatorAuth, limiter);
+  const requiredPatterns = options.paths
+    ? options.paths.map((path) => `${path}/*`)
+    : DEFAULT_CREATOR_PATTERNS;
+  for (const pattern of requiredPatterns) {
+    app.use(pattern, requireCreatorAuth, limiter);
+  }
+
+  const optionalCreatorLimiter: MiddlewareHandler = async (context, next) => {
+    await requirePrivyAuth(context, async () => {
+      const auth = getAuthContext(
+        context as unknown as Parameters<typeof getAuthContext>[0],
+      );
+      if (!auth.creatorId || auth.creatorResolutionError) {
+        await next();
+        return;
+      }
+      const response = await limiter(context, next);
+      if (response) context.res = response;
+    });
+  };
+  for (const pattern of options.optionalPaths ??
+    DEFAULT_OPTIONAL_CREATOR_PATTERNS) {
+    app.use(pattern, optionalCreatorLimiter);
   }
 }

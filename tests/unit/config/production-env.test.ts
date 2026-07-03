@@ -107,7 +107,7 @@ function productionEnv(
     WHATSAPP_VERIFY_TOKEN: "",
     WHATSAPP_WEBHOOK_SECRET: "",
     ENABLE_JOBS: true,
-    ENABLE_DISTRIBUTED_RATE_LIMIT: false,
+    ENABLE_DISTRIBUTED_RATE_LIMIT: true,
     REDIS_URL: "redis://redis:6379",
     PLATFORM_ENCRYPTION_KEY_VERSION: "v1",
     PLATFORM_ENCRYPTION_KEY_V1: "platform-encryption-key",
@@ -190,7 +190,7 @@ describe("validateProductionEnv", () => {
     ).toThrow(/TELEGRAM_BOT_TOKEN/);
   });
 
-  it("requires Redis only when jobs or distributed rate limiting are enabled", () => {
+  it("requires distributed rate limiting and Redis in production", () => {
     expect(() =>
       validateProductionEnv(
         productionEnv({
@@ -199,7 +199,16 @@ describe("validateProductionEnv", () => {
           REDIS_URL: "",
         }),
       ),
-    ).not.toThrow();
+    ).toThrow(/ENABLE_DISTRIBUTED_RATE_LIMIT/);
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({
+          ENABLE_JOBS: false,
+          ENABLE_DISTRIBUTED_RATE_LIMIT: false,
+          REDIS_URL: "redis://redis:6379",
+        }),
+      ),
+    ).toThrow(/ENABLE_DISTRIBUTED_RATE_LIMIT/);
     expect(() =>
       validateProductionEnv(productionEnv({ REDIS_URL: "" })),
     ).toThrow(/REDIS_URL/);

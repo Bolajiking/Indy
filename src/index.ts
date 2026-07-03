@@ -1,10 +1,7 @@
 import { serve } from "@hono/node-server";
 import pino from "pino";
 import { createApiServer } from "./api/server.js";
-import {
-  InMemoryRateLimitStore,
-  RedisRateLimitStore,
-} from "./api/rate-limit-store.js";
+import { createConfiguredRateLimitStore } from "./api/rate-limit-store.js";
 import { installCreatorRateLimits } from "./api/middleware/rate-limit.js";
 import { agent } from "./api/routes/agent.js";
 import { auth } from "./api/routes/auth.js";
@@ -42,9 +39,11 @@ async function main() {
     log.error({ err }, "MCP server initialization failed"),
   );
 
-  const rateLimitStore = env.ENABLE_DISTRIBUTED_RATE_LIMIT
-    ? new RedisRateLimitStore(env.REDIS_URL)
-    : new InMemoryRateLimitStore();
+  const rateLimitStore = createConfiguredRateLimitStore({
+    nodeEnv: env.NODE_ENV,
+    distributed: env.ENABLE_DISTRIBUTED_RATE_LIMIT,
+    redisUrl: env.REDIS_URL,
+  });
   const app = createApiServer({
     rateLimitStore,
     trustedProxyHops: env.TRUSTED_PROXY_HOPS,

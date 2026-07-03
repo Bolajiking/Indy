@@ -145,6 +145,13 @@ export function getProductionEnvIssues(
     }
   }
 
+  if (!config.ENABLE_DISTRIBUTED_RATE_LIMIT) {
+    issues.push({
+      field: "ENABLE_DISTRIBUTED_RATE_LIMIT",
+      message: "must be enabled in production",
+    });
+  }
+
   if (config.ENABLE_JOBS || config.ENABLE_DISTRIBUTED_RATE_LIMIT) {
     requireValue(
       "REDIS_URL",
