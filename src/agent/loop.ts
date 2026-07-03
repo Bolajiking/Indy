@@ -265,7 +265,9 @@ export async function runAgentLoop(
         if (config.executeDynamicTool) {
           // Write actions on a connected account require explicit approval,
           // routed through the same approve/skip flow as hybrid tools.
-          if (config.dynamicToolNeedsApproval?.(toolUse.name, toolInput ?? {})) {
+          if (
+            config.dynamicToolNeedsApproval?.(toolUse.name, toolInput ?? {})
+          ) {
             // execute_app_tool wraps the real action as {slug, arguments} —
             // store the unwrapped slug/args so approval display shows the real
             // action and approval execution can run it by slug directly.

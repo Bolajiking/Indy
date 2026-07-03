@@ -66,8 +66,7 @@ describe("execute_app_tool approval unwrapping in the agent loop", () => {
       dynamicTools: [],
       executeDynamicTool: async () => ({ content: "ok", isError: false }),
       dynamicToolNeedsApproval: (name, input) =>
-        name === "execute_app_tool" &&
-        String(input.slug).includes("SEND"),
+        name === "execute_app_tool" && String(input.slug).includes("SEND"),
     });
 
     expect(result.requiresApproval).toBe(true);
@@ -92,7 +91,9 @@ describe("execute_app_tool approval unwrapping in the agent loop", () => {
       )
       .mockResolvedValueOnce({
         ...toolUseMessage("noop", {}),
-        content: [{ type: "text", text: "Here are your emails", citations: null }],
+        content: [
+          { type: "text", text: "Here are your emails", citations: null },
+        ],
         stop_reason: "end_turn",
       } as Anthropic.Messages.Message);
 
@@ -117,9 +118,15 @@ describe("execute_app_tool approval unwrapping in the agent loop", () => {
 describe("searchCatalog", () => {
   const catalog = [
     { slug: "GMAIL_SEND_EMAIL", description: "Send an email message" },
-    { slug: "GMAIL_GET_VACATION_SETTINGS", description: "Read vacation auto-reply settings" },
+    {
+      slug: "GMAIL_GET_VACATION_SETTINGS",
+      description: "Read vacation auto-reply settings",
+    },
     { slug: "GMAIL_CREATE_LABEL", description: "Create a new label" },
-    { slug: "GMAIL_LIST_LABELS", description: "List all labels in the mailbox" },
+    {
+      slug: "GMAIL_LIST_LABELS",
+      description: "List all labels in the mailbox",
+    },
   ];
 
   it("matches against slug and description, slug-first", () => {

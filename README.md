@@ -1,7 +1,7 @@
 # Indyfren
 
 [![CI/CD](https://github.com/your-org/indyfren/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/indyfren/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-316%20passing-success)](./docs/TEST_RESULTS.md)
+[![Tests](https://img.shields.io/badge/tests-352%20passing-success)](./docs/TEST_RESULTS.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 AI business manager for independent content creators. Manages brand deals, rate negotiations, pitching, financial tracking, and content strategy through Telegram/WhatsApp chat and a companion web dashboard.
@@ -16,14 +16,15 @@ AI business manager for independent content creators. Manages brand deals, rate 
 
 ## 📊 Status
 
-- ⚠️ **Consumer readiness in progress**
+- ⚠️ **Public sandbox beta preparation; staging has not passed live smoke**
 - ✅ Automated unit/build coverage for core backend and dashboard flows
 - ✅ Core agent system operational
 - ✅ Telegram + WhatsApp bots working
 - ✅ Dashboard with Privy auth
 - ⚠️ Wallet provisioning is wired, but paid MPP calls still require funded Tempo sandbox wallets
-- ✅ CI formatting and root npm audit are blocking gates; dashboard high/critical audit is enforced
-- ⚠️ Dashboard still has a moderate Next-bundled PostCSS advisory with no safe current Next upgrade path
+- ✅ `npm run verify` is the shared local/CI test, build, format, and audit contract
+- ✅ Root moderate+ and dashboard high+ advisories are blocking gates
+- ⚠️ Root retains one low-severity esbuild development-server advisory; dashboard retains two moderate findings for Next-bundled PostCSS
 - ⏳ Additional platform OAuth (Instagram, TikTok, Twitter)
 
 ## Architecture
@@ -37,18 +38,20 @@ AI business manager for independent content creators. Manages brand deals, rate 
 
 ## Prerequisites
 
-- Node.js 22+
+- Node.js 22.x
 - Redis (for job queue)
 - Supabase project
 - Privy account (app ID + secret)
 - AI provider API key (`ANTHROPIC_API_KEY` by default, or `AI_PROVIDER=openai` with `AI_API_KEY` / `OPENAI_API_KEY`)
 
-## 🚀 Production Deployment
+## 🚀 Sandbox Deployment Setup
+
+Railway and Vercel automation is configured, but that configuration is not a production-readiness claim. Promote only to the public sandbox beta after staging health, Privy auth, dashboard proxy, and a funded Tempo MPP smoke all pass with deployment credentials.
 
 **Quick Deploy:**
 
 1. Push to GitHub
-2. GitHub Actions automatically deploys to Railway (backend) and Vercel (dashboard)
+2. GitHub Actions deploys to Railway (backend) and Vercel (dashboard) only after all blocking verification and security jobs pass
 3. See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for detailed instructions
 
 **Required Setup:**
@@ -214,6 +217,7 @@ If a live MPP smoke reports that `payment_attempts` is missing, set `DATABASE_UR
 | `npm run dev:all`                           | Start backend + dashboard together                                              |
 | `npm run build`                             | TypeScript compile                                                              |
 | `npm test`                                  | Run all tests                                                                   |
+| `npm run verify`                            | Run the shared test, build, format, and audit contract                          |
 | `npm run db:init`                           | Print/verify database schema                                                    |
 | `npm run db:migrate:payment-attempts`       | Apply the MPP payment-attempt ledger table/index/RLS slice                      |
 | `npm run db:seed`                           | Seed demo data                                                                  |
@@ -255,7 +259,7 @@ Send these via Telegram or WhatsApp:
 ## Testing
 
 ```bash
-npm test
-npm run build
-npm run dashboard:build
+npm run verify
 ```
+
+Current local baseline: 77 test files and 352 tests pass. This is automated verification only; staging and live-smoke gates remain outstanding.

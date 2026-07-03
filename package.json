@@ -2,6 +2,9 @@
   "name": "indyfren",
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "main": "index.js",
   "directories": {
     "doc": "docs"
@@ -22,7 +25,8 @@
     "dev:all": "npx concurrently -n api,dash -c blue,magenta \"npm run dev\" \"npm run dashboard:dev\"",
     "dashboard:dev": "npm run dev --prefix dashboard",
     "dashboard:build": "npm run build --prefix dashboard",
-    "dashboard:start": "npm run start --prefix dashboard"
+    "dashboard:start": "npm run start --prefix dashboard",
+    "verify": "npm test && npm run build && npm run dashboard:build && npx prettier --check 'src/**/*.ts' 'tests/**/*.ts' && npm audit --audit-level=moderate && npm audit --audit-level=high --prefix dashboard"
   },
   "keywords": [],
   "author": "",
@@ -56,5 +60,8 @@
     "prettier": "^3.8.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
+  },
+  "overrides": {
+    "ws": "8.21.0"
   }
 }

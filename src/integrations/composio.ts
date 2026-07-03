@@ -492,7 +492,8 @@ export function selectToolkitTools(
 
 // Result keys that signal something went wrong inside an otherwise-"successful"
 // response — surfaced to the top so the agent can't miss them in a large payload.
-const ISSUE_KEY = /^(error|errors|failed|failure|failures|warning|warnings|rejected|invalid|denied)$/i;
+const ISSUE_KEY =
+  /^(error|errors|failed|failure|failures|warning|warnings|rejected|invalid|denied)$/i;
 const MAX_ISSUES = 5;
 const MAX_ISSUE_CHARS = 160;
 
@@ -512,7 +513,9 @@ function collectResultIssues(
       entry === false ||
       (Array.isArray(entry) && entry.length === 0);
     if (ISSUE_KEY.test(key) && !isEmpty) {
-      found.push(`${entryPath}: ${JSON.stringify(entry).slice(0, MAX_ISSUE_CHARS)}`);
+      found.push(
+        `${entryPath}: ${JSON.stringify(entry).slice(0, MAX_ISSUE_CHARS)}`,
+      );
     } else if (isRecord(entry)) {
       collectResultIssues(entry, entryPath, depth + 1, found);
     } else if (Array.isArray(entry)) {
@@ -536,9 +539,7 @@ export function triageAppToolResult(
   slug: string,
   outcome: { success: boolean; data: unknown },
 ): string {
-  const lines = [
-    `ACTION ${slug}: ${outcome.success ? "completed" : "FAILED"}`,
-  ];
+  const lines = [`ACTION ${slug}: ${outcome.success ? "completed" : "FAILED"}`];
 
   const issues = outcome.success ? collectResultIssues(outcome.data) : [];
   if (issues.length > 0) {
@@ -641,7 +642,10 @@ function buildConnectionsNote(
 // The raw per-toolkit catalog is user-independent and changes rarely — cache it
 // so discovery calls don't refetch 200 schemas from Composio each time.
 const CATALOG_TTL_MS = 10 * 60 * 1000;
-const catalogCache = new Map<string, { at: number; tools: RawComposioTool[] }>();
+const catalogCache = new Map<
+  string,
+  { at: number; tools: RawComposioTool[] }
+>();
 
 async function getToolkitCatalog(toolkit: string): Promise<RawComposioTool[]> {
   const cached = catalogCache.get(toolkit);

@@ -1,10 +1,10 @@
 # Indyfren Completion Status
 
-**Last Updated:** 2026-06-03
+**Last Updated:** 2026-07-03
 
 ## Current Release Posture
 
-Indyfren's core product surface is implemented and covered by blocking local/CI gates. Live production readiness still depends on fresh Privy smoke credentials and a funded Tempo sandbox wallet for the paid MPP smoke. The previous formatting/audit baseline risk has been remediated: Prettier is a blocking CI gate, the root package audit is clean at moderate severity, and dashboard high/critical audit is enforced. The only known package advisory left is a moderate Next-bundled PostCSS issue that is still present in current Next 16 and has no safe app-level upgrade path today.
+Indyfren's core product surface is implemented and covered by a shared blocking local/CI contract. The current posture is public sandbox beta preparation, not production-ready: staging health, live Privy auth, dashboard proxy, and a funded Tempo MPP smoke have not all passed with current deployment credentials. Root moderate+ and dashboard high+ audit gates pass. Known lower-threshold findings are one low-severity root esbuild development-server advisory and two moderate dashboard findings for Next-bundled PostCSS; no safe non-breaking fix is currently available for the latter.
 
 ## ✅ What's Complete
 
@@ -110,10 +110,12 @@ Indyfren's core product surface is implemented and covered by blocking local/CI 
 - ✅ Smoke test scripts (preflight, health, auth, MPP)
 - ✅ `npm run build` passing
 - ✅ `npm run dashboard:build` passing
+- ✅ `npm run verify` is the shared local/CI contract
 - ✅ Prettier is blocking in CI
 - ✅ Root `npm audit --audit-level=moderate` is blocking in CI
 - ✅ Dashboard `npm audit --audit-level=high` is blocking in CI
 - ⚠️ Dashboard `npm audit --audit-level=moderate` still reports the current Next-bundled PostCSS advisory
+- ⚠️ Root `npm audit` still reports one low-severity esbuild development-server advisory below the blocking threshold
 
 ### Documentation
 
@@ -146,16 +148,16 @@ Indyfren's core product surface is implemented and covered by blocking local/CI 
 - ⚠️ Tempo sandbox funding is manual/operator-driven until a confirmed faucet or bootstrap flow is wired
 - ✅ Balance checking UI
 
-### 3. End-to-End Testing ✅
+### 3. Automated Testing ✅
 
 **Status:** AUTOMATED COVERAGE PRESENT, LIVE SMOKE STILL BLOCKED
 
 - ✅ Created detailed `docs/TESTING_CHECKLIST.md`
-- ✅ Executed automated test suite: **316/316 tests passing**
+- ✅ Executed automated test suite: **352/352 tests passing across 77/77 files**
 - ✅ Verified backend build: TypeScript compilation successful
 - ✅ Verified dashboard build: Next.js production build successful
 - ✅ Documented results in `docs/TEST_RESULTS.md`
-- ⚠️ Not approved for consumer production until live auth and funded MPP smoke pass with current credentials
+- ⚠️ Not approved beyond a public sandbox beta until staging health, live auth, dashboard proxy, and funded MPP smoke pass with current credentials
 
 ### 4. API Documentation ✅
 
@@ -168,7 +170,7 @@ Indyfren's core product surface is implemented and covered by blocking local/CI 
 - ✅ Rate limits and pagination
 - ✅ SDK examples (JavaScript, curl)
 
-### 5. Production Deployment Setup ✅
+### 5. Deployment Configuration ✅
 
 **Status:** COMPLETE
 
@@ -179,6 +181,7 @@ Indyfren's core product surface is implemented and covered by blocking local/CI 
 - ✅ `.railwayignore` and `.vercelignore` - Build optimizations
 - ✅ README updated with deployment links
 - ✅ GitHub Actions auto-deploy on main push
+- ⚠️ Configuration exists, but staging has not yet passed the complete live-smoke gate
 
 ## 🎯 Optional Future Work
 
@@ -223,9 +226,9 @@ Indyfren's core product surface is implemented and covered by blocking local/CI 
 
 - YouTube done, 3+ platforms remain (optional)
 
-### Deployment: 100% ✅
+### Deployment Configuration: 100% ✅; Staging Validation: Pending ⚠️
 
-- Railway config, Vercel config, GitHub Actions CI/CD exist
+- Railway config, Vercel config, GitHub Actions CI/CD exist; this does not establish deployment readiness
 - CI now has blocking format, audit, build, test, and smoke-preflight contract checks
 
 ### Documentation: 80% ⚠️
@@ -239,6 +242,7 @@ Indyfren's core product surface is implemented and covered by blocking local/CI 
 
 1. **Run live Privy smoke** - Set `SMOKE_PRIVY_ACCESS_TOKEN` from a current signed-in dashboard session and run `npm run smoke:auth`.
 2. **Run funded Tempo MPP smoke** - Set `MPP_TEST_CREATOR_ID` for a creator with testnet pathUSD and run `npm run test:mpp`.
-3. **Deploy with real env** - Push through Railway/Vercel with production secrets and configured dashboard/API origins.
-4. **Run post-deploy health** - Run `npm run smoke:preflight`, `node --import tsx scripts/smoke-health.ts`, `npm run smoke:auth`, and `npm run test:mpp` against deployed URLs.
-5. **Track the Next/PostCSS advisory** - Re-run dashboard moderate audit when a Next release ships a patched bundled PostCSS dependency.
+3. **Deploy to staging with real env** - Push through Railway/Vercel with staging secrets and configured dashboard/API origins.
+4. **Run staging health and smoke** - Run `npm run smoke:preflight`, `node --import tsx scripts/smoke-health.ts`, `npm run smoke:auth`, and `npm run test:mpp` against staging URLs.
+5. **Open the public sandbox beta only after staging passes** - Do not describe the system as production-ready before the complete staging gate is green.
+6. **Track lower-threshold advisories** - Re-run root low and dashboard moderate audits when esbuild/Next releases provide safe patched dependency paths.

@@ -254,7 +254,12 @@ auth.patch("/me", async (c) => {
       onboarding: getOnboardingState(updatedCreator),
     } satisfies ApiAuthProfileResponse);
   } catch (err: unknown) {
-    return handleAuthRouteError(c, err, "Creator update failed", "Update failed");
+    return handleAuthRouteError(
+      c,
+      err,
+      "Creator update failed",
+      "Update failed",
+    );
   }
 });
 

@@ -19,10 +19,7 @@ const LOW_CREDIT_THRESHOLD_CENTS = 100; // $1.00
 /**
  * Send a proactive message to a creator on all their connected channels.
  */
-async function notifyCreator(
-  creatorId: string,
-  text: string,
-): Promise<void> {
+async function notifyCreator(creatorId: string, text: string): Promise<void> {
   try {
     const creator = await getCreatorById(creatorId);
     if (!creator) return;

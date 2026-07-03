@@ -45,13 +45,19 @@ export interface ToolResult {
 }
 
 /** Read a string tool parameter, or null when absent or not a string. */
-export function readStringParam(params: JsonObject, key: string): string | null {
+export function readStringParam(
+  params: JsonObject,
+  key: string,
+): string | null {
   const value = params[key];
   return typeof value === "string" ? value : null;
 }
 
 /** Read a finite number tool parameter, or null when absent or invalid. */
-export function readNumberParam(params: JsonObject, key: string): number | null {
+export function readNumberParam(
+  params: JsonObject,
+  key: string,
+): number | null {
   const value = params[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

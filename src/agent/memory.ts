@@ -145,8 +145,7 @@ export function formatActiveDeals(deals: ContextDeal[]): string {
 
   const shown = ordered.slice(0, MAX_CONTEXT_DEALS);
   const lines = shown.map((d, i) => {
-    const note =
-      i < NOTED_DEALS && d.notes ? ` — ${d.notes.slice(0, 80)}` : "";
+    const note = i < NOTED_DEALS && d.notes ? ` — ${d.notes.slice(0, 80)}` : "";
     return `- [ID: ${d.id}] ${d.brand_name} [${d.stage}] est. ${formatUsdWhole(d.estimated_value_cents ?? 0)}${note}`;
   });
   if (ordered.length > shown.length) {
@@ -267,14 +266,16 @@ ${
 }
 
 ## Connected Apps & Platforms
-${formatConnectedApps(connections, connectedApps)}${formatYoutubeIdentity(creator.settings, connectedApps.connected.includes("youtube"))}${formatSetupGaps({
-    nicheSet: Boolean(creator.niche),
-    hasAnyConnection:
-      connections.length > 0 || connectedApps.connected.length > 0,
-    reconnect: connectedApps.reconnect,
-    walletCreated: Boolean(creator.wallet_address),
-    creditsCents: creator.free_credits_remaining_cents ?? 0,
-  })}
+${formatConnectedApps(connections, connectedApps)}${formatYoutubeIdentity(creator.settings, connectedApps.connected.includes("youtube"))}${formatSetupGaps(
+    {
+      nicheSet: Boolean(creator.niche),
+      hasAnyConnection:
+        connections.length > 0 || connectedApps.connected.length > 0,
+      reconnect: connectedApps.reconnect,
+      walletCreated: Boolean(creator.wallet_address),
+      creditsCents: creator.free_credits_remaining_cents ?? 0,
+    },
+  )}
 
 ## Active Deals (${activeDeals.length})
 ${formatActiveDeals(activeDeals)}

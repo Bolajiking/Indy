@@ -1,8 +1,4 @@
-import {
-  readStringParam,
-  registerTool,
-  type AgentTool,
-} from "./registry.js";
+import { readStringParam, registerTool, type AgentTool } from "./registry.js";
 import {
   getPlatformAnalyticsEndpoint,
   SUPPORTED_PLATFORM_ANALYTICS_PLATFORMS,

@@ -88,7 +88,7 @@ jobs:
           retention-days: 7
 
   lint:
-    name: Lint Code
+    name: Launch Verification Contract
     runs-on: ubuntu-latest
 
     steps:
@@ -104,11 +104,20 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run TypeScript check
-        run: npm run build
+      - name: Install dashboard dependencies
+        run: npm ci --prefix dashboard
 
-      - name: Check formatting
-        run: npx prettier --check "src/**/*.ts" "tests/**/*.ts"
+      - name: Run launch verification contract
+        run: npm run verify
+        env:
+          ANTHROPIC_API_KEY: ci-placeholder
+          SUPABASE_URL: https://supabase.com
+          SUPABASE_SERVICE_KEY: ci-placeholder
+          PRIVY_APP_ID: ci-placeholder
+          PRIVY_APP_SECRET: ci-placeholder
+          PRIVY_JWT_VERIFICATION_KEY: ci-placeholder
+          MESSAGING_LINK_SECRET: ci-placeholder
+          NODE_ENV: test
 
   smoke-preflight:
     name: Smoke Preflight Contract
@@ -191,7 +200,7 @@ jobs:
 
   deploy-backend:
     name: Deploy Backend to Railway
-    needs: [test-backend, lint, smoke-preflight]
+    needs: [test-backend, lint, smoke-preflight, security]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
@@ -209,7 +218,7 @@ jobs:
 
   deploy-dashboard:
     name: Deploy Dashboard to Vercel
-    needs: [test-dashboard, lint, smoke-preflight]
+    needs: [test-dashboard, lint, smoke-preflight, security]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 

@@ -1,8 +1,4 @@
-import {
-  readStringParam,
-  registerTool,
-  type AgentTool,
-} from "./registry.js";
+import { readStringParam, registerTool, type AgentTool } from "./registry.js";
 
 const mediaKitGeneratorTool: AgentTool = {
   name: "generate_media_kit",
