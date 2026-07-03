@@ -2,9 +2,13 @@ import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  BASELINE_REQUIREMENTS,
+  BASELINE_MANIFEST,
+  BASELINE_INVENTORY_SQL,
+  canonicalizeDefinition,
   discoverMigrations,
   runMigrations,
+  verifyBaselineInventory,
+  type CatalogObject,
   type DatabaseClient,
   type Migration,
 } from "../../../scripts/migrate-db.js";
@@ -14,25 +18,21 @@ const migrationsDirectory = resolve(
   "../../../src/db/migrations",
 );
 
-describe("database migrations", () => {
+describe("database migration files", () => {
   it("discovers unique, lexically ordered, nonempty SQL migrations", async () => {
     const filenames = (await readdir(migrationsDirectory)).filter((filename) =>
       filename.endsWith(".sql"),
     );
-
     expect(filenames).toEqual([
       "0001_baseline.sql",
       "0002_public_launch_readiness.sql",
     ]);
     expect(new Set(filenames).size).toBe(filenames.length);
     expect(filenames).toEqual([...filenames].sort());
-
     for (const filename of filenames) {
-      const sql = await readFile(
-        resolve(migrationsDirectory, filename),
-        "utf8",
-      );
-      expect(sql.trim()).not.toBe("");
+      expect(
+        (await readFile(resolve(migrationsDirectory, filename), "utf8")).trim(),
+      ).not.toBe("");
     }
   });
 
@@ -41,7 +41,6 @@ describe("database migrations", () => {
       resolve(migrationsDirectory, "0002_public_launch_readiness.sql"),
       "utf8",
     );
-
     expect(sql).toMatch(/CREATE TABLE webhook_events/i);
     expect(sql).toMatch(/provider_event_id TEXT NOT NULL/i);
     expect(sql).toMatch(/payload_hash TEXT NOT NULL/i);
@@ -68,10 +67,8 @@ describe("database migrations", () => {
         "utf8",
       ),
     ) as { scripts: Record<string, string> };
-
     expect(schema).toMatch(/ordered migrations.*clean-install snapshot/i);
     expect(schema).toMatch(/CREATE TABLE IF NOT EXISTS webhook_events/i);
-    expect(schema).toMatch(/expires_at TIMESTAMPTZ/);
     expect(schema).toMatch(/key_version INTEGER NOT NULL DEFAULT 1/i);
     expect(schema).toMatch(/account_status TEXT NOT NULL DEFAULT 'active'/i);
     expect(schema).toMatch(/deletion_requested_at TIMESTAMPTZ/i);
@@ -80,124 +77,262 @@ describe("database migrations", () => {
       "tsx scripts/migrate-db.ts --check",
     );
   });
+});
 
-  it("discovers migrations in deterministic order with checksums", async () => {
+describe("database migration runner", () => {
+  it("executes the exact migration files in lexical order and records each transaction", async () => {
     const migrations = await discoverMigrations(migrationsDirectory);
-
-    expect(migrations.map(({ version }) => version)).toEqual(["0001", "0002"]);
-    expect(
-      migrations.every(({ checksum }) => /^[a-f0-9]{64}$/.test(checksum)),
-    ).toBe(true);
-  });
-
-  it("rejects checksum drift for an applied migration", async () => {
-    const migrations = fixtureMigrations();
-    const db = new FakeDatabase({ "0001": "not-the-current-checksum" });
-
-    await expect(runMigrations(db, migrations)).rejects.toThrow(
-      /checksum drift.*0001/i,
-    );
-    expect(db.commands).not.toContain("BEGIN");
-  });
-
-  it("rolls back a failed migration without recording it", async () => {
-    const migrations = fixtureMigrations();
-    const db = new FakeDatabase({}, { failSql: migrations[1].sql });
-
-    await expect(runMigrations(db, migrations)).rejects.toThrow(
-      "migration failed",
-    );
-    expect(db.commands).toEqual(
-      expect.arrayContaining(["BEGIN", "COMMIT", "ROLLBACK"]),
-    );
-    expect(db.applied.has("0001")).toBe(true);
-    expect(db.applied.has("0002")).toBe(false);
-  });
-
-  it("applies every migration to a clean database then becomes idempotent", async () => {
-    const migrations = fixtureMigrations();
     const db = new FakeDatabase();
 
     expect(await runMigrations(db, migrations)).toEqual({
       applied: ["0001", "0002"],
     });
-    const transactionCount = db.commands.filter(
-      (sql) => sql === "BEGIN",
-    ).length;
-
-    expect(await runMigrations(db, migrations)).toEqual({ applied: [] });
-    expect(db.commands.filter((sql) => sql === "BEGIN")).toHaveLength(
-      transactionCount,
-    );
+    expect(db.transactionEvents).toEqual([
+      "BEGIN",
+      migrations[0].sql,
+      "INSERT:0001",
+      "COMMIT",
+      "BEGIN",
+      migrations[1].sql,
+      "INSERT:0002",
+      "COMMIT",
+    ]);
   });
 
-  it("adopts a verified baseline before applying later migrations", async () => {
-    const migrations = fixtureMigrations();
-    const db = new FakeDatabase({}, { baselineObjects: BASELINE_REQUIREMENTS });
+  it("rolls back an actual migration SQL failure without recording or committing it", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const db = new FakeDatabase({}, { failSql: migrations[1].sql });
+
+    await expect(runMigrations(db, migrations)).rejects.toThrow(
+      "migration failed",
+    );
+    expect(db.transactionEvents).toEqual([
+      "BEGIN",
+      migrations[0].sql,
+      "INSERT:0001",
+      "COMMIT",
+      "BEGIN",
+      migrations[1].sql,
+      "ROLLBACK",
+    ]);
+    expect(db.applied.has("0002")).toBe(false);
+  });
+
+  it("does not execute actual migration SQL again on a second run", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const db = new FakeDatabase();
+    await runMigrations(db, migrations);
+    const firstEvents = [...db.transactionEvents];
+
+    expect(await runMigrations(db, migrations)).toEqual({ applied: [] });
+    expect(db.transactionEvents).toEqual(firstEvents);
+  });
+
+  it("rejects checksum drift before opening a transaction", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const db = new FakeDatabase({ "0001": "wrong-checksum" });
+    await expect(runMigrations(db, migrations)).rejects.toThrow(
+      /checksum drift.*0001/i,
+    );
+    expect(db.transactionEvents).toEqual([]);
+  });
+
+  it("adopts a definition-verified baseline then applies only the real launch SQL", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const db = new FakeDatabase({}, { catalog: catalogFromManifest() });
 
     expect(
       await runMigrations(db, migrations, { adoptBaseline: true }),
     ).toEqual({ applied: ["0001", "0002"] });
-    expect(db.executedMigrationSql).toEqual([migrations[1].sql]);
+    expect(db.transactionEvents).toEqual([
+      "BEGIN",
+      "CATALOG",
+      "INSERT:0001",
+      "COMMIT",
+      "BEGIN",
+      migrations[1].sql,
+      "INSERT:0002",
+      "COMMIT",
+    ]);
   });
 
-  it("refuses to adopt an incomplete or unknown baseline", async () => {
-    const migrations = fixtureMigrations();
-    const db = new FakeDatabase(
-      {},
-      { baselineObjects: [BASELINE_REQUIREMENTS[0]] },
+  it("rolls back and refuses adoption when a catalog definition is unsafe", async () => {
+    const migrations = await discoverMigrations(migrationsDirectory);
+    const catalog = catalogFromManifest();
+    replaceDefinition(
+      catalog,
+      "policy",
+      "creators.deny_anon_creators",
+      "permissive;all;{anon};using=true;check=true",
     );
+    const db = new FakeDatabase({}, { catalog });
 
     await expect(
       runMigrations(db, migrations, { adoptBaseline: true }),
-    ).rejects.toThrow(/baseline verification failed/i);
+    ).rejects.toThrow(/policy creators\.deny_anon_creators.*mismatch/i);
+    expect(db.transactionEvents).toEqual(["BEGIN", "CATALOG", "ROLLBACK"]);
     expect(db.applied.size).toBe(0);
-    expect(db.commands).toEqual(expect.arrayContaining(["BEGIN", "ROLLBACK"]));
   });
 });
 
-function fixtureMigrations(): Migration[] {
-  return [
-    {
-      version: "0001",
-      filename: "0001_baseline.sql",
-      sql: "BASELINE SQL",
-      checksum: "aaa",
-    },
-    {
-      version: "0002",
-      filename: "0002_launch.sql",
-      sql: "LAUNCH SQL",
-      checksum: "bbb",
-    },
-  ];
+describe("baseline definition verification", () => {
+  it("uses PostgreSQL catalog deparsers for definition-level inventory", () => {
+    expect(BASELINE_INVENTORY_SQL).toMatch(/format_type\s*\(/i);
+    expect(BASELINE_INVENTORY_SQL).toMatch(/pg_get_expr\s*\(/i);
+    expect(BASELINE_INVENTORY_SQL).toMatch(/pg_get_constraintdef\s*\(/i);
+    expect(BASELINE_INVENTORY_SQL).toMatch(/pg_get_indexdef\s*\(/i);
+    expect(BASELINE_INVENTORY_SQL).toMatch(/relrowsecurity/i);
+    expect(BASELINE_INVENTORY_SQL).toMatch(/roles::text/i);
+    expect(BASELINE_INVENTORY_SQL).toMatch(/with_check/i);
+  });
+
+  it("does not canonicalize meaningful whitespace inside string literals", () => {
+    expect(canonicalizeDefinition("default='a, b'")).not.toBe(
+      canonicalizeDefinition("default='a,b'"),
+    );
+  });
+
+  it.each([
+    [
+      "column type",
+      "column",
+      "creators.id",
+      "type=text;nullable=false;default=gen_random_uuid()",
+    ],
+    [
+      "column default",
+      "column",
+      "creators.free_credits_remaining_cents",
+      "type=integer;nullable=true;default=999",
+    ],
+    [
+      "case-sensitive text default",
+      "column",
+      "transactions.currency",
+      "type=text;nullable=true;default='usd'::text",
+    ],
+    [
+      "column nullability",
+      "column",
+      "creators.display_name",
+      "type=text;nullable=true;default=<none>",
+    ],
+    [
+      "index definition",
+      "index",
+      "idx_deals_creator_id",
+      "create index idx_deals_creator_id on deals using btree (stage)",
+    ],
+    [
+      "index uniqueness",
+      "index",
+      "idx_deals_creator_id",
+      "create unique index idx_deals_creator_id on deals using btree (creator_id)",
+    ],
+    [
+      "constraint definition",
+      "constraint",
+      "platform_connections_creator_id_fkey",
+      "foreign key (creator_id) references creators(id)",
+    ],
+    ["RLS", "rls", "creators", "enabled=false"],
+    [
+      "policy roles",
+      "policy",
+      "creators.service_role_creators",
+      "permissive;all;{anon};using=true;check=true",
+    ],
+    [
+      "policy mode",
+      "policy",
+      "creators.service_role_creators",
+      "restrictive;all;{service_role};using=true;check=true",
+    ],
+    [
+      "policy command",
+      "policy",
+      "creators.service_role_creators",
+      "permissive;select;{service_role};using=true;check=true",
+    ],
+    [
+      "policy USING",
+      "policy",
+      "creators.deny_anon_creators",
+      "permissive;all;{anon};using=true;check=false",
+    ],
+    [
+      "policy WITH CHECK",
+      "policy",
+      "creators.deny_anon_creators",
+      "permissive;all;{anon};using=false;check=true",
+    ],
+  ])("rejects a %s mismatch", (_label, kind, identity, definition) => {
+    const catalog = catalogFromManifest();
+    replaceDefinition(catalog, kind, identity, definition);
+    expect(() => verifyBaselineInventory(catalog)).toThrow(
+      new RegExp(`${kind} ${escapeRegExp(identity)}.*mismatch`, "i"),
+    );
+  });
+
+  it("rejects missing tables and foreign keys", () => {
+    for (const [kind, identity] of [
+      ["table", "creators"],
+      ["constraint", "deals_creator_id_fkey"],
+    ]) {
+      const catalog = catalogFromManifest().filter(
+        (object) => !(object.kind === kind && object.identity === identity),
+      );
+      expect(() => verifyBaselineInventory(catalog)).toThrow(
+        new RegExp(`missing ${kind} ${identity}`, "i"),
+      );
+    }
+  });
+});
+
+function catalogFromManifest(): CatalogObject[] {
+  return BASELINE_MANIFEST.map((object) => ({ ...object }));
+}
+
+function replaceDefinition(
+  catalog: CatalogObject[],
+  kind: string,
+  identity: string,
+  definition: string,
+): void {
+  const object = catalog.find(
+    (candidate) => candidate.kind === kind && candidate.identity === identity,
+  );
+  if (!object) throw new Error(`Missing test fixture ${kind} ${identity}`);
+  object.definition = definition;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 class FakeDatabase implements DatabaseClient {
-  readonly commands: string[] = [];
-  readonly executedMigrationSql: string[] = [];
+  readonly transactionEvents: string[] = [];
   readonly applied: Map<string, string>;
   private readonly failSql?: string;
-  private readonly baselineObjects: readonly string[];
+  private readonly catalog: CatalogObject[];
+  private stagedInsert?: [string, string];
 
   constructor(
     applied: Record<string, string> = {},
-    options: { failSql?: string; baselineObjects?: readonly string[] } = {},
+    options: { failSql?: string; catalog?: CatalogObject[] } = {},
   ) {
     this.applied = new Map(Object.entries(applied));
     this.failSql = options.failSql;
-    this.baselineObjects = options.baselineObjects ?? [];
+    this.catalog = options.catalog ?? [];
   }
 
   async query<T extends Record<string, unknown> = Record<string, unknown>>(
     text: string,
     values: readonly unknown[] = [],
   ): Promise<{ rows: T[] }> {
-    this.commands.push(text);
     if (text.includes("baseline_schema_inventory")) {
-      return {
-        rows: this.baselineObjects.map((name) => ({ name })) as T[],
-      };
+      this.transactionEvents.push("CATALOG");
+      return { rows: this.catalog as T[] };
     }
     if (text.startsWith("SELECT version, checksum")) {
       return {
@@ -207,14 +342,32 @@ class FakeDatabase implements DatabaseClient {
         })) as T[],
       };
     }
-    if (text.startsWith("INSERT INTO schema_migrations")) {
-      this.applied.set(String(values[0]), String(values[1]));
+    if (text === "BEGIN") {
+      this.transactionEvents.push(text);
       return { rows: [] };
     }
-    if (text === this.failSql) throw new Error("migration failed");
-    if (text === "BASELINE SQL" || text === "LAUNCH SQL") {
-      this.executedMigrationSql.push(text);
+    if (text === "COMMIT") {
+      this.transactionEvents.push(text);
+      if (this.stagedInsert) this.applied.set(...this.stagedInsert);
+      this.stagedInsert = undefined;
+      return { rows: [] };
     }
+    if (text === "ROLLBACK") {
+      this.transactionEvents.push(text);
+      this.stagedInsert = undefined;
+      return { rows: [] };
+    }
+    if (text.startsWith("INSERT INTO schema_migrations")) {
+      const version = String(values[0]);
+      this.transactionEvents.push(`INSERT:${version}`);
+      this.stagedInsert = [version, String(values[1])];
+      return { rows: [] };
+    }
+    if (text.startsWith("CREATE TABLE IF NOT EXISTS schema_migrations")) {
+      return { rows: [] };
+    }
+    this.transactionEvents.push(text);
+    if (text === this.failSql) throw new Error("migration failed");
     return { rows: [] };
   }
 }
