@@ -1,6 +1,7 @@
 import { lookup } from "node:dns/promises";
 import { URL } from "node:url";
 import { env } from "../src/config/env.js";
+import { getProductionEnvIssues } from "../src/config/validate-production-env.js";
 
 type CheckResult = {
   name: string;
@@ -82,48 +83,30 @@ function checkGroupedValues(
 
 async function main() {
   const supabaseHost = new URL(env.SUPABASE_URL).hostname;
-
-  const aiKey =
-    env.AI_PROVIDER === "openai"
-      ? env.AI_API_KEY || env.OPENAI_API_KEY
-      : env.AI_API_KEY || env.ANTHROPIC_API_KEY;
+  const productionIssues = getProductionEnvIssues(env);
+  const productionChecks: CheckResult[] =
+    productionIssues.length === 0
+      ? [
+          {
+            name: "Production configuration",
+            ok: true,
+            level: "ok",
+            detail: "safe for enabled providers and services",
+          },
+        ]
+      : productionIssues.map(({ field, message }) => ({
+          name: field,
+          ok: false,
+          level: "fail" as const,
+          detail: message,
+        }));
 
   const checks: CheckResult[] = [
-    checkValue("AI_PROVIDER", env.AI_PROVIDER),
-    {
-      name: `AI credentials (${env.AI_PROVIDER})`,
-      ok: aiKey.trim().length > 0,
-      level: aiKey.trim().length > 0 ? "ok" : "fail",
-      detail: aiKey.trim().length > 0 ? "configured" : "missing",
-    },
+    ...productionChecks,
     checkValue("SUPABASE_URL", env.SUPABASE_URL),
     checkValue("SUPABASE_SERVICE_KEY", env.SUPABASE_SERVICE_KEY),
     checkValue("PRIVY_APP_ID", env.PRIVY_APP_ID),
     checkValue("PRIVY_APP_SECRET", env.PRIVY_APP_SECRET),
-    checkValue("PRIVY_JWT_VERIFICATION_KEY", env.PRIVY_JWT_VERIFICATION_KEY),
-    checkValue("MESSAGING_LINK_SECRET", env.MESSAGING_LINK_SECRET),
-    checkValue("TELEGRAM_BOT_TOKEN", env.TELEGRAM_BOT_TOKEN),
-    checkValue("ENABLE_TELEGRAM_BOT", env.ENABLE_TELEGRAM_BOT),
-    checkValue("ENABLE_JOBS", env.ENABLE_JOBS),
-    checkGroupedValues(
-      "YouTube OAuth env",
-      [
-        { name: "GOOGLE_OAUTH_CLIENT_ID", value: env.GOOGLE_OAUTH_CLIENT_ID },
-        {
-          name: "GOOGLE_OAUTH_CLIENT_SECRET",
-          value: env.GOOGLE_OAUTH_CLIENT_SECRET,
-        },
-        {
-          name: "YOUTUBE_OAUTH_REDIRECT_URI",
-          value: env.YOUTUBE_OAUTH_REDIRECT_URI,
-        },
-        { name: "DASHBOARD_APP_URL", value: env.DASHBOARD_APP_URL },
-      ],
-      {
-        optional: true,
-        note: "needed for live YouTube OAuth smoke",
-      },
-    ),
     checkGroupedValues(
       "Dashboard public env",
       [
@@ -159,7 +142,9 @@ async function main() {
       },
     ),
     await checkDns(supabaseHost, "Supabase DNS"),
-    await checkDns("api.telegram.org", "Telegram DNS"),
+    ...(env.ENABLE_TELEGRAM_BOT && env.TELEGRAM_MODE !== "disabled"
+      ? [await checkDns("api.telegram.org", "Telegram DNS")]
+      : []),
     await checkDns("stableenrich.dev", "MPP provider DNS"),
     await checkDns("mpp.dev", "MPP paid ping DNS"),
     await checkDns("rpc.moderato.tempo.xyz", "Tempo RPC DNS"),
