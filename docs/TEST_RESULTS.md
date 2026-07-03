@@ -59,13 +59,13 @@ The non-breaking remediation updated vulnerable transitive dependencies and did 
 
 - The blocking command `npm audit --audit-level=moderate` passes.
 - Hono, Undici, and js-yaml were updated to patched versions.
-- `ws` is pinned to patched `8.21.0` through an override because its reachable runtime path is `@privy-io/node -> viem -> ws` and `mppx -> viem -> ws` in wallet authentication/payment code.
+- `ws` is pinned to patched `8.21.0` through an override because its reachable runtime paths are `@privy-io/node -> viem -> ws` and `mppx -> viem -> ws` in wallet authentication/payment code. Review by **August 3, 2026**; remove the override once both owning dependency trees resolve to a non-vulnerable `ws` without it and the root moderate audit still passes.
 - One low-severity esbuild development-server advisory remains below the blocking threshold. It concerns arbitrary file reads from the development server on Windows and is not part of the deployed Node server runtime.
 
 ### Dashboard
 
 - The blocking command `npm audit --audit-level=high --prefix dashboard` passes.
-- form-data and Hono high-severity findings were remediated; Hono is pinned to patched `4.12.27` through an override.
+- form-data and Hono high-severity findings were remediated. Hono is pinned to patched `4.12.27` because the dashboard reaches it through `@privy-io/react-auth -> x402 -> wagmi -> @wagmi/connectors -> porto -> hono`. Review by **August 3, 2026**; remove the override once that upstream tree resolves to a patched Hono without it and the dashboard high audit still passes.
 - Two moderate findings remain for PostCSS bundled inside Next.js. npm offers only a forced breaking downgrade, so the high threshold remains enforced while the team tracks a safe Next.js release.
 
 ## Build and Format Results

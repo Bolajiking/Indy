@@ -26,7 +26,7 @@
     "dashboard:dev": "npm run dev --prefix dashboard",
     "dashboard:build": "npm run build --prefix dashboard",
     "dashboard:start": "npm run start --prefix dashboard",
-    "verify": "npm test && npm run build && npm run dashboard:build && npx prettier --check 'src/**/*.ts' 'tests/**/*.ts' && npm audit --audit-level=moderate && npm audit --audit-level=high --prefix dashboard"
+    "verify": "npm test && npm run build && npm run dashboard:build && npx prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" && npm audit --audit-level=moderate && npm audit --audit-level=high --prefix dashboard"
   },
   "keywords": [],
   "author": "",
