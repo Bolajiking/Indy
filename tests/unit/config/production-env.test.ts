@@ -1,8 +1,86 @@
 import { describe, expect, it } from "vitest";
+import { envSchema } from "../../../src/config/env.js";
 import {
   validateProductionEnv,
   type ProductionEnvironment,
 } from "../../../src/config/validate-production-env.js";
+
+const BOOLEAN_FLAGS = [
+  "ENABLE_YOUTUBE_OAUTH",
+  "ENABLE_WHATSAPP",
+  "ENABLE_DISTRIBUTED_RATE_LIMIT",
+  "ENABLE_TELEGRAM_BOT",
+  "ENABLE_JOBS",
+] as const;
+
+function schemaInput(overrides: Record<string, unknown> = {}) {
+  return {
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_SERVICE_KEY: "service-key",
+    PRIVY_APP_ID: "privy-app",
+    PRIVY_APP_SECRET: "privy-secret",
+    NODE_ENV: "test",
+    ...overrides,
+  };
+}
+
+describe("production env schema", () => {
+  it.each(BOOLEAN_FLAGS)(
+    "parses %s from trimmed case-insensitive true and false values",
+    (flag) => {
+      expect(envSchema.parse(schemaInput({ [flag]: " TrUe " }))[flag]).toBe(
+        true,
+      );
+      expect(envSchema.parse(schemaInput({ [flag]: " FaLsE " }))[flag]).toBe(
+        false,
+      );
+    },
+  );
+
+  it.each(BOOLEAN_FLAGS)("rejects malformed %s values", (flag) => {
+    for (const malformed of ["1", "yes", "treu"]) {
+      expect(() =>
+        envSchema.parse(schemaInput({ [flag]: malformed })),
+      ).toThrow();
+    }
+  });
+
+  it("coerces trusted proxy hops within the supported bounds", () => {
+    expect(
+      envSchema.parse(schemaInput({ TRUSTED_PROXY_HOPS: "2" }))
+        .TRUSTED_PROXY_HOPS,
+    ).toBe(2);
+  });
+
+  it.each(["-1", "3", "1.5", "many"])(
+    "rejects invalid trusted proxy hops: %s",
+    (value) => {
+      expect(() =>
+        envSchema.parse(schemaInput({ TRUSTED_PROXY_HOPS: value })),
+      ).toThrow();
+    },
+  );
+
+  it("rejects an invalid public support email", () => {
+    expect(() =>
+      envSchema.parse(schemaInput({ PUBLIC_SUPPORT_EMAIL: "not-an-email" })),
+    ).toThrow();
+  });
+
+  it("only accepts v1 or an empty platform encryption key version", () => {
+    expect(
+      envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "v1" }))
+        .PLATFORM_ENCRYPTION_KEY_VERSION,
+    ).toBe("v1");
+    expect(
+      envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "" }))
+        .PLATFORM_ENCRYPTION_KEY_VERSION,
+    ).toBe("");
+    expect(() =>
+      envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "v2" })),
+    ).toThrow();
+  });
+});
 
 function productionEnv(
   overrides: Partial<ProductionEnvironment> = {},

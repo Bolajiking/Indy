@@ -4,6 +4,17 @@ import { config } from "dotenv";
 config({ path: ".env.local", override: false });
 config({ path: ".env", override: false });
 
+function strictBoolean(defaultValue: boolean) {
+  const defaultLiteral = defaultValue ? "true" : "false";
+  return z
+    .preprocess(
+      (value) =>
+        typeof value === "string" ? value.trim().toLowerCase() : value,
+      z.enum(["true", "false"]).default(defaultLiteral),
+    )
+    .transform((value) => value === "true");
+}
+
 const rawEnvSchema = z.object({
   // ── AI provider selection ──────────────────────────────────────────────
   // "anthropic" (default) talks to the Anthropic Messages API. "openai" talks
@@ -33,10 +44,7 @@ const rawEnvSchema = z.object({
   MESSAGING_LINK_SECRET: z.string().default(""),
   GOOGLE_OAUTH_CLIENT_ID: z.string().default(""),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().default(""),
-  ENABLE_YOUTUBE_OAUTH: z
-    .string()
-    .default("false")
-    .transform((value) => value.toLowerCase() === "true"),
+  ENABLE_YOUTUBE_OAUTH: strictBoolean(false),
   YOUTUBE_OAUTH_REDIRECT_URI: z
     .union([z.string().url(), z.literal("")])
     .default(""),
@@ -50,17 +58,11 @@ const rawEnvSchema = z.object({
   WHATSAPP_ACCESS_TOKEN: z.string().default(""),
   WHATSAPP_VERIFY_TOKEN: z.string().default(""),
   WHATSAPP_WEBHOOK_SECRET: z.string().default(""),
-  ENABLE_WHATSAPP: z
-    .string()
-    .default("false")
-    .transform((value) => value.toLowerCase() === "true"),
+  ENABLE_WHATSAPP: strictBoolean(false),
   REDIS_URL: z.string().default("redis://localhost:6379"),
-  ENABLE_DISTRIBUTED_RATE_LIMIT: z
-    .string()
-    .default("false")
-    .transform((value) => value.toLowerCase() === "true"),
+  ENABLE_DISTRIBUTED_RATE_LIMIT: strictBoolean(false),
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(2).default(0),
-  PLATFORM_ENCRYPTION_KEY_VERSION: z.string().default(""),
+  PLATFORM_ENCRYPTION_KEY_VERSION: z.enum(["", "v1"]).default(""),
   PLATFORM_ENCRYPTION_KEY_V1: z.string().default(""),
   PLATFORM_ENCRYPTION_KEY_PREVIOUS: z.string().default(""),
   ERROR_REPORTING_DSN: z.string().default(""),
@@ -69,14 +71,8 @@ const rawEnvSchema = z.object({
     .default(""),
   BROWSERBASE_API_KEY: z.string().default(""),
   BROWSERBASE_PROJECT_ID: z.string().default(""),
-  ENABLE_TELEGRAM_BOT: z
-    .string()
-    .default("true")
-    .transform((value) => value.toLowerCase() !== "false"),
-  ENABLE_JOBS: z
-    .string()
-    .default("true")
-    .transform((value) => value.toLowerCase() !== "false"),
+  ENABLE_TELEGRAM_BOT: strictBoolean(true),
+  ENABLE_JOBS: strictBoolean(true),
   PORT: z.string().default("3000").transform(Number),
   NODE_ENV: z
     .enum(["development", "production", "test"])

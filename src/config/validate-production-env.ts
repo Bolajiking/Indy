@@ -1,30 +1,33 @@
-export type ProductionEnvironment = {
-  NODE_ENV: "development" | "production" | "test";
-  AI_PROVIDER: "anthropic" | "openai";
-  AI_API_KEY: string;
-  ANTHROPIC_API_KEY: string;
-  OPENAI_API_KEY: string;
-  MESSAGING_LINK_SECRET: string;
-  PRIVY_JWT_VERIFICATION_KEY: string;
-  ENABLE_YOUTUBE_OAUTH: boolean;
-  GOOGLE_OAUTH_CLIENT_ID: string;
-  GOOGLE_OAUTH_CLIENT_SECRET: string;
-  YOUTUBE_OAUTH_REDIRECT_URI: string;
-  ENABLE_TELEGRAM_BOT: boolean;
-  TELEGRAM_MODE: "disabled" | "polling" | "webhook";
-  TELEGRAM_BOT_TOKEN: string;
-  TELEGRAM_WEBHOOK_SECRET: string;
-  ENABLE_WHATSAPP: boolean;
-  WHATSAPP_PHONE_NUMBER_ID: string;
-  WHATSAPP_ACCESS_TOKEN: string;
-  WHATSAPP_VERIFY_TOKEN: string;
-  WHATSAPP_WEBHOOK_SECRET: string;
-  ENABLE_JOBS: boolean;
-  ENABLE_DISTRIBUTED_RATE_LIMIT: boolean;
-  REDIS_URL: string;
-  PLATFORM_ENCRYPTION_KEY_VERSION: string;
-  PLATFORM_ENCRYPTION_KEY_V1: string;
-};
+import type { Env } from "./env.js";
+
+export type ProductionEnvironment = Pick<
+  Env,
+  | "NODE_ENV"
+  | "AI_PROVIDER"
+  | "AI_API_KEY"
+  | "ANTHROPIC_API_KEY"
+  | "OPENAI_API_KEY"
+  | "MESSAGING_LINK_SECRET"
+  | "PRIVY_JWT_VERIFICATION_KEY"
+  | "ENABLE_YOUTUBE_OAUTH"
+  | "GOOGLE_OAUTH_CLIENT_ID"
+  | "GOOGLE_OAUTH_CLIENT_SECRET"
+  | "YOUTUBE_OAUTH_REDIRECT_URI"
+  | "ENABLE_TELEGRAM_BOT"
+  | "TELEGRAM_MODE"
+  | "TELEGRAM_BOT_TOKEN"
+  | "TELEGRAM_WEBHOOK_SECRET"
+  | "ENABLE_WHATSAPP"
+  | "WHATSAPP_PHONE_NUMBER_ID"
+  | "WHATSAPP_ACCESS_TOKEN"
+  | "WHATSAPP_VERIFY_TOKEN"
+  | "WHATSAPP_WEBHOOK_SECRET"
+  | "ENABLE_JOBS"
+  | "ENABLE_DISTRIBUTED_RATE_LIMIT"
+  | "REDIS_URL"
+  | "PLATFORM_ENCRYPTION_KEY_VERSION"
+  | "PLATFORM_ENCRYPTION_KEY_V1"
+>;
 
 export type ProductionEnvIssue = {
   field: keyof ProductionEnvironment;
@@ -66,11 +69,12 @@ export function getProductionEnvIssues(
     config.MESSAGING_LINK_SECRET,
     "required to sign messaging link tokens",
   );
-  requireValue(
-    "PLATFORM_ENCRYPTION_KEY_VERSION",
-    config.PLATFORM_ENCRYPTION_KEY_VERSION,
-    "must identify the active platform encryption key",
-  );
+  if (config.PLATFORM_ENCRYPTION_KEY_VERSION !== "v1") {
+    issues.push({
+      field: "PLATFORM_ENCRYPTION_KEY_VERSION",
+      message: "must be v1 in production",
+    });
+  }
   requireValue(
     "PLATFORM_ENCRYPTION_KEY_V1",
     config.PLATFORM_ENCRYPTION_KEY_V1,
