@@ -17,6 +17,8 @@
     "test:watch": "vitest",
     "db:init": "tsx scripts/init-db.ts",
     "db:seed": "tsx scripts/seed-db.ts",
+    "db:migrate": "tsx scripts/migrate-db.ts",
+    "db:migrate:check": "tsx scripts/migrate-db.ts --check",
     "db:migrate:payment-attempts": "tsx scripts/apply-payment-attempts-schema.ts",
     "migrate:platform-secrets": "tsx scripts/migrate-platform-secrets.ts",
     "smoke:preflight": "node --import tsx scripts/preflight.ts",

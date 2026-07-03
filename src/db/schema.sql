@@ -1,5 +1,7 @@
 -- Indyfren Database Schema
 -- Run via: npm run db:init
+-- Ordered migrations are authoritative for upgrades; this is the clean-install snapshot
+-- of all migrations through 0002_public_launch_readiness.sql.
 
 -- Creators table
 CREATE TABLE IF NOT EXISTS creators (
@@ -11,6 +13,8 @@ CREATE TABLE IF NOT EXISTS creators (
   niche TEXT,
   wallet_id TEXT,
   wallet_address TEXT,
+  account_status TEXT NOT NULL DEFAULT 'active',
+  deletion_requested_at TIMESTAMPTZ,
   free_credits_remaining_cents INTEGER DEFAULT 1000,
   monthly_spend_cents INTEGER DEFAULT 0,
   settings JSONB DEFAULT '{}',
@@ -29,6 +33,7 @@ CREATE TABLE IF NOT EXISTS platform_connections (
   platform_username TEXT,
   metadata JSONB DEFAULT '{}',
   expires_at TIMESTAMPTZ,
+  key_version INTEGER NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(creator_id, platform)
 );
@@ -116,6 +121,7 @@ CREATE TABLE IF NOT EXISTS agent_actions (
   requires_approval BOOLEAN DEFAULT false,
   approved_at TIMESTAMPTZ,
   executed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -172,6 +178,21 @@ CREATE TABLE IF NOT EXISTS skill_outcomes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Durable webhook receipt ledger (provider event IDs make ingestion idempotent)
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider TEXT NOT NULL,
+  provider_event_id TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued',
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  error TEXT,
+  processed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(provider, provider_event_id)
+);
+
 -- Indexes (IF NOT EXISTS requires Postgres 9.5+)
 CREATE INDEX IF NOT EXISTS idx_creators_telegram_chat_id ON creators(telegram_chat_id);
 CREATE INDEX IF NOT EXISTS idx_creators_whatsapp_phone ON creators(whatsapp_phone);
@@ -191,6 +212,9 @@ CREATE INDEX IF NOT EXISTS idx_creator_memories_creator_id ON creator_memories(c
 CREATE INDEX IF NOT EXISTS idx_creator_memories_skill ON creator_memories(creator_id, skill);
 CREATE INDEX IF NOT EXISTS idx_skill_outcomes_creator_skill ON skill_outcomes(creator_id, skill);
 CREATE INDEX IF NOT EXISTS idx_skill_outcomes_created_at ON skill_outcomes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_status_created_at ON webhook_events(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_actions_expires_at ON agent_actions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_creators_account_status ON creators(account_status);
 
 -- Enable Row Level Security on all tables
 ALTER TABLE creators ENABLE ROW LEVEL SECURITY;
@@ -203,6 +227,7 @@ ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messaging_link_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creator_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE skill_outcomes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_events ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies: allow service_role full access (backend uses service key)
 -- These are no-ops for service_role but protect against anon-key access.
@@ -286,6 +311,14 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_messaging_link_sessions') THEN
     CREATE POLICY deny_anon_messaging_link_sessions ON messaging_link_sessions FOR ALL TO anon USING (false);
   END IF;
+
+  -- Webhook events
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'service_role_webhook_events') THEN
+    CREATE POLICY service_role_webhook_events ON webhook_events FOR ALL TO service_role USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_webhook_events') THEN
+    CREATE POLICY deny_anon_webhook_events ON webhook_events FOR ALL TO anon USING (false);
+  END IF;
 END $$;
 
 -- Auto-update updated_at trigger
@@ -306,6 +339,9 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_creator_memories_updated_at') THEN
     CREATE TRIGGER trg_creator_memories_updated_at BEFORE UPDATE ON creator_memories FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_webhook_events_updated_at') THEN
+    CREATE TRIGGER trg_webhook_events_updated_at BEFORE UPDATE ON webhook_events FOR EACH ROW EXECUTE FUNCTION update_updated_at();
   END IF;
 END $$;
 
