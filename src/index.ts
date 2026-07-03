@@ -59,25 +59,26 @@ async function main() {
     },
   );
 
-  if (
-    env.ENABLE_TELEGRAM_BOT &&
-    env.TELEGRAM_MODE !== "disabled" &&
-    isTelegramConfigured()
-  ) {
+  if (env.ENABLE_TELEGRAM_BOT && isTelegramConfigured()) {
     const telegramBot = createTelegramBot();
+    log.info("Telegram bot instance created, starting long-polling...");
     registerTelegramBot(telegramBot);
+    // Also register for webhook mode (the POST /webhooks/telegram route)
     setTelegramBotForWebhook(telegramBot);
 
-    if (env.TELEGRAM_MODE === "polling") {
-      log.info("Telegram bot instance created, starting long-polling...");
-      telegramBot.start().catch((error) => {
-        log.error({ error }, "Telegram bot failed to start");
+    // Start the bot in long-polling mode
+    log.info("Calling telegramBot.start()...");
+    const startPromise = telegramBot.start();
+    log.info("telegramBot.start() called, waiting for promise...");
+    startPromise
+      .then(() => {
+        log.info("✅ Telegram bot started successfully (long-polling mode)");
+      })
+      .catch((error) => {
+        log.error({ error }, "❌ Telegram bot failed to start");
       });
-    } else {
-      log.info("Telegram bot registered in webhook mode");
-    }
-  } else if (!env.ENABLE_TELEGRAM_BOT || env.TELEGRAM_MODE === "disabled") {
-    log.warn("Telegram bot startup is disabled");
+  } else if (!env.ENABLE_TELEGRAM_BOT) {
+    log.warn("Telegram bot startup is disabled via ENABLE_TELEGRAM_BOT=false");
   } else {
     log.warn(
       "Telegram bot not started because TELEGRAM_BOT_TOKEN is not configured",
@@ -101,6 +102,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  log.error({ err: error }, "Fatal startup error");
+  log.error({ error }, "Fatal startup error");
   process.exit(1);
 });
