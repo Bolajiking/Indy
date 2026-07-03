@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { Bot, webhookCallback } from "grammy";
+import crypto from "node:crypto";
 import {
   handleWhatsAppWebhookPayload,
   sendWhatsAppMessage,
@@ -10,74 +11,99 @@ import pino from "pino";
 
 const log = pino({ name: "routes:webhooks" });
 
-export const webhooks = new Hono();
+type TelegramMode = "disabled" | "polling" | "webhook";
 
-/**
- * Stores a reference to the Telegram bot for webhook mode.
- * Set via setTelegramBotForWebhook() from index.ts.
- */
-let telegramBotForWebhook: Bot | null = null;
+type WebhookRouteOptions = {
+  telegramMode?: TelegramMode;
+  telegramBot?: Bot | null;
+  telegramWebhookSecret?: string;
+  telegramHandler?: ReturnType<typeof webhookCallback>;
+};
 
-export function setTelegramBotForWebhook(bot: Bot) {
-  telegramBotForWebhook = bot;
+function secretsMatch(expected: string, supplied: string | undefined) {
+  if (!expected || !supplied) return false;
+  const expectedBuffer = Buffer.from(expected, "utf8");
+  const suppliedBuffer = Buffer.from(supplied, "utf8");
+  return (
+    expectedBuffer.length === suppliedBuffer.length &&
+    crypto.timingSafeEqual(expectedBuffer, suppliedBuffer)
+  );
 }
 
-/**
- * POST /webhooks/telegram — Telegram webhook endpoint.
- * Alternative to long-polling. Set via Telegram Bot API setWebhook().
- */
-webhooks.post("/telegram", async (c) => {
-  if (!telegramBotForWebhook) {
-    log.warn("Telegram webhook received but no bot is registered");
-    return c.text("Bot not configured", 503);
-  }
+export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
+  const routes = new Hono();
+  const telegramMode = options.telegramMode ?? "disabled";
 
-  try {
-    const handler = webhookCallback(telegramBotForWebhook, "hono");
-    return await handler(c);
-  } catch (error) {
-    log.error({ error }, "Telegram webhook handler failed");
-    return c.text("OK", 200); // Always 200 to avoid Telegram retries
-  }
-});
+  routes.post("/telegram", async (context) => {
+    if (telegramMode !== "webhook") {
+      return context.text("Telegram webhook mode is disabled", 404);
+    }
 
-webhooks.get("/whatsapp", (context) => {
-  const url = new URL(context.req.url);
-  const query = {
-    "hub.mode": url.searchParams.get("hub.mode") ?? undefined,
-    "hub.verify_token": url.searchParams.get("hub.verify_token") ?? undefined,
-    "hub.challenge": url.searchParams.get("hub.challenge") ?? undefined,
-  };
+    if (!options.telegramBot) {
+      log.warn("Telegram webhook received but no bot is registered");
+      return context.text("Bot not configured", 503);
+    }
 
-  const result = verifyWhatsAppWebhook(query);
-  if (!result.ok) {
-    return context.text("Forbidden", 403);
-  }
+    const suppliedSecret = context.req.header(
+      "X-Telegram-Bot-Api-Secret-Token",
+    );
+    if (!secretsMatch(options.telegramWebhookSecret ?? "", suppliedSecret)) {
+      return context.text("Unauthorized", 401);
+    }
 
-  return context.text(result.challenge ?? "", 200);
-});
+    try {
+      if (options.telegramHandler) {
+        return await options.telegramHandler(context as never);
+      }
+      return await webhookCallback(options.telegramBot, "hono")(context);
+    } catch (error) {
+      log.error({ error }, "Telegram webhook handler failed");
+      return context.text("OK", 200); // Avoid retries after authenticated processing fails.
+    }
+  });
 
-webhooks.post("/whatsapp", async (context) => {
-  const rawBody = await context.req.text();
-  const signature = context.req.header("x-hub-signature-256");
+  routes.get("/whatsapp", (context) => {
+    const url = new URL(context.req.url);
+    const query = {
+      "hub.mode": url.searchParams.get("hub.mode") ?? undefined,
+      "hub.verify_token": url.searchParams.get("hub.verify_token") ?? undefined,
+      "hub.challenge": url.searchParams.get("hub.challenge") ?? undefined,
+    };
 
-  if (!verifyWhatsAppSignature(rawBody, signature)) {
-    return context.json({ error: "Invalid WhatsApp signature" }, 401);
-  }
+    const result = verifyWhatsAppWebhook(query);
+    if (!result.ok) {
+      return context.text("Forbidden", 403);
+    }
 
-  let payload: unknown;
-  try {
-    payload = JSON.parse(rawBody) as unknown;
-  } catch (error) {
-    log.warn({ error }, "WhatsApp webhook body was not valid JSON");
-    return context.json({ error: "Invalid WhatsApp payload" }, 400);
-  }
+    return context.text(result.challenge ?? "", 200);
+  });
 
-  const responses = await handleWhatsAppWebhookPayload(payload);
+  routes.post("/whatsapp", async (context) => {
+    const rawBody = await context.req.text();
+    const signature = context.req.header("x-hub-signature-256");
 
-  await Promise.all(
-    responses.map(({ to, response }) => sendWhatsAppMessage(to, response)),
-  );
+    if (!verifyWhatsAppSignature(rawBody, signature)) {
+      return context.json({ error: "Invalid WhatsApp signature" }, 401);
+    }
 
-  return context.text("OK", 200);
-});
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawBody) as unknown;
+    } catch (error) {
+      log.warn({ error }, "WhatsApp webhook body was not valid JSON");
+      return context.json({ error: "Invalid WhatsApp payload" }, 400);
+    }
+
+    const responses = await handleWhatsAppWebhookPayload(payload);
+
+    await Promise.all(
+      responses.map(({ to, response }) => sendWhatsAppMessage(to, response)),
+    );
+
+    return context.text("OK", 200);
+  });
+
+  return routes;
+}
+
+export const webhooks = createWebhookRoutes();

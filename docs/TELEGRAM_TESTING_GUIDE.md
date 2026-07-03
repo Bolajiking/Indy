@@ -79,21 +79,29 @@ AI business manager for content creators. Powered by a configurable AI provider.
 npm run dev
 ```
 
-The bot will automatically start in long-polling mode if `TELEGRAM_BOT_TOKEN` is configured.
+The bot starts long polling only when `ENABLE_TELEGRAM_BOT=true`,
+`TELEGRAM_MODE=polling`, and `TELEGRAM_BOT_TOKEN` is configured.
 
 **Look for this in logs:**
 
 ```
-{"name":"indyfren","msg":"Telegram bot started (long-polling mode)"}
+{"name":"indyfren","mode":"polling","msg":"Telegram bot configured"}
 ```
 
 ### Production (Webhook Mode)
 
-Set webhook after deploying to Railway:
+Set `TELEGRAM_MODE=webhook` and configure `TELEGRAM_WEBHOOK_SECRET` in the
+deployment environment. Then set the webhook after deploying to Railway:
 
 ```bash
-curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-api.railway.app/webhooks/telegram"
+curl --request POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
+  --form-string "url=https://your-api.railway.app/webhooks/telegram" \
+  --form-string "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
 ```
+
+Keep `TELEGRAM_WEBHOOK_SECRET` out of the URL and logs. Telegram uses the
+`secret_token` field to generate the `X-Telegram-Bot-Api-Secret-Token` header
+that Indyfren verifies on every update.
 
 Verify webhook:
 
@@ -430,7 +438,9 @@ curl "https://api.telegram.org/bot<TOKEN>/getWebhookInfo"
 curl -X POST "https://api.telegram.org/bot<TOKEN>/deleteWebhook"
 
 # Set new webhook
-curl -X POST "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://your-api.railway.app/webhooks/telegram"
+curl --request POST "https://api.telegram.org/bot<TOKEN>/setWebhook" \
+  --form-string "url=https://your-api.railway.app/webhooks/telegram" \
+  --form-string "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
 ```
 
 ### Long polling conflicts

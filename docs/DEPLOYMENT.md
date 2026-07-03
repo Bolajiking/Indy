@@ -283,11 +283,21 @@ railway up
 
 #### Telegram Bot
 
-Set webhook URL:
+Set webhook URL and ask Telegram to authenticate every delivery. Keep the secret
+in the `secret_token` form field; do not append it to the webhook URL or print its
+value in deployment logs. Before running this command, set
+`TELEGRAM_MODE=webhook` and configure `TELEGRAM_WEBHOOK_SECRET` in Railway.
 
 ```bash
-curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-api.railway.app/webhooks/telegram"
+curl --request POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
+  --form-string "url=https://your-api.railway.app/webhooks/telegram" \
+  --form-string "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
 ```
+
+Telegram generates the `X-Telegram-Bot-Api-Secret-Token` request header from
+that field. Indyfren accepts the route only when `TELEGRAM_MODE=webhook` and the
+header exactly matches `TELEGRAM_WEBHOOK_SECRET`; polling and disabled modes
+return `404`.
 
 Verify webhook:
 

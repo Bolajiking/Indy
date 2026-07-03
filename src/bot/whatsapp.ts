@@ -45,17 +45,22 @@ export function verifyWhatsAppWebhook(
 export function verifyWhatsAppSignature(
   payload: string,
   signature: string | undefined,
+  secret = env.WHATSAPP_WEBHOOK_SECRET,
 ): boolean {
-  if (!env.WHATSAPP_WEBHOOK_SECRET || !signature) {
+  if (!secret || !signature) {
     return false;
   }
 
-  const expected = crypto
-    .createHmac("sha256", env.WHATSAPP_WEBHOOK_SECRET)
-    .update(payload)
-    .digest("hex");
+  const match = /^sha256=([a-fA-F0-9]{64})$/.exec(signature);
+  if (!match) return false;
 
-  return signature === `sha256=${expected}`;
+  const expected = crypto.createHmac("sha256", secret).update(payload).digest();
+  const supplied = Buffer.from(match[1], "hex");
+
+  return (
+    supplied.length === expected.length &&
+    crypto.timingSafeEqual(supplied, expected)
+  );
 }
 
 export async function handleWhatsAppWebhookPayload(

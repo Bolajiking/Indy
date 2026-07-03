@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { pathToFileURL } from "node:url";
 import pino from "pino";
 import { createApiServer } from "./api/server.js";
 import { initializeRateLimitStore } from "./api/rate-limit-store.js";
@@ -11,7 +12,7 @@ import { reports } from "./api/routes/reports.js";
 import { wallet } from "./api/routes/wallet.js";
 import { messaging } from "./api/routes/messaging.js";
 import { connections } from "./api/routes/connections.js";
-import { webhooks, setTelegramBotForWebhook } from "./api/routes/webhooks.js";
+import { createWebhookRoutes } from "./api/routes/webhooks.js";
 import { createHealthRoutes } from "./api/routes/health.js";
 import {
   createTelegramBot,
@@ -31,7 +32,35 @@ import { loadMCPServers } from "./agent/tools/mcp-adapter.js";
 
 const log = pino({ name: "indyfren" });
 
-async function main() {
+type TelegramMode = "disabled" | "polling" | "webhook";
+type StartableTelegramBot = { start: () => Promise<void> | void };
+
+export function startTelegramMode<T extends StartableTelegramBot>(options: {
+  enabled: boolean;
+  configured: boolean;
+  mode: TelegramMode;
+  createBot: () => T;
+  registerBot: (bot: T) => void;
+  registerWebhook: (bot: T) => void;
+}): T | null {
+  if (!options.enabled || options.mode === "disabled") return null;
+  if (!options.configured) return null;
+
+  const bot = options.createBot();
+  options.registerBot(bot);
+
+  if (options.mode === "polling") {
+    Promise.resolve(bot.start()).catch((error) => {
+      log.error({ error }, "Telegram bot failed to start in polling mode");
+    });
+  } else {
+    options.registerWebhook(bot);
+  }
+
+  return bot;
+}
+
+export async function main() {
   validateProductionEnv(env);
 
   // Load MCP tool servers (non-blocking — failures logged, not fatal)
@@ -48,6 +77,19 @@ async function main() {
     rateLimitStore,
     trustedProxyHops: env.TRUSTED_PROXY_HOPS,
   });
+
+  let telegramWebhookBot: ReturnType<typeof createTelegramBot> | null = null;
+  const telegramBot = startTelegramMode({
+    enabled: env.ENABLE_TELEGRAM_BOT,
+    configured: isTelegramConfigured(),
+    mode: env.TELEGRAM_MODE,
+    createBot: createTelegramBot,
+    registerBot: registerTelegramBot,
+    registerWebhook: (bot) => {
+      telegramWebhookBot = bot;
+    },
+  });
+
   installCreatorRateLimits(app, { store: rateLimitStore });
   app.route(
     "/health",
@@ -60,7 +102,15 @@ async function main() {
         : undefined,
     }),
   );
-  app.route("/webhooks", webhooks);
+  app.route(
+    "/webhooks",
+    createWebhookRoutes({
+      telegramMode:
+        env.ENABLE_TELEGRAM_BOT && telegramBot ? env.TELEGRAM_MODE : "disabled",
+      telegramBot: telegramWebhookBot,
+      telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET,
+    }),
+  );
   app.route("/api/agent", agent);
   app.route("/api/auth", auth);
   app.route("/api/deals", deals);
@@ -80,30 +130,14 @@ async function main() {
     },
   );
 
-  if (env.ENABLE_TELEGRAM_BOT && isTelegramConfigured()) {
-    const telegramBot = createTelegramBot();
-    log.info("Telegram bot instance created, starting long-polling...");
-    registerTelegramBot(telegramBot);
-    // Also register for webhook mode (the POST /webhooks/telegram route)
-    setTelegramBotForWebhook(telegramBot);
-
-    // Start the bot in long-polling mode
-    log.info("Calling telegramBot.start()...");
-    const startPromise = telegramBot.start();
-    log.info("telegramBot.start() called, waiting for promise...");
-    startPromise
-      .then(() => {
-        log.info("✅ Telegram bot started successfully (long-polling mode)");
-      })
-      .catch((error) => {
-        log.error({ error }, "❌ Telegram bot failed to start");
-      });
-  } else if (!env.ENABLE_TELEGRAM_BOT) {
-    log.warn("Telegram bot startup is disabled via ENABLE_TELEGRAM_BOT=false");
-  } else {
+  if (!env.ENABLE_TELEGRAM_BOT || env.TELEGRAM_MODE === "disabled") {
+    log.warn("Telegram bot startup is disabled");
+  } else if (!telegramBot) {
     log.warn(
       "Telegram bot not started because TELEGRAM_BOT_TOKEN is not configured",
     );
+  } else {
+    log.info({ mode: env.TELEGRAM_MODE }, "Telegram bot configured");
   }
 
   if (env.ENABLE_JOBS) {
@@ -122,7 +156,13 @@ async function main() {
   log.info("Indyfren is running");
 }
 
-main().catch((error) => {
-  log.error({ error }, "Fatal startup error");
-  process.exit(1);
-});
+const isEntrypoint =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+
+if (isEntrypoint) {
+  main().catch((error) => {
+    log.error({ error }, "Fatal startup error");
+    process.exit(1);
+  });
+}

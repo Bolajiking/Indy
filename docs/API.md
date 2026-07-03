@@ -548,15 +548,23 @@ Get upcoming deadlines and scheduled tasks.
 
 ### POST /webhooks/telegram
 
-Telegram bot webhook endpoint.
+Telegram bot webhook endpoint. It is active only when `TELEGRAM_MODE=webhook`.
+Polling and disabled modes return `404`.
 
 **Setup:**
 
 ```bash
-curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-api.railway.app/webhooks/telegram"
+curl --request POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
+  --form-string "url=https://your-api.railway.app/webhooks/telegram" \
+  --form-string "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
 ```
 
-**Request:** Telegram webhook payload (automatically sent by Telegram)
+Pass the secret as Telegram's `secret_token` field, never as part of the webhook
+URL. Telegram then supplies it in the
+`X-Telegram-Bot-Api-Secret-Token` header on each delivery.
+
+**Request:** Telegram webhook payload with the
+`X-Telegram-Bot-Api-Secret-Token` header (automatically sent by Telegram)
 
 **Response:** `200 OK`
 
