@@ -1,8 +1,6 @@
 import { Hono } from "hono";
 import { supabase } from "../../db/client.js";
 
-const startedAt = Date.now();
-
 async function checkDatabase() {
   const { error } = await supabase.from("creators").select("id").limit(1);
   if (error) throw new Error("Database unavailable");
@@ -16,13 +14,6 @@ interface HealthRouteOptions {
 export function createHealthRoutes(options: HealthRouteOptions = {}) {
   const app = new Hono();
   const databaseCheck = options.checkDatabase ?? checkDatabase;
-
-  app.get("/", (c) =>
-    c.json({
-      status: "ok",
-      uptime: Math.floor((Date.now() - startedAt) / 1000),
-    }),
-  );
 
   app.get("/ready", async (c) => {
     const checks: Record<string, "ok" | "unreachable"> = {};
@@ -49,5 +40,3 @@ export function createHealthRoutes(options: HealthRouteOptions = {}) {
 
   return app;
 }
-
-export const health = createHealthRoutes();

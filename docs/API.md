@@ -35,20 +35,14 @@ Authorization: Bearer <privy_access_token>
 
 ### GET /health
 
-Check API health and dependency status.
+Cheap process liveness check. This endpoint does not probe external dependencies.
 
 **Response:** `200 OK`
 
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-03-20T12:00:00.000Z",
-  "uptime": 3600,
-  "dependencies": {
-    "database": "ok",
-    "redis": "ok",
-    "anthropic": "ok"
-  }
+  "timestamp": "2026-07-03T12:00:00.000Z"
 }
 ```
 
@@ -60,9 +54,15 @@ Readiness probe for deployment health checks.
 
 ```json
 {
-  "ready": true
+  "ready": true,
+  "checks": {
+    "database": "ok",
+    "rateLimit": "ok"
+  }
 }
 ```
+
+When a dependency is unavailable, the endpoint returns `503` with `ready: false` and that check set to `"unreachable"`.
 
 ---
 

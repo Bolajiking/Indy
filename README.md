@@ -230,18 +230,18 @@ If a live MPP smoke reports that `payment_attempts` is missing, set `DATABASE_UR
 
 ## API Endpoints
 
-| Route                          | Description                                 |
-| ------------------------------ | ------------------------------------------- |
-| `GET /health`                  | Health check with dependency status         |
-| `GET /health/ready`            | Readiness probe                             |
-| `POST /webhooks/telegram`      | Telegram webhook                            |
-| `GET/POST /webhooks/whatsapp`  | WhatsApp webhook                            |
-| `POST /api/auth/register`      | Creator registration                        |
-| `GET /api/auth/me`             | Current creator profile                     |
-| `GET /api/deals`               | List deals                                  |
-| `GET /api/wallet/transactions` | Wallet activity                             |
-| `GET /api/platforms`           | Connected platforms                         |
-| `GET /api/reports/*`           | Financial, analytics, calendar, SEO reports |
+| Route                          | Description                                    |
+| ------------------------------ | ---------------------------------------------- |
+| `GET /health`                  | Cheap process liveness (`status`, `timestamp`) |
+| `GET /health/ready`            | Database and rate-limit Redis readiness checks |
+| `POST /webhooks/telegram`      | Telegram webhook                               |
+| `GET/POST /webhooks/whatsapp`  | WhatsApp webhook                               |
+| `POST /api/auth/register`      | Creator registration                           |
+| `GET /api/auth/me`             | Current creator profile                        |
+| `GET /api/deals`               | List deals                                     |
+| `GET /api/wallet/transactions` | Wallet activity                                |
+| `GET /api/platforms`           | Connected platforms                            |
+| `GET /api/reports/*`           | Financial, analytics, calendar, SEO reports    |
 
 ## Bot Commands
 

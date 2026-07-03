@@ -7,19 +7,48 @@ vi.mock("../../../src/db/client.js", () => ({
 }));
 
 import { createHealthRoutes } from "../../../src/api/routes/health.js";
+import { createApiServer } from "../../../src/api/server.js";
+import { InMemoryRateLimitStore } from "../../../src/api/rate-limit-store.js";
 
 describe("health routes", () => {
-  it("keeps liveness cheap without checking dependencies", async () => {
+  it("leaves liveness ownership to the API server", async () => {
     const checkDatabase = vi.fn().mockRejectedValue(new Error("database down"));
     const checkRateLimit = vi.fn().mockRejectedValue(new Error("redis down"));
     const app = createHealthRoutes({ checkDatabase, checkRateLimit });
 
     const response = await app.request("/");
 
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ status: "ok" });
+    expect(response.status).toBe(404);
     expect(checkDatabase).not.toHaveBeenCalled();
     expect(checkRateLimit).not.toHaveBeenCalled();
+  });
+
+  it("composes cheap liveness with dependency readiness like the production server", async () => {
+    const app = createApiServer({
+      rateLimitStore: new InMemoryRateLimitStore(),
+      getSocketAddress: () => "203.0.113.40",
+    });
+    app.route(
+      "/health",
+      createHealthRoutes({
+        checkDatabase: async () => undefined,
+        checkRateLimit: async () => undefined,
+      }),
+    );
+
+    const liveness = await app.request("/health");
+    const readiness = await app.request("/health/ready");
+
+    expect(liveness.status).toBe(200);
+    expect(await liveness.json()).toEqual({
+      status: "ok",
+      timestamp: expect.any(String),
+    });
+    expect(readiness.status).toBe(200);
+    expect(await readiness.json()).toEqual({
+      ready: true,
+      checks: { database: "ok", rateLimit: "ok" },
+    });
   });
 
   it("reports distributed rate-limit Redis failures through readiness", async () => {

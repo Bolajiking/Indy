@@ -331,14 +331,29 @@ Expected:
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-03-20T12:00:00.000Z",
-  "uptime": 3600,
-  "dependencies": {
+  "timestamp": "2026-07-03T12:00:00.000Z"
+}
+```
+
+This is a cheap liveness check. Verify dependency readiness separately:
+
+```bash
+curl https://your-api.railway.app/health/ready
+```
+
+Expected when ready:
+
+```json
+{
+  "ready": true,
+  "checks": {
     "database": "ok",
-    "redis": "ok"
+    "rateLimit": "ok"
   }
 }
 ```
+
+Readiness returns `503` with `ready: false` and an `"unreachable"` check when the database or rate-limit Redis is unavailable.
 
 **Dashboard:**
 
