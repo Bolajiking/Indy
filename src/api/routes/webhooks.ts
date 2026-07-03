@@ -39,16 +39,16 @@ export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
       return context.text("Telegram webhook mode is disabled", 404);
     }
 
-    if (!options.telegramBot) {
-      log.warn("Telegram webhook received but no bot is registered");
-      return context.text("Bot not configured", 503);
-    }
-
     const suppliedSecret = context.req.header(
       "X-Telegram-Bot-Api-Secret-Token",
     );
     if (!secretsMatch(options.telegramWebhookSecret ?? "", suppliedSecret)) {
       return context.text("Unauthorized", 401);
+    }
+
+    if (!options.telegramBot) {
+      log.warn("Telegram webhook received but no bot is registered");
+      return context.text("Bot not configured", 503);
     }
 
     try {

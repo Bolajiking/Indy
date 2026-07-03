@@ -5,7 +5,10 @@ import { createWebhookRoutes } from "../../../src/api/routes/webhooks.js";
 import { verifyWhatsAppSignature } from "../../../src/bot/whatsapp.js";
 
 describe("Telegram webhook authentication", () => {
-  const createApp = (mode: "disabled" | "polling" | "webhook") => {
+  const createApp = (
+    mode: "disabled" | "polling" | "webhook",
+    options: { botAvailable?: boolean } = {},
+  ) => {
     const processUpdate = vi.fn(
       async () => new Response("OK", { status: 200 }),
     );
@@ -14,7 +17,7 @@ describe("Telegram webhook authentication", () => {
       "/webhooks",
       createWebhookRoutes({
         telegramMode: mode,
-        telegramBot: {} as never,
+        telegramBot: options.botAvailable === false ? null : ({} as never),
         telegramWebhookSecret: "telegram-webhook-secret",
         telegramHandler: processUpdate,
       }),
@@ -56,6 +59,41 @@ describe("Telegram webhook authentication", () => {
 
     expect(response.status).toBe(200);
     expect(processUpdate).toHaveBeenCalledOnce();
+  });
+
+  it.each([undefined, "wrong-secret"])(
+    "returns 401 before revealing absent bot state for secret %s",
+    async (secret) => {
+      const { app, processUpdate } = createApp("webhook", {
+        botAvailable: false,
+      });
+      const headers: Record<string, string> = {};
+      if (secret) headers["X-Telegram-Bot-Api-Secret-Token"] = secret;
+
+      const response = await app.request("/webhooks/telegram", {
+        method: "POST",
+        headers,
+      });
+
+      expect(response.status).toBe(401);
+      expect(processUpdate).not.toHaveBeenCalled();
+    },
+  );
+
+  it("returns 503 only after authenticating a request when the bot is absent", async () => {
+    const { app, processUpdate } = createApp("webhook", {
+      botAvailable: false,
+    });
+
+    const response = await app.request("/webhooks/telegram", {
+      method: "POST",
+      headers: {
+        "X-Telegram-Bot-Api-Secret-Token": "telegram-webhook-secret",
+      },
+    });
+
+    expect(response.status).toBe(503);
+    expect(processUpdate).not.toHaveBeenCalled();
   });
 
   it.each(["disabled", "polling"] as const)(

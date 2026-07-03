@@ -689,7 +689,10 @@ Link: </api/deals?limit=50&offset=50>; rel="next"
 
 ### Telegram
 
-Telegram webhooks are verified automatically by the grammY framework.
+Telegram webhook authentication is application-managed, not automatically
+verified by grammY. Indyfren compares the configured secret with the
+`X-Telegram-Bot-Api-Secret-Token` header using an equal-length, timing-safe
+comparison before checking bot availability or processing the update.
 
 ### WhatsApp
 
