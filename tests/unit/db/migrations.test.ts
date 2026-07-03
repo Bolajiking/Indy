@@ -6,6 +6,7 @@ import {
   BASELINE_INVENTORY_SQL,
   canonicalizeDefinition,
   discoverMigrations,
+  formatMigrationError,
   runMigrations,
   verifyBaselineInventory,
   type CatalogObject,
@@ -91,6 +92,9 @@ describe("database migration files", () => {
     );
 
     expect(schema).toMatch(/CREATE TABLE IF NOT EXISTS schema_migrations/i);
+    expect(schema).toMatch(/ON CONFLICT\s*\(version\)\s*DO NOTHING/i);
+    expect(schema).not.toMatch(/DO UPDATE SET checksum/i);
+    expect(schema).toMatch(/RAISE EXCEPTION[^;]*checksum drift/i);
     expect(snapshotRows).toEqual(
       new Map(migrations.map(({ version, checksum }) => [version, checksum])),
     );
@@ -473,6 +477,30 @@ describe("baseline definition verification", () => {
       runMigrations(db, migrations, { adoptBaseline: true }),
     ).rejects.toThrow(/unexpected policy creators\.extra_anon_read/i);
     expect(db.queryEvents.at(-1)).toBe("UNLOCK");
+  });
+});
+
+describe("migration CLI diagnostics", () => {
+  it("prints aggregate member failures while redacting connection URLs", () => {
+    const primary = new Error("migration failed");
+    const aggregate = new AggregateError(
+      [
+        primary,
+        new Error("rollback failed"),
+        new Error(
+          "unlock failed at postgresql://admin:super-secret@db.example/indy",
+        ),
+      ],
+      "migration failed",
+      { cause: primary },
+    );
+
+    const diagnostic = formatMigrationError(aggregate);
+    expect(diagnostic).toMatch(/migration failed/i);
+    expect(diagnostic).toMatch(/rollback failed/i);
+    expect(diagnostic).toMatch(/unlock failed/i);
+    expect(diagnostic).not.toContain("super-secret");
+    expect(diagnostic).not.toContain("admin");
   });
 });
 

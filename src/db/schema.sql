@@ -368,4 +368,21 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 INSERT INTO schema_migrations (version, checksum) VALUES
   ('0001', 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94'),
   ('0002', '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906')
-ON CONFLICT (version) DO UPDATE SET checksum = EXCLUDED.checksum;
+ON CONFLICT (version) DO NOTHING;
+
+DO $$
+DECLARE
+  drift_version TEXT;
+BEGIN
+  SELECT version INTO drift_version
+  FROM schema_migrations
+  WHERE
+    (version = '0001' AND checksum <> 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94')
+    OR
+    (version = '0002' AND checksum <> '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906')
+  LIMIT 1;
+
+  IF drift_version IS NOT NULL THEN
+    RAISE EXCEPTION 'schema_migrations checksum drift for version %', drift_version;
+  END IF;
+END $$;

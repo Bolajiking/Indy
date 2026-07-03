@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import pg, { type PoolClient } from "pg";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -14,6 +15,7 @@ integration.sequential("database migrations on PostgreSQL", () => {
   let pool: pg.Pool;
   let client: PoolClient;
   let migrations: Migration[];
+  let snapshotSql: string;
 
   beforeAll(async () => {
     pool = new pg.Pool({ connectionString: testDatabaseUrl });
@@ -29,6 +31,10 @@ integration.sequential("database migrations on PostgreSQL", () => {
     }
     migrations = await discoverMigrations(
       resolve(import.meta.dirname, "../../src/db/migrations"),
+    );
+    snapshotSql = await readFile(
+      resolve(import.meta.dirname, "../../src/db/schema.sql"),
+      "utf8",
     );
   });
 
@@ -49,6 +55,33 @@ integration.sequential("database migrations on PostgreSQL", () => {
     expect(
       await runMigrations(client, migrations, { checkOnly: true }),
     ).toEqual({ applied: [] });
+  });
+
+  it("hands a snapshot install to migration check and reruns idempotently", async () => {
+    await client.query(snapshotSql);
+    expect(
+      await runMigrations(client, migrations, { checkOnly: true }),
+    ).toEqual({ applied: [] });
+
+    await client.query(snapshotSql);
+    expect(
+      await runMigrations(client, migrations, { checkOnly: true }),
+    ).toEqual({ applied: [] });
+  });
+
+  it("surfaces snapshot ledger drift without repairing the checksum", async () => {
+    await client.query(snapshotSql);
+    await client.query(
+      "UPDATE schema_migrations SET checksum = 'tampered' WHERE version = '0001'",
+    );
+
+    await expect(client.query(snapshotSql)).rejects.toThrow(
+      /checksum drift.*0001/i,
+    );
+    const { rows } = await client.query<{ checksum: string }>(
+      "SELECT checksum FROM schema_migrations WHERE version = '0001'",
+    );
+    expect(rows[0]?.checksum).toBe("tampered");
   });
 
   it("adopts an actual verified baseline and applies the launch migration", async () => {

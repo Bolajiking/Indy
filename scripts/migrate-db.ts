@@ -604,6 +604,44 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+export function formatMigrationError(error: unknown): string {
+  const messages: string[] = [];
+  const seenErrors = new Set<unknown>();
+  const seenMessages = new Set<string>();
+
+  const visit = (current: unknown): void => {
+    if (seenErrors.has(current)) return;
+    seenErrors.add(current);
+    const message = redactDiagnostic(errorMessage(current));
+    if (!seenMessages.has(message)) {
+      seenMessages.add(message);
+      messages.push(message);
+    }
+    if (current instanceof AggregateError) {
+      for (const member of current.errors) visit(member);
+    } else if (current instanceof Error && current.cause !== undefined) {
+      visit(current.cause);
+    }
+  };
+
+  visit(error);
+  return messages
+    .map((message, index) =>
+      index === 0 ? message : `Related error: ${message}`,
+    )
+    .join("\n");
+}
+
+function redactDiagnostic(message: string): string {
+  let redacted = message;
+  const databaseUrl = process.env.DATABASE_URL;
+  if (databaseUrl)
+    redacted = redacted.split(databaseUrl).join("[DATABASE_URL redacted]");
+  return redacted
+    .replace(/\bpostgres(?:ql)?:\/\/[^\s)]+/gi, "postgresql://[redacted]")
+    .replace(/\b(password|secret|token)=([^\s&]+)/gi, "$1=[redacted]");
+}
+
 async function main(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error("DATABASE_URL is required");
@@ -641,7 +679,7 @@ if (
   resolve(process.argv[1]) === fileURLToPath(import.meta.url)
 ) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : error);
+    console.error(formatMigrationError(error));
     process.exitCode = 1;
   });
 }
