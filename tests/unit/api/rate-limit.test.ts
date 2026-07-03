@@ -6,6 +6,7 @@ vi.mock("../../../src/auth/session.js", () => ({
 }));
 import {
   createConfiguredRateLimitStore,
+  initializeRateLimitStore,
   InMemoryRateLimitStore,
   type RateLimitStore,
 } from "../../../src/api/rate-limit-store.js";
@@ -79,6 +80,55 @@ describe("distributed API rate limiting", () => {
     ).toBeInstanceOf(InMemoryRateLimitStore);
   });
 
+  it("refuses startup when production Redis is unavailable without exposing its URL", async () => {
+    const secretUrl = "rediss://user:super-secret@redis.example.com:6380";
+    const unavailableStore: RateLimitStore = {
+      increment: async () => ({ count: 1, resetAt: Date.now() + 60_000 }),
+      ready: async () => {
+        throw new Error(`connect ECONNREFUSED ${secretUrl}`);
+      },
+    };
+
+    let failure: Error | undefined;
+    try {
+      await initializeRateLimitStore(
+        {
+          nodeEnv: "production",
+          distributed: true,
+          redisUrl: secretUrl,
+        },
+        () => unavailableStore,
+      );
+    } catch (error) {
+      failure = error as Error;
+    }
+
+    expect(failure?.message).toBe(
+      "Rate limit Redis is unavailable; startup aborted",
+    );
+    expect(failure?.message).not.toContain("super-secret");
+  });
+
+  it("waits for a successful Redis readiness probe during initialization", async () => {
+    const ready = vi.fn().mockResolvedValue(undefined);
+    const store: RateLimitStore = {
+      increment: async () => ({ count: 1, resetAt: Date.now() + 60_000 }),
+      ready,
+    };
+
+    const initialized = await initializeRateLimitStore(
+      {
+        nodeEnv: "production",
+        distributed: true,
+        redisUrl: "rediss://redis.example.com:6380",
+      },
+      () => store,
+    );
+
+    expect(initialized).toBe(store);
+    expect(ready).toHaveBeenCalledOnce();
+  });
+
   it("cannot bypass an IP quota by rotating spoofed forwarding headers", async () => {
     const app = createApiServer({
       rateLimitStore: new InMemoryRateLimitStore(),
@@ -111,6 +161,62 @@ describe("distributed API rate limiting", () => {
         socketAddress: "10.0.0.4",
         forwardedFor: "198.51.100.99, 198.51.100.20",
         trustedProxyHops: 1,
+      }),
+    ).toBe("198.51.100.20");
+  });
+
+  it("falls back to the socket when the forwarded chain is shorter than trusted hops", () => {
+    expect(
+      resolveNetworkIdentity({
+        socketAddress: "203.0.113.9",
+        forwardedFor: "198.51.100.20",
+        trustedProxyHops: 2,
+      }),
+    ).toBe("203.0.113.9");
+  });
+
+  it("rejects malformed forwarded and socket identities", () => {
+    expect(
+      resolveNetworkIdentity({
+        socketAddress: "203.0.113.9",
+        forwardedFor: "not-an-ip, 198.51.100.20",
+        trustedProxyHops: 2,
+      }),
+    ).toBe("203.0.113.9");
+    expect(
+      resolveNetworkIdentity({
+        socketAddress: "attacker-controlled-value",
+        forwardedFor: "also-not-an-ip",
+        trustedProxyHops: 1,
+      }),
+    ).toBe("unknown");
+  });
+
+  it("canonicalizes IPv4-mapped and equivalent IPv6 identities", () => {
+    expect(
+      resolveNetworkIdentity({
+        socketAddress: "::ffff:192.0.2.128",
+        trustedProxyHops: 0,
+      }),
+    ).toBe("192.0.2.128");
+    const expanded = resolveNetworkIdentity({
+      socketAddress: "2001:0db8:0000:0000:0000:0000:0000:0001",
+      trustedProxyHops: 0,
+    });
+    const compressed = resolveNetworkIdentity({
+      socketAddress: "2001:db8::1",
+      trustedProxyHops: 0,
+    });
+    expect(expanded).toBe("2001:db8::1");
+    expect(compressed).toBe(expanded);
+  });
+
+  it("normalizes whitespace in a valid multi-hop forwarded chain", () => {
+    expect(
+      resolveNetworkIdentity({
+        socketAddress: " 10.0.0.4 ",
+        forwardedFor: " 198.51.100.20 , 10.0.0.3 ",
+        trustedProxyHops: 2,
       }),
     ).toBe("198.51.100.20");
   });
@@ -398,6 +504,35 @@ describe("distributed API rate limiting", () => {
     expect((await store.increment("first", 60_000)).count).toBe(1);
     expect((await store.increment("second", 60_000)).count).toBe(1);
     expect((await store.increment("first", 60_000)).count).toBe(1);
+  });
+
+  it("evicts the bucket nearest expiry instead of the oldest insertion", async () => {
+    let now = 0;
+    const store = new InMemoryRateLimitStore({
+      maxEntries: 3,
+      now: () => now,
+    });
+    await store.increment("long-oldest", 1_000);
+    await store.increment("short-newer", 100);
+    await store.increment("long-newest", 2_000);
+    await store.increment("incoming", 3_000);
+
+    expect((await store.increment("long-oldest", 1_000)).count).toBe(2);
+    expect((await store.increment("short-newer", 100)).count).toBe(1);
+
+    now = 5_000;
+    await store.increment("after-expiry", 1_000);
+    expect(store.size).toBe(1);
+  });
+
+  it("stays bounded under high-cardinality churn", async () => {
+    const store = new InMemoryRateLimitStore({ maxEntries: 25 });
+
+    for (let key = 0; key < 2_000; key += 1) {
+      await store.increment(`churn-${key}`, 60_000);
+    }
+
+    expect(store.size).toBe(25);
   });
 
   it("emits standard quota and retry headers", async () => {

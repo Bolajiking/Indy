@@ -1,7 +1,7 @@
 import { serve } from "@hono/node-server";
 import pino from "pino";
 import { createApiServer } from "./api/server.js";
-import { createConfiguredRateLimitStore } from "./api/rate-limit-store.js";
+import { initializeRateLimitStore } from "./api/rate-limit-store.js";
 import { installCreatorRateLimits } from "./api/middleware/rate-limit.js";
 import { agent } from "./api/routes/agent.js";
 import { auth } from "./api/routes/auth.js";
@@ -12,7 +12,7 @@ import { wallet } from "./api/routes/wallet.js";
 import { messaging } from "./api/routes/messaging.js";
 import { connections } from "./api/routes/connections.js";
 import { webhooks, setTelegramBotForWebhook } from "./api/routes/webhooks.js";
-import { health } from "./api/routes/health.js";
+import { createHealthRoutes } from "./api/routes/health.js";
 import {
   createTelegramBot,
   isTelegramConfigured,
@@ -39,7 +39,7 @@ async function main() {
     log.error({ err }, "MCP server initialization failed"),
   );
 
-  const rateLimitStore = createConfiguredRateLimitStore({
+  const rateLimitStore = await initializeRateLimitStore({
     nodeEnv: env.NODE_ENV,
     distributed: env.ENABLE_DISTRIBUTED_RATE_LIMIT,
     redisUrl: env.REDIS_URL,
@@ -49,7 +49,17 @@ async function main() {
     trustedProxyHops: env.TRUSTED_PROXY_HOPS,
   });
   installCreatorRateLimits(app, { store: rateLimitStore });
-  app.route("/health", health);
+  app.route(
+    "/health",
+    createHealthRoutes({
+      checkRateLimit: env.ENABLE_DISTRIBUTED_RATE_LIMIT
+        ? async () => {
+            if (!rateLimitStore.ready) throw new Error("Readiness unavailable");
+            await rateLimitStore.ready();
+          }
+        : undefined,
+    }),
+  );
   app.route("/webhooks", webhooks);
   app.route("/api/agent", agent);
   app.route("/api/auth", auth);

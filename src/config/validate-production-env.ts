@@ -38,6 +38,22 @@ function isMissing(value: string): boolean {
   return value.trim().length === 0;
 }
 
+function isLoopbackRedisUrl(value: string): boolean {
+  try {
+    const hostname = new URL(value).hostname
+      .replace(/^\[|\]$/g, "")
+      .replace(/\.$/, "")
+      .toLowerCase();
+    return (
+      hostname === "localhost" ||
+      hostname.startsWith("127.") ||
+      hostname === "::1"
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function getProductionEnvIssues(
   config: ProductionEnvironment,
 ): ProductionEnvIssue[] {
@@ -158,6 +174,12 @@ export function getProductionEnvIssues(
       config.REDIS_URL,
       "required when jobs or distributed rate limiting are enabled",
     );
+    if (config.REDIS_URL && isLoopbackRedisUrl(config.REDIS_URL)) {
+      issues.push({
+        field: "REDIS_URL",
+        message: "must reference a non-loopback Redis service in production",
+      });
+    }
   }
 
   return issues;

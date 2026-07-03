@@ -5,6 +5,7 @@ export interface RateLimitStore {
     key: string,
     windowMs: number,
   ): Promise<{ count: number; resetAt: number }>;
+  ready?(): Promise<void>;
   close?(): Promise<void>;
 }
 
@@ -31,8 +32,29 @@ export function createConfiguredRateLimitStore(
   return new InMemoryRateLimitStore();
 }
 
+export async function initializeRateLimitStore(
+  config: RateLimitRuntimeConfig,
+  createRedisStore?: (redisUrl: string) => RateLimitStore,
+): Promise<RateLimitStore> {
+  const store = createConfiguredRateLimitStore(config, createRedisStore);
+  if (!config.distributed) return store;
+
+  try {
+    if (!store.ready) throw new Error("Store does not expose readiness");
+    await store.ready();
+    return store;
+  } catch {
+    throw new Error("Rate limit Redis is unavailable; startup aborted");
+  }
+}
+
 interface MemoryBucket {
   count: number;
+  resetAt: number;
+}
+
+interface ExpiryEntry {
+  key: string;
   resetAt: number;
 }
 
@@ -44,12 +66,17 @@ export interface InMemoryRateLimitStoreOptions {
 /** Deterministic, bounded adapter for tests and local development. */
 export class InMemoryRateLimitStore implements RateLimitStore {
   private readonly buckets = new Map<string, MemoryBucket>();
+  private readonly expiryHeap: ExpiryEntry[] = [];
   private readonly now: () => number;
   private readonly maxEntries: number;
 
   constructor(options: InMemoryRateLimitStoreOptions = {}) {
     this.now = options.now ?? Date.now;
     this.maxEntries = options.maxEntries ?? 10_000;
+  }
+
+  get size() {
+    return this.buckets.size;
   }
 
   async increment(key: string, windowMs: number) {
@@ -63,19 +90,73 @@ export class InMemoryRateLimitStore implements RateLimitStore {
     }
 
     if (this.buckets.size >= this.maxEntries) {
-      const oldestKey = this.buckets.keys().next().value as string | undefined;
-      if (oldestKey) this.buckets.delete(oldestKey);
+      this.evictEarliestExpiry();
     }
 
     const bucket = { count: 1, resetAt: now + windowMs };
     this.buckets.set(key, bucket);
+    this.pushExpiry({ key, resetAt: bucket.resetAt });
     return bucket;
   }
 
   private removeExpired(now: number) {
-    for (const [key, bucket] of this.buckets) {
-      if (bucket.resetAt <= now) this.buckets.delete(key);
+    while (this.expiryHeap[0]?.resetAt <= now) {
+      const expired = this.popExpiry();
+      if (!expired) return;
+      const bucket = this.buckets.get(expired.key);
+      if (bucket?.resetAt === expired.resetAt) this.buckets.delete(expired.key);
     }
+  }
+
+  private evictEarliestExpiry() {
+    let entry: ExpiryEntry | undefined;
+    while ((entry = this.popExpiry())) {
+      const bucket = this.buckets.get(entry.key);
+      if (bucket?.resetAt === entry.resetAt) {
+        this.buckets.delete(entry.key);
+        return;
+      }
+    }
+  }
+
+  private pushExpiry(entry: ExpiryEntry) {
+    this.expiryHeap.push(entry);
+    let index = this.expiryHeap.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (this.expiryHeap[parent].resetAt <= entry.resetAt) break;
+      this.expiryHeap[index] = this.expiryHeap[parent];
+      index = parent;
+    }
+    this.expiryHeap[index] = entry;
+  }
+
+  private popExpiry(): ExpiryEntry | undefined {
+    const first = this.expiryHeap[0];
+    const last = this.expiryHeap.pop();
+    if (!first || !last || this.expiryHeap.length === 0) return first;
+
+    let index = 0;
+    this.expiryHeap[0] = last;
+    while (true) {
+      const left = index * 2 + 1;
+      const right = left + 1;
+      if (left >= this.expiryHeap.length) break;
+      const child =
+        right < this.expiryHeap.length &&
+        this.expiryHeap[right].resetAt < this.expiryHeap[left].resetAt
+          ? right
+          : left;
+      if (this.expiryHeap[index].resetAt <= this.expiryHeap[child].resetAt) {
+        break;
+      }
+      [this.expiryHeap[index], this.expiryHeap[child]] = [
+        this.expiryHeap[child],
+        this.expiryHeap[index],
+      ];
+      index = child;
+    }
+    return first;
   }
 }
 
@@ -101,6 +182,7 @@ export class RedisRateLimitStore implements RateLimitStore {
       redis ??
       new Redis(redisUrl, {
         enableOfflineQueue: false,
+        lazyConnect: true,
         maxRetriesPerRequest: 1,
       });
   }
@@ -114,6 +196,33 @@ export class RedisRateLimitStore implements RateLimitStore {
     )) as [number, number];
     const [count, ttl] = result.map(Number) as [number, number];
     return { count, resetAt: Date.now() + Math.max(0, ttl) };
+  }
+
+  async ready() {
+    if (this.redis.status !== "ready") {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(
+          () => finish(new Error("Redis readiness timed out")),
+          5_000,
+        );
+        const onReady = () => finish();
+        const onError = (error: Error) => finish(error);
+        const finish = (error?: Error) => {
+          clearTimeout(timeout);
+          this.redis.off("ready", onReady);
+          this.redis.off("error", onError);
+          if (error) reject(error);
+          else resolve();
+        };
+        this.redis.once("ready", onReady);
+        this.redis.once("error", onError);
+        if (this.redis.status === "wait") {
+          void this.redis.connect().catch(onError);
+        }
+      });
+    }
+    const response = await this.redis.ping();
+    if (response !== "PONG") throw new Error("Unexpected Redis ping response");
   }
 
   async close() {

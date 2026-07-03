@@ -144,7 +144,7 @@ railway variables set PORT=3000
 railway variables set TRUSTED_PROXY_HOPS=1
 railway variables set ENABLE_JOBS=true
 railway variables set REDIS_URL=${{Redis.REDIS_URL}}
-railway variables set ENABLE_DISTRIBUTED_RATE_LIMIT=false
+railway variables set ENABLE_DISTRIBUTED_RATE_LIMIT=true
 ```
 
 #### 4. Deploy
@@ -376,48 +376,48 @@ Access via: https://vercel.com/{your-team}/{project}
 
 ### Backend (Railway)
 
-| Variable                           | Required      | Default                | Description                                                    |
-| ---------------------------------- | ------------- | ---------------------- | -------------------------------------------------------------- |
-| `AI_PROVIDER`                      | No            | anthropic              | Agent AI provider: `anthropic` or `openai`                     |
-| `AI_API_KEY`                       | No            | -                      | Provider-neutral API key override                              |
-| `AI_BASE_URL`                      | No            | -                      | OpenAI-compatible or Anthropic-compatible provider base URL    |
-| `AI_MODEL`                         | No            | -                      | Default-tier model override                                    |
-| `AI_FAST_MODEL`                    | No            | -                      | Fast-tier model override                                       |
-| `ANTHROPIC_API_KEY`                | Conditionally | -                      | Required for Anthropic unless `AI_API_KEY` is set              |
-| `OPENAI_API_KEY`                   | Conditionally | -                      | Required for OpenAI unless `AI_API_KEY` is set                 |
-| `SUPABASE_URL`                     | Yes           | -                      | Supabase project URL                                           |
-| `SUPABASE_SERVICE_KEY`             | Yes           | -                      | Supabase service role key                                      |
-| `PRIVY_APP_ID`                     | Yes           | -                      | Privy application ID                                           |
-| `PRIVY_APP_SECRET`                 | Yes           | -                      | Privy application secret                                       |
-| `PRIVY_JWT_VERIFICATION_KEY`       | Yes           | -                      | JWT verification key                                           |
-| `MESSAGING_LINK_SECRET`            | Yes           | -                      | Unique secret used to sign messaging-link tokens               |
-| `PLATFORM_ENCRYPTION_KEY_VERSION`  | Yes           | -                      | Active key version; currently only `v1`                        |
-| `PLATFORM_ENCRYPTION_KEY_V1`       | Yes           | -                      | Unique platform credential encryption key                      |
-| `PLATFORM_ENCRYPTION_KEY_PREVIOUS` | No            | -                      | Previous key retained temporarily during rotation              |
-| `REDIS_URL`                        | Conditionally | redis://localhost:6379 | Required when jobs or distributed rate limiting are enabled    |
-| `PORT`                             | No            | 3000                   | API server port                                                |
-| `NODE_ENV`                         | No            | development            | Node environment                                               |
-| `TRUSTED_PROXY_HOPS`               | No            | 0                      | Trusted reverse-proxy hops; integer from 0 through 2           |
-| `ENABLE_TELEGRAM_BOT`              | No            | true                   | Strict boolean master switch for Telegram configuration        |
-| `TELEGRAM_MODE`                    | No            | polling                | Telegram mode: `disabled`, `polling`, or `webhook`             |
-| `TELEGRAM_BOT_TOKEN`               | Conditionally | -                      | Required when Telegram is enabled and mode is not `disabled`   |
-| `TELEGRAM_WEBHOOK_SECRET`          | Conditionally | -                      | Required when Telegram is enabled in `webhook` mode            |
-| `ENABLE_WHATSAPP`                  | No            | false                  | Strict boolean enabling WhatsApp production configuration      |
-| `WHATSAPP_PHONE_NUMBER_ID`         | Conditionally | -                      | Required when WhatsApp is enabled                              |
-| `WHATSAPP_ACCESS_TOKEN`            | Conditionally | -                      | Required when WhatsApp is enabled                              |
-| `WHATSAPP_VERIFY_TOKEN`            | Conditionally | -                      | Unique verify token required when WhatsApp is enabled          |
-| `WHATSAPP_WEBHOOK_SECRET`          | Conditionally | -                      | Meta app secret required when WhatsApp is enabled              |
-| `ENABLE_YOUTUBE_OAUTH`             | No            | false                  | Strict boolean enabling YouTube OAuth production configuration |
-| `GOOGLE_OAUTH_CLIENT_ID`           | Conditionally | -                      | Required when YouTube OAuth is enabled                         |
-| `GOOGLE_OAUTH_CLIENT_SECRET`       | Conditionally | -                      | Required when YouTube OAuth is enabled                         |
-| `YOUTUBE_OAUTH_REDIRECT_URI`       | Conditionally | -                      | Required when YouTube OAuth is enabled                         |
-| `DASHBOARD_APP_URL`                | No            | -                      | Dashboard URL for redirects                                    |
-| `BROWSERBASE_API_KEY`              | No            | -                      | BrowserBase API key                                            |
-| `BROWSERBASE_PROJECT_ID`           | No            | -                      | BrowserBase project ID                                         |
-| `ENABLE_JOBS`                      | No            | true                   | Strict boolean enabling jobs; requires Redis when true         |
-| `ENABLE_DISTRIBUTED_RATE_LIMIT`    | No            | false                  | Strict boolean enabling Redis-backed distributed rate limiting |
-| `ERROR_REPORTING_DSN`              | No            | -                      | Optional error-reporting provider DSN                          |
-| `PUBLIC_SUPPORT_EMAIL`             | No            | -                      | Optional valid public support email address                    |
+| Variable                           | Required      | Default            | Description                                                    |
+| ---------------------------------- | ------------- | ------------------ | -------------------------------------------------------------- |
+| `AI_PROVIDER`                      | No            | anthropic          | Agent AI provider: `anthropic` or `openai`                     |
+| `AI_API_KEY`                       | No            | -                  | Provider-neutral API key override                              |
+| `AI_BASE_URL`                      | No            | -                  | OpenAI-compatible or Anthropic-compatible provider base URL    |
+| `AI_MODEL`                         | No            | -                  | Default-tier model override                                    |
+| `AI_FAST_MODEL`                    | No            | -                  | Fast-tier model override                                       |
+| `ANTHROPIC_API_KEY`                | Conditionally | -                  | Required for Anthropic unless `AI_API_KEY` is set              |
+| `OPENAI_API_KEY`                   | Conditionally | -                  | Required for OpenAI unless `AI_API_KEY` is set                 |
+| `SUPABASE_URL`                     | Yes           | -                  | Supabase project URL                                           |
+| `SUPABASE_SERVICE_KEY`             | Yes           | -                  | Supabase service role key                                      |
+| `PRIVY_APP_ID`                     | Yes           | -                  | Privy application ID                                           |
+| `PRIVY_APP_SECRET`                 | Yes           | -                  | Privy application secret                                       |
+| `PRIVY_JWT_VERIFICATION_KEY`       | Yes           | -                  | JWT verification key                                           |
+| `MESSAGING_LINK_SECRET`            | Yes           | -                  | Unique secret used to sign messaging-link tokens               |
+| `PLATFORM_ENCRYPTION_KEY_VERSION`  | Yes           | -                  | Active key version; currently only `v1`                        |
+| `PLATFORM_ENCRYPTION_KEY_V1`       | Yes           | -                  | Unique platform credential encryption key                      |
+| `PLATFORM_ENCRYPTION_KEY_PREVIOUS` | No            | -                  | Previous key retained temporarily during rotation              |
+| `REDIS_URL`                        | Yes           | -                  | Mandatory non-loopback Redis service in production             |
+| `PORT`                             | No            | 3000               | API server port                                                |
+| `NODE_ENV`                         | No            | development        | Node environment                                               |
+| `TRUSTED_PROXY_HOPS`               | No            | 0                  | Trusted reverse-proxy hops; integer from 0 through 2           |
+| `ENABLE_TELEGRAM_BOT`              | No            | true               | Strict boolean master switch for Telegram configuration        |
+| `TELEGRAM_MODE`                    | No            | polling            | Telegram mode: `disabled`, `polling`, or `webhook`             |
+| `TELEGRAM_BOT_TOKEN`               | Conditionally | -                  | Required when Telegram is enabled and mode is not `disabled`   |
+| `TELEGRAM_WEBHOOK_SECRET`          | Conditionally | -                  | Required when Telegram is enabled in `webhook` mode            |
+| `ENABLE_WHATSAPP`                  | No            | false              | Strict boolean enabling WhatsApp production configuration      |
+| `WHATSAPP_PHONE_NUMBER_ID`         | Conditionally | -                  | Required when WhatsApp is enabled                              |
+| `WHATSAPP_ACCESS_TOKEN`            | Conditionally | -                  | Required when WhatsApp is enabled                              |
+| `WHATSAPP_VERIFY_TOKEN`            | Conditionally | -                  | Unique verify token required when WhatsApp is enabled          |
+| `WHATSAPP_WEBHOOK_SECRET`          | Conditionally | -                  | Meta app secret required when WhatsApp is enabled              |
+| `ENABLE_YOUTUBE_OAUTH`             | No            | false              | Strict boolean enabling YouTube OAuth production configuration |
+| `GOOGLE_OAUTH_CLIENT_ID`           | Conditionally | -                  | Required when YouTube OAuth is enabled                         |
+| `GOOGLE_OAUTH_CLIENT_SECRET`       | Conditionally | -                  | Required when YouTube OAuth is enabled                         |
+| `YOUTUBE_OAUTH_REDIRECT_URI`       | Conditionally | -                  | Required when YouTube OAuth is enabled                         |
+| `DASHBOARD_APP_URL`                | No            | -                  | Dashboard URL for redirects                                    |
+| `BROWSERBASE_API_KEY`              | No            | -                  | BrowserBase API key                                            |
+| `BROWSERBASE_PROJECT_ID`           | No            | -                  | BrowserBase project ID                                         |
+| `ENABLE_JOBS`                      | No            | true               | Strict boolean enabling jobs; requires Redis when true         |
+| `ENABLE_DISTRIBUTED_RATE_LIMIT`    | Yes           | true in production | Must be true in production; false is development/test only     |
+| `ERROR_REPORTING_DSN`              | No            | -                  | Optional error-reporting provider DSN                          |
+| `PUBLIC_SUPPORT_EMAIL`             | No            | -                  | Optional valid public support email address                    |
 
 ### Dashboard (Vercel)
 

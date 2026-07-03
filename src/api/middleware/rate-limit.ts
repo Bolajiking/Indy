@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 import type { Context, Hono, MiddlewareHandler } from "hono";
 import pino from "pino";
 import {
@@ -93,6 +94,29 @@ export interface NetworkIdentityInput {
   trustedProxyHops: number;
 }
 
+function normalizeIpAddress(
+  rawAddress: string | undefined,
+): string | undefined {
+  const address = rawAddress?.trim();
+  if (!address) return undefined;
+  const version = isIP(address);
+  if (version === 4) return address;
+  if (version !== 6) return undefined;
+
+  let canonical: string;
+  try {
+    canonical = new URL(`http://[${address}]/`).hostname.slice(1, -1);
+  } catch {
+    return undefined;
+  }
+
+  const mapped = canonical.match(/^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i);
+  if (!mapped) return canonical;
+  const high = Number.parseInt(mapped[1], 16);
+  const low = Number.parseInt(mapped[2], 16);
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join(".");
+}
+
 /**
  * Forwarded addresses are ignored unless the directly connected proxy is
  * trusted. Each configured hop moves one address left from the right edge.
@@ -102,16 +126,19 @@ export function resolveNetworkIdentity({
   forwardedFor,
   trustedProxyHops,
 }: NetworkIdentityInput): string {
-  const socket = socketAddress?.trim() || "unknown";
+  const socket = normalizeIpAddress(socketAddress) ?? "unknown";
   if (trustedProxyHops <= 0 || !forwardedFor) return socket;
 
   const forwarded = forwardedFor
     .split(",")
     .map((address) => address.trim())
     .filter(Boolean);
-  if (forwarded.length === 0) return socket;
+  if (forwarded.length < trustedProxyHops) return socket;
 
-  return forwarded[Math.max(0, forwarded.length - trustedProxyHops)] ?? socket;
+  const normalized = forwarded.map(normalizeIpAddress);
+  if (normalized.some((address) => !address)) return socket;
+
+  return normalized[forwarded.length - trustedProxyHops] ?? socket;
 }
 
 type PolicyResolver = RateLimitPolicy | ((context: Context) => RateLimitPolicy);

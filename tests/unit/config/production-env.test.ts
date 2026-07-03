@@ -214,6 +214,27 @@ describe("validateProductionEnv", () => {
     ).toThrow(/REDIS_URL/);
   });
 
+  it("rejects the implicit local Redis default in production", () => {
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({ REDIS_URL: "redis://localhost:6379" }),
+      ),
+    ).toThrow(/REDIS_URL/);
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({ REDIS_URL: "redis://127.0.0.1:6379" }),
+      ),
+    ).toThrow(/REDIS_URL/);
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({ REDIS_URL: "redis://127.0.0.2:6379" }),
+      ),
+    ).toThrow(/REDIS_URL/);
+    expect(() =>
+      validateProductionEnv(productionEnv({ REDIS_URL: "redis://[::1]:6379" })),
+    ).toThrow(/REDIS_URL/);
+  });
+
   it("does not enforce production-only requirements outside production", () => {
     expect(() =>
       validateProductionEnv(
