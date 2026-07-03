@@ -227,18 +227,24 @@ const BASELINE_INDEXES = [
   "idx_skill_outcomes_created_at",
 ] as const;
 
-const BASELINE_CONSTRAINTS: readonly (readonly [string, string])[] = [
+const BASELINE_CONSTRAINTS: readonly (readonly [
+  table: string,
+  name: string,
+  definition: string,
+])[] = [
   ...BASELINE_TABLES.map(
-    (table) => [`${table}_pkey`, "PRIMARY KEY (id)"] as const,
+    (table) => [table, `${table}_pkey`, "PRIMARY KEY (id)"] as const,
   ),
-  ["creators_privy_user_id_key", "UNIQUE (privy_user_id)"],
-  ["creators_telegram_chat_id_key", "UNIQUE (telegram_chat_id)"],
-  ["creators_whatsapp_phone_key", "UNIQUE (whatsapp_phone)"],
+  ["creators", "creators_privy_user_id_key", "UNIQUE (privy_user_id)"],
+  ["creators", "creators_telegram_chat_id_key", "UNIQUE (telegram_chat_id)"],
+  ["creators", "creators_whatsapp_phone_key", "UNIQUE (whatsapp_phone)"],
   [
+    "platform_connections",
     "platform_connections_creator_id_platform_key",
     "UNIQUE (creator_id, platform)",
   ],
   [
+    "creator_memories",
     "creator_memories_creator_id_skill_key_key",
     "UNIQUE (creator_id, skill, key)",
   ],
@@ -255,15 +261,18 @@ const BASELINE_CONSTRAINTS: readonly (readonly [string, string])[] = [
   ].map(
     (table) =>
       [
+        table,
         `${table}_creator_id_fkey`,
         "FOREIGN KEY (creator_id) REFERENCES creators(id) ON DELETE CASCADE",
       ] as const,
   ),
   [
+    "payment_attempts",
     "payment_attempts_transaction_id_fkey",
     "FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL",
   ],
   [
+    "skill_outcomes",
     "skill_outcomes_action_id_fkey",
     "FOREIGN KEY (action_id) REFERENCES agent_actions(id) ON DELETE SET NULL",
   ],
@@ -305,9 +314,9 @@ export const BASELINE_MANIFEST: readonly CatalogObject[] = [
       }),
     ),
   ),
-  ...BASELINE_CONSTRAINTS.map(([identity, definition]) => ({
+  ...BASELINE_CONSTRAINTS.map(([table, name, definition]) => ({
     kind: "constraint",
-    identity,
+    identity: `${table}.${name}`,
     definition,
   })),
   ...BASELINE_INDEXES.map((identity) => ({
@@ -356,7 +365,7 @@ JOIN pg_namespace n ON n.oid = c.relnamespace
 LEFT JOIN pg_attrdef d ON d.adrelid = a.attrelid AND d.adnum = a.attnum
 WHERE n.nspname = current_schema() AND c.relkind = 'r' AND a.attnum > 0 AND NOT a.attisdropped
 UNION ALL
-SELECT 'constraint', con.conname, pg_get_constraintdef(con.oid, true)
+SELECT 'constraint', c.relname || '.' || con.conname, pg_get_constraintdef(con.oid, true)
 FROM pg_constraint con
 JOIN pg_class c ON c.oid = con.conrelid
 JOIN pg_namespace n ON n.oid = c.relnamespace

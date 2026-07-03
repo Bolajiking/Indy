@@ -173,9 +173,72 @@ describe("database migration runner", () => {
     expect(db.transactionEvents).toEqual(["BEGIN", "CATALOG", "ROLLBACK"]);
     expect(db.applied.size).toBe(0);
   });
+
+  it.each([
+    ["PK", "creators.creators_pkey", "deals.creators_pkey", "missing"],
+    [
+      "FK",
+      "deals.deals_creator_id_fkey",
+      "transactions.deals_creator_id_fkey",
+      "divergent",
+    ],
+    [
+      "unique",
+      "creators.creators_privy_user_id_key",
+      "deals.creators_privy_user_id_key",
+      "missing",
+    ],
+  ])(
+    "does not let another table's same-named constraint satisfy a %s during adoption",
+    async (_label, expectedIdentity, collidingIdentity, mode) => {
+      const migrations = await discoverMigrations(migrationsDirectory);
+      const catalog = catalogFromManifest();
+      const expected = catalog.find(
+        ({ kind, identity }) =>
+          kind === "constraint" && identity === expectedIdentity,
+      );
+      if (!expected) throw new Error(`Missing fixture ${expectedIdentity}`);
+
+      catalog.push({
+        kind: "constraint",
+        identity: collidingIdentity,
+        definition: expected.definition,
+      });
+      if (mode === "missing") {
+        catalog.splice(catalog.indexOf(expected), 1);
+      } else {
+        expected.definition = "CHECK (false)";
+      }
+      const db = new FakeDatabase({}, { catalog });
+
+      await expect(
+        runMigrations(db, migrations, { adoptBaseline: true }),
+      ).rejects.toThrow(
+        new RegExp(
+          mode === "missing"
+            ? `missing constraint ${escapeRegExp(expectedIdentity)}`
+            : `constraint ${escapeRegExp(expectedIdentity)}.*mismatch`,
+          "i",
+        ),
+      );
+      expect(db.transactionEvents).toEqual(["BEGIN", "CATALOG", "ROLLBACK"]);
+    },
+  );
 });
 
 describe("baseline definition verification", () => {
+  it("qualifies constraint identities with their owning table", () => {
+    expect(
+      BASELINE_MANIFEST.some(
+        ({ kind, identity }) =>
+          kind === "constraint" && identity === "creators.creators_pkey",
+      ),
+    ).toBe(true);
+    expect(BASELINE_INVENTORY_SQL).toMatch(
+      /c\.relname\s*\|\|\s*'\.'\s*\|\|\s*con\.conname/i,
+    );
+  });
+
   it("uses PostgreSQL catalog deparsers for definition-level inventory", () => {
     expect(BASELINE_INVENTORY_SQL).toMatch(/format_type\s*\(/i);
     expect(BASELINE_INVENTORY_SQL).toMatch(/pg_get_expr\s*\(/i);
@@ -232,7 +295,7 @@ describe("baseline definition verification", () => {
     [
       "constraint definition",
       "constraint",
-      "platform_connections_creator_id_fkey",
+      "platform_connections.platform_connections_creator_id_fkey",
       "foreign key (creator_id) references creators(id)",
     ],
     ["RLS", "rls", "creators", "enabled=false"],
@@ -277,7 +340,7 @@ describe("baseline definition verification", () => {
   it("rejects missing tables and foreign keys", () => {
     for (const [kind, identity] of [
       ["table", "creators"],
-      ["constraint", "deals_creator_id_fkey"],
+      ["constraint", "deals.deals_creator_id_fkey"],
     ]) {
       const catalog = catalogFromManifest().filter(
         (object) => !(object.kind === kind && object.identity === identity),
