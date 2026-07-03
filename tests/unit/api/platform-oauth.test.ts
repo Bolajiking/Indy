@@ -17,6 +17,11 @@ vi.mock("../../../src/db/queries/creators.js", () => ({
 
 import { authenticateAccessToken } from "../../../src/auth/session.js";
 import { createApiServer } from "../../../src/api/server.js";
+import {
+  InMemoryRateLimitStore,
+  type RateLimitStore,
+} from "../../../src/api/rate-limit-store.js";
+import { installCreatorRateLimits } from "../../../src/api/middleware/rate-limit.js";
 import { platforms } from "../../../src/api/routes/platforms.js";
 import { createPlatformOAuthState } from "../../../src/platforms/oauth.js";
 import { getCreatorById } from "../../../src/db/queries/creators.js";
@@ -195,6 +200,37 @@ describe("platform OAuth routes", () => {
       }),
     );
     expect(getCreatorById).toHaveBeenCalledWith("creator-1");
+  });
+
+  it("fails safely before provider calls or persistence when callback throttling is unavailable", async () => {
+    const failingStore: RateLimitStore = {
+      increment: async () => {
+        throw new Error("redis unavailable");
+      },
+    };
+    const app = createApiServer({
+      rateLimitStore: failingStore,
+      getSocketAddress: () => "203.0.113.30",
+    });
+    installCreatorRateLimits(app, { store: new InMemoryRateLimitStore() });
+    app.route("/api/platforms", platforms);
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const state = createPlatformOAuthState({
+      creatorId: "creator-1",
+      privyUserId: "did:privy:creator-1",
+      platform: "youtube",
+    });
+
+    const response = await app.request(
+      `/api/platforms/oauth/youtube/callback?code=oauth-code&state=${encodeURIComponent(state)}`,
+    );
+
+    expect(response.status).toBe(503);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getCreatorById).not.toHaveBeenCalled();
+    expect(upsertConnection).not.toHaveBeenCalled();
+    expect(authenticateAccessToken).not.toHaveBeenCalled();
   });
 
   it("redirects back to settings when callback state is invalid or expired", async () => {

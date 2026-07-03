@@ -217,7 +217,6 @@ describe("distributed API rate limiting", () => {
   it("does not require creator auth for the signed platform OAuth callback", async () => {
     const app = createApiServer({
       rateLimitStore: new InMemoryRateLimitStore(),
-      anonymousPolicy: { ...oneRequest, name: "outer", limit: 100 },
       getSocketAddress: () => "203.0.113.20",
     });
     installCreatorRateLimits(app, {
@@ -233,6 +232,35 @@ describe("distributed API rate limiting", () => {
 
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("provider callback reached");
+    expect(response.headers.get("RateLimit-Limit")).toBe("30");
+    expect(authenticateAccessToken).not.toHaveBeenCalled();
+  });
+
+  it("fails closed before public OAuth callback side effects when the store is unavailable", async () => {
+    let callbackRuns = 0;
+    const failingStore: RateLimitStore = {
+      increment: async () => {
+        throw new Error("redis unavailable");
+      },
+    };
+    const app = createApiServer({
+      rateLimitStore: failingStore,
+      getSocketAddress: () => "203.0.113.24",
+    });
+    installCreatorRateLimits(app, {
+      store: new InMemoryRateLimitStore(),
+    });
+    app.get("/api/platforms/oauth/:platform/callback", (c) => {
+      callbackRuns += 1;
+      return c.text("provider side effects ran");
+    });
+
+    const response = await app.request(
+      "/api/platforms/oauth/youtube/callback?code=provider-code&state=signed",
+    );
+
+    expect(response.status).toBe(503);
+    expect(callbackRuns).toBe(0);
     expect(authenticateAccessToken).not.toHaveBeenCalled();
   });
 
@@ -256,6 +284,37 @@ describe("distributed API rate limiting", () => {
       expect((await request()).status).toBe(200);
     }
     expect((await request()).status).toBe(429);
+  });
+
+  it("keys Composio initiation into distinct conservative IP and creator quotas", async () => {
+    const keys: string[] = [];
+    const recordingStore: RateLimitStore = {
+      increment: async (key) => {
+        keys.push(key);
+        return { count: 1, resetAt: Date.now() + 60_000 };
+      },
+    };
+    const app = createApiServer({
+      rateLimitStore: recordingStore,
+      getSocketAddress: () => "203.0.113.25",
+    });
+    installCreatorRateLimits(app, { store: recordingStore });
+    app.post("/api/connections/:toolkit/initiate", (c) => c.text("started"));
+
+    const response = await app.request("/api/connections/gmail/initiate", {
+      method: "POST",
+      headers: { Authorization: "Bearer valid-token" },
+    });
+
+    expect(response.status).toBe(200);
+    expect(keys).toHaveLength(2);
+    expect(keys.some((key) => key.includes(":anonymous-auth-start:"))).toBe(
+      true,
+    );
+    expect(keys.some((key) => key.includes(":creator-oauth-start:"))).toBe(
+      true,
+    );
+    expect(new Set(keys).size).toBe(2);
   });
 
   it("applies creator quotas to existing-creator auth routes only", async () => {

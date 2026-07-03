@@ -20,6 +20,7 @@ export interface RateLimitPolicy {
   windowMs: number;
   /** Expensive and mutating operations must reject requests when Redis fails. */
   failClosed: boolean;
+  failClosedOnStoreError?: boolean;
 }
 
 export const RATE_LIMIT_POLICIES = {
@@ -40,6 +41,13 @@ export const RATE_LIMIT_POLICIES = {
     limit: 10,
     windowMs: 60_000,
     failClosed: true,
+  },
+  oauthCallback: {
+    name: "anonymous-oauth-callback",
+    limit: 30,
+    windowMs: 60_000,
+    failClosed: true,
+    failClosedOnStoreError: true,
   },
   creatorRead: {
     name: "creator-read",
@@ -151,7 +159,10 @@ export function createRateLimitMiddleware(
     try {
       result = await options.store.increment(key, policy.windowMs);
     } catch (error) {
-      if (policy.failClosed || !options.fallbackStore) {
+      if (
+        (policy.failClosedOnStoreError ?? policy.failClosed) ||
+        !options.fallbackStore
+      ) {
         log.error(
           { error, policy: policy.name },
           "Rate limit store unavailable",
@@ -187,8 +198,16 @@ export function anonymousPolicyFor(context: Context): RateLimitPolicy {
     return RATE_LIMIT_POLICIES.health;
   }
   if (
+    context.req.method === "GET" &&
+    /^\/api\/platforms\/oauth\/[^/]+\/callback$/.test(path)
+  ) {
+    return RATE_LIMIT_POLICIES.oauthCallback;
+  }
+  if (
     (context.req.method === "POST" && path === "/api/auth/register") ||
-    (context.req.method === "POST" && /\/oauth\/[^/]+\/start$/.test(path))
+    (context.req.method === "POST" && /\/oauth\/[^/]+\/start$/.test(path)) ||
+    (context.req.method === "POST" &&
+      /^\/api\/connections\/[^/]+\/initiate$/.test(path))
   ) {
     return RATE_LIMIT_POLICIES.authStart;
   }
