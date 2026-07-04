@@ -1,5 +1,6 @@
 import type { ConnectionOptions } from "bullmq";
 import { Queue, Worker } from "bullmq";
+import type { Bot } from "grammy";
 import pino from "pino";
 import { env } from "../config/env.js";
 
@@ -7,6 +8,7 @@ const log = pino({ name: "jobs:queue" });
 
 let connection: ConnectionOptions | null = null;
 let agentQueue: Queue | null = null;
+let agentWorker: Worker | null = null;
 
 function getQueueConnection(): ConnectionOptions {
   if (!connection) {
@@ -81,15 +83,41 @@ export async function processJob(job: {
   }
 }
 
-export function startWorkers(): Worker {
-  const worker = new Worker("indyfren-agent", processJob, {
-    connection: getQueueConnection(),
-    concurrency: 5,
-  });
+export function startWorkers(
+  options: { telegramBot?: Bot | null } = {},
+): Worker {
+  if (agentWorker) return agentWorker;
+
+  const worker = new Worker(
+    "indyfren-agent",
+    async (job) => {
+      if (job.name === "webhook-delivery") {
+        const { createDefaultWebhookDeliveryProcessor } =
+          await import("./webhook-delivery.js");
+        const processor = createDefaultWebhookDeliveryProcessor(
+          options.telegramBot ?? null,
+        );
+        await processor(job as never);
+        return;
+      }
+      await processJob(job);
+    },
+    {
+      connection: getQueueConnection(),
+      concurrency: 5,
+    },
+  );
 
   worker.on("failed", (job, error) => {
     log.error(
-      { jobId: job?.id, jobName: job?.name, error: error.message },
+      {
+        jobId: job?.id,
+        jobName: job?.name,
+        error:
+          job?.name === "webhook-delivery"
+            ? "Webhook delivery failed"
+            : error.message,
+      },
       "Job failed",
     );
   });
@@ -102,7 +130,8 @@ export function startWorkers(): Worker {
   });
 
   log.info("Job workers started");
-  return worker;
+  agentWorker = worker;
+  return agentWorker;
 }
 
 export async function scheduleRecurringJobs(

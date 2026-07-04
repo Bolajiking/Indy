@@ -12,12 +12,9 @@ describe("Telegram webhook authentication", () => {
     mode: "disabled" | "polling" | "webhook",
     options: {
       botAvailable?: boolean;
-      telegramHandlerFactory?: () => ReturnType<typeof vi.fn>;
     } = {},
   ) => {
-    const processUpdate = vi.fn(
-      async () => new Response("OK", { status: 200 }),
-    );
+    const processUpdate = vi.fn(async () => undefined);
     const app = createApiServer();
     app.route(
       "/webhooks",
@@ -25,10 +22,11 @@ describe("Telegram webhook authentication", () => {
         telegramMode: mode,
         telegramBot: options.botAvailable === false ? null : ({} as never),
         telegramWebhookSecret: "telegram-webhook-secret",
-        telegramHandler: options.telegramHandlerFactory
-          ? undefined
-          : processUpdate,
-        telegramHandlerFactory: options.telegramHandlerFactory,
+        claimWebhookEvent: vi.fn(async () => ({
+          claimed: true,
+          status: "queued",
+        })),
+        enqueueWebhook: processUpdate,
       }),
     );
     return { app, processUpdate };
@@ -46,7 +44,7 @@ describe("Telegram webhook authentication", () => {
       const response = await app.request("/webhooks/telegram", {
         method: "POST",
         headers,
-        body: JSON.stringify({ update_id: 1 }),
+        body: JSON.stringify({ update_id: 1, message: { text: "hello" } }),
       });
 
       expect(response.status).toBe(401);
@@ -69,7 +67,7 @@ describe("Telegram webhook authentication", () => {
     expect(processUpdate).not.toHaveBeenCalled();
   });
 
-  it("processes a request whose secret exactly matches", async () => {
+  it("queues a request whose secret exactly matches", async () => {
     const { app, processUpdate } = createApp("webhook");
 
     const response = await app.request("/webhooks/telegram", {
@@ -78,17 +76,15 @@ describe("Telegram webhook authentication", () => {
         "Content-Type": "application/json",
         "X-Telegram-Bot-Api-Secret-Token": "telegram-webhook-secret",
       },
-      body: JSON.stringify({ update_id: 1 }),
+      body: JSON.stringify({ update_id: 1, message: { text: "hello" } }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(processUpdate).toHaveBeenCalledOnce();
   });
 
-  it("initializes the grammY webhook handler once for repeated requests", async () => {
-    const handler = vi.fn(async () => new Response("OK", { status: 200 }));
-    const telegramHandlerFactory = vi.fn(() => handler);
-    const { app } = createApp("webhook", { telegramHandlerFactory });
+  it("queues repeated updates without invoking a synchronous handler", async () => {
+    const { app, processUpdate } = createApp("webhook");
 
     for (const updateId of [1, 2]) {
       const response = await app.request("/webhooks/telegram", {
@@ -97,13 +93,45 @@ describe("Telegram webhook authentication", () => {
           "Content-Type": "application/json",
           "X-Telegram-Bot-Api-Secret-Token": "telegram-webhook-secret",
         },
-        body: JSON.stringify({ update_id: updateId }),
+        body: JSON.stringify({
+          update_id: updateId,
+          message: { text: "hello" },
+        }),
       });
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(202);
     }
 
-    expect(telegramHandlerFactory).toHaveBeenCalledOnce();
-    expect(handler).toHaveBeenCalledTimes(2);
+    expect(processUpdate).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects a processable update without update_id", async () => {
+    const { app, processUpdate } = createApp("webhook");
+    const response = await app.request("/webhooks/telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Bot-Api-Secret-Token": "telegram-webhook-secret",
+      },
+      body: JSON.stringify({ message: { text: "hello" } }),
+    });
+
+    expect(response.status).toBe(400);
+    expect(processUpdate).not.toHaveBeenCalled();
+  });
+
+  it("accepts an authenticated Telegram no-op without queueing", async () => {
+    const { app, processUpdate } = createApp("webhook");
+    const response = await app.request("/webhooks/telegram", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Telegram-Bot-Api-Secret-Token": "telegram-webhook-secret",
+      },
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(202);
+    expect(processUpdate).not.toHaveBeenCalled();
   });
 
   it.each([undefined, "wrong-secret"])(

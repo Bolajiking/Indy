@@ -12,6 +12,7 @@ export interface WhatsAppWebhookPayload {
       value?: {
         contacts?: Array<{ profile?: { name?: string } }>;
         messages?: Array<{
+          id?: string;
           from?: string;
           type?: string;
           text?: { body?: string };
@@ -67,6 +68,7 @@ export function verifyWhatsAppSignature(
 
 export async function handleWhatsAppWebhookPayload(
   payload: unknown,
+  providerEventId?: string,
 ): Promise<Array<{ to: string; response: OutgoingMessage }>> {
   if (!isWhatsAppWebhookPayload(payload)) {
     return [];
@@ -86,19 +88,19 @@ export async function handleWhatsAppWebhookPayload(
         continue;
       }
 
-      const message = change.value?.messages?.[0];
-      if (!message?.from || message.type !== "text") {
-        continue;
+      for (const message of change.value?.messages ?? []) {
+        if (providerEventId && message.id !== providerEventId) continue;
+        if (!message.from || message.type !== "text") continue;
+
+        const response = await handleMessage({
+          platform: "whatsapp",
+          platformUserId: message.from,
+          displayName: change.value?.contacts?.[0]?.profile?.name ?? "Creator",
+          text: message.text?.body ?? "",
+        });
+
+        responses.push({ to: message.from, response });
       }
-
-      const response = await handleMessage({
-        platform: "whatsapp",
-        platformUserId: message.from,
-        displayName: change.value?.contacts?.[0]?.profile?.name ?? "Creator",
-        text: message.text?.body ?? "",
-      });
-
-      responses.push({ to: message.from, response });
     }
   }
 

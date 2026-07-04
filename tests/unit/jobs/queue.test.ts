@@ -99,6 +99,8 @@ describe("jobs queue", () => {
     const worker = startWorkers();
 
     expect(worker).toBe(workerInstance);
+    expect(startWorkers()).toBe(workerInstance);
+    expect(workerConstructor).toHaveBeenCalledOnce();
     expect(workerConstructor).toHaveBeenCalledWith(
       "indyfren-agent",
       expect.any(Function),

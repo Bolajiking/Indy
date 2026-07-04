@@ -146,7 +146,7 @@ export async function main() {
     try {
       const { scheduleRecurringJobs, startWorkers } =
         await import("./jobs/queue.js");
-      startWorkers();
+      startWorkers({ telegramBot: telegramWebhookBot });
       await scheduleRecurringJobs();
     } catch (error) {
       log.warn({ error }, "Job system not started");

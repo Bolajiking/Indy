@@ -41,9 +41,30 @@ import {
   findCreatorByWhatsApp,
 } from "../../src/db/queries/creators.js";
 import { ensureCreatorWalletProvisioning } from "../../src/wallet/provisioning.js";
-import { sendWhatsAppMessage } from "../../src/bot/whatsapp.js";
+import {
+  handleWhatsAppWebhookPayload,
+  sendWhatsAppMessage,
+} from "../../src/bot/whatsapp.js";
 
 describe("bot-to-agent integration", () => {
+  const workerDependencies = {
+    claimWebhookEvent: vi.fn(async () => ({
+      claimed: true,
+      status: "queued" as const,
+    })),
+    enqueueWebhook: async (job: {
+      payload: unknown;
+      providerEventId: string;
+    }) => {
+      const responses = await handleWhatsAppWebhookPayload(
+        job.payload,
+        job.providerEventId,
+      );
+      await Promise.all(
+        responses.map(({ to, response }) => sendWhatsAppMessage(to, response)),
+      );
+    },
+  };
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(processCreatorMessage).mockResolvedValue({
@@ -75,7 +96,10 @@ describe("bot-to-agent integration", () => {
     } as never);
 
     const app = createApiServer();
-    app.route("/webhooks", createWebhookRoutes({ whatsappEnabled: true }));
+    app.route(
+      "/webhooks",
+      createWebhookRoutes({ whatsappEnabled: true, ...workerDependencies }),
+    );
 
     const response = await app.request("/webhooks/whatsapp", {
       method: "POST",
@@ -91,6 +115,7 @@ describe("bot-to-agent integration", () => {
                   contacts: [{ profile: { name: "Ada" } }],
                   messages: [
                     {
+                      id: "wamid.onboarding",
                       from: "2348000",
                       type: "text",
                       text: { body: "hello" },
@@ -104,7 +129,7 @@ describe("bot-to-agent integration", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(createCreator).toHaveBeenCalledWith({
       display_name: "Ada",
       telegram_chat_id: undefined,
@@ -145,7 +170,10 @@ describe("bot-to-agent integration", () => {
     });
 
     const app = createApiServer();
-    app.route("/webhooks", createWebhookRoutes({ whatsappEnabled: true }));
+    app.route(
+      "/webhooks",
+      createWebhookRoutes({ whatsappEnabled: true, ...workerDependencies }),
+    );
 
     const response = await app.request("/webhooks/whatsapp", {
       method: "POST",
@@ -161,6 +189,7 @@ describe("bot-to-agent integration", () => {
                   contacts: [{ profile: { name: "Bola" } }],
                   messages: [
                     {
+                      id: "wamid.existing",
                       from: "2348001",
                       type: "text",
                       text: { body: "scan for deals" },
@@ -174,7 +203,7 @@ describe("bot-to-agent integration", () => {
       }),
     });
 
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(202);
     expect(processCreatorMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         creatorId: "creator-2",
