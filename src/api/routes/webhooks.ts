@@ -124,5 +124,3 @@ export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
 
   return routes;
 }
-
-export const webhooks = createWebhookRoutes();

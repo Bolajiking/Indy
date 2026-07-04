@@ -92,6 +92,21 @@ describe("production env schema", () => {
     ).toBe("");
   });
 
+  it.each(["", "not valid while enabled"])(
+    "permits webhook secret %j when Telegram is disabled",
+    (secret) => {
+      expect(
+        envSchema.parse(
+          schemaInput({
+            ENABLE_TELEGRAM_BOT: "false",
+            TELEGRAM_MODE: "webhook",
+            TELEGRAM_WEBHOOK_SECRET: secret,
+          }),
+        ).TELEGRAM_WEBHOOK_SECRET,
+      ).toBe(secret);
+    },
+  );
+
   it.each(["", "has spaces", "bad.secret", "bad/secret", "a".repeat(257)])(
     "rejects an invalid Telegram webhook secret in webhook mode: %s",
     (secret) => {
@@ -245,6 +260,16 @@ describe("validateProductionEnv", () => {
         productionEnv({ TELEGRAM_MODE: "polling", TELEGRAM_BOT_TOKEN: "" }),
       ),
     ).toThrow(/TELEGRAM_BOT_TOKEN/);
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({
+          ENABLE_TELEGRAM_BOT: false,
+          TELEGRAM_MODE: "webhook",
+          TELEGRAM_BOT_TOKEN: "",
+          TELEGRAM_WEBHOOK_SECRET: "",
+        }),
+      ),
+    ).not.toThrow();
   });
 
   it("requires distributed rate limiting and Redis in production", () => {

@@ -77,6 +77,7 @@ const rawEnvObjectSchema = z.object({
 
 const rawEnvSchema = rawEnvObjectSchema.superRefine((parsed, context) => {
   if (
+    parsed.ENABLE_TELEGRAM_BOT &&
     parsed.TELEGRAM_MODE === "webhook" &&
     !/^[A-Za-z0-9_-]{1,256}$/.test(parsed.TELEGRAM_WEBHOOK_SECRET)
   ) {

@@ -551,8 +551,8 @@ Get upcoming deadlines and scheduled tasks.
 Telegram bot webhook endpoint. It is active only when `TELEGRAM_MODE=webhook`.
 Polling and disabled modes return `404`.
 The configured secret must be a random 32-256 character value containing only
-letters, numbers, underscores, and hyphens; replace the example
-`replace_with_32_plus_random_chars_1234567890` before deployment.
+letters, numbers, underscores, and hyphens. Generate one with
+`openssl rand -hex 32`.
 
 **Setup:**
 
@@ -573,7 +573,8 @@ URL. Telegram then supplies it in the
 
 ### GET /webhooks/whatsapp
 
-WhatsApp webhook verification.
+WhatsApp webhook verification. This endpoint returns `404` unless
+`ENABLE_WHATSAPP=true`.
 
 **Query Parameters:**
 
@@ -585,7 +586,8 @@ WhatsApp webhook verification.
 
 ### POST /webhooks/whatsapp
 
-WhatsApp message webhook.
+WhatsApp message webhook. This endpoint returns `404` unless
+`ENABLE_WHATSAPP=true`.
 
 **Headers:**
 

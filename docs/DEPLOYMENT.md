@@ -288,7 +288,7 @@ in the `secret_token` form field; do not append it to the webhook URL or print i
 value in deployment logs. Before running this command, set
 `TELEGRAM_MODE=webhook` and configure `TELEGRAM_WEBHOOK_SECRET` in Railway.
 Use 32-256 characters from `A-Z`, `a-z`, `0-9`, `_`, and `-`, for example
-`replace_with_32_plus_random_chars_1234567890` (replace this placeholder).
+a value generated with `openssl rand -hex 32`.
 
 ```bash
 curl --request POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \

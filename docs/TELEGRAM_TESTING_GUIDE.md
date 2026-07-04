@@ -92,9 +92,8 @@ The bot starts long polling only when `ENABLE_TELEGRAM_BOT=true`,
 
 Set `TELEGRAM_MODE=webhook` and configure `TELEGRAM_WEBHOOK_SECRET` in the
 deployment environment. Use a random 32-256 character value containing only
-letters, numbers, underscores, and hyphens, such as
-`replace_with_32_plus_random_chars_1234567890` (replace this placeholder).
-Then set the webhook after deploying to Railway:
+letters, numbers, underscores, and hyphens. Generate one with
+`openssl rand -hex 32`, then set the webhook after deploying to Railway:
 
 ```bash
 curl --request POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
