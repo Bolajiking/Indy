@@ -18,21 +18,32 @@ type WebhookRouteOptions = {
   telegramBot?: Bot | null;
   telegramWebhookSecret?: string;
   telegramHandler?: ReturnType<typeof webhookCallback>;
+  telegramHandlerFactory?: (bot: Bot) => ReturnType<typeof webhookCallback>;
+  whatsappEnabled?: boolean;
+  whatsappVerifyToken?: string;
 };
 
 function secretsMatch(expected: string, supplied: string | undefined) {
-  if (!expected || !supplied) return false;
-  const expectedBuffer = Buffer.from(expected, "utf8");
-  const suppliedBuffer = Buffer.from(supplied, "utf8");
-  return (
-    expectedBuffer.length === suppliedBuffer.length &&
-    crypto.timingSafeEqual(expectedBuffer, suppliedBuffer)
-  );
+  const expectedDigest = crypto.createHash("sha256").update(expected).digest();
+  const suppliedDigest = crypto
+    .createHash("sha256")
+    .update(supplied ?? "")
+    .digest();
+  const matches = crypto.timingSafeEqual(expectedDigest, suppliedDigest);
+  return Boolean(expected && supplied) && matches;
 }
 
 export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
   const routes = new Hono();
   const telegramMode = options.telegramMode ?? "disabled";
+  const telegramHandler =
+    options.telegramHandler ??
+    (telegramMode === "webhook" && options.telegramBot
+      ? (
+          options.telegramHandlerFactory ??
+          ((bot) => webhookCallback(bot, "hono"))
+        )(options.telegramBot)
+      : undefined);
 
   routes.post("/telegram", async (context) => {
     if (telegramMode !== "webhook") {
@@ -52,10 +63,10 @@ export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
     }
 
     try {
-      if (options.telegramHandler) {
-        return await options.telegramHandler(context as never);
+      if (telegramHandler) {
+        return await telegramHandler(context as never);
       }
-      return await webhookCallback(options.telegramBot, "hono")(context);
+      return context.text("Bot not configured", 503);
     } catch (error) {
       log.error({ error }, "Telegram webhook handler failed");
       return context.text("OK", 200); // Avoid retries after authenticated processing fails.
@@ -63,6 +74,10 @@ export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
   });
 
   routes.get("/whatsapp", (context) => {
+    if (!options.whatsappEnabled) {
+      return context.text("WhatsApp webhooks are disabled", 404);
+    }
+
     const url = new URL(context.req.url);
     const query = {
       "hub.mode": url.searchParams.get("hub.mode") ?? undefined,
@@ -70,7 +85,7 @@ export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
       "hub.challenge": url.searchParams.get("hub.challenge") ?? undefined,
     };
 
-    const result = verifyWhatsAppWebhook(query);
+    const result = verifyWhatsAppWebhook(query, options.whatsappVerifyToken);
     if (!result.ok) {
       return context.text("Forbidden", 403);
     }
@@ -79,6 +94,10 @@ export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
   });
 
   routes.post("/whatsapp", async (context) => {
+    if (!options.whatsappEnabled) {
+      return context.text("WhatsApp webhooks are disabled", 404);
+    }
+
     const rawBody = await context.req.text();
     const signature = context.req.header("x-hub-signature-256");
 

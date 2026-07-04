@@ -130,6 +130,12 @@ export function getProductionEnvIssues(
       config.TELEGRAM_WEBHOOK_SECRET,
       "required for Telegram webhook mode",
     );
+    if (config.TELEGRAM_WEBHOOK_SECRET.length < 32) {
+      issues.push({
+        field: "TELEGRAM_WEBHOOK_SECRET",
+        message: "must be at least 32 characters in Telegram webhook mode",
+      });
+    }
   }
 
   if (config.ENABLE_WHATSAPP) {

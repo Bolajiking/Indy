@@ -109,6 +109,8 @@ export async function main() {
         env.ENABLE_TELEGRAM_BOT && telegramBot ? env.TELEGRAM_MODE : "disabled",
       telegramBot: telegramWebhookBot,
       telegramWebhookSecret: env.TELEGRAM_WEBHOOK_SECRET,
+      whatsappEnabled: env.ENABLE_WHATSAPP,
+      whatsappVerifyToken: env.WHATSAPP_VERIFY_TOKEN,
     }),
   );
   app.route("/api/agent", agent);

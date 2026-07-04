@@ -44,7 +44,7 @@ import { getOnChainBalanceWithTimeout } from "../../../src/wallet/mpp.js";
 import { createApiServer } from "../../../src/api/server.js";
 import { deals as dealsRoutes } from "../../../src/api/routes/deals.js";
 import { wallet as walletRoutes } from "../../../src/api/routes/wallet.js";
-import { webhooks } from "../../../src/api/routes/webhooks.js";
+import { createWebhookRoutes } from "../../../src/api/routes/webhooks.js";
 
 describe("API server", () => {
   beforeEach(() => {
@@ -353,7 +353,13 @@ describe("API server", () => {
 
   it("verifies the WhatsApp webhook handshake", async () => {
     const app = createApiServer();
-    app.route("/webhooks", webhooks);
+    app.route(
+      "/webhooks",
+      createWebhookRoutes({
+        whatsappEnabled: true,
+        whatsappVerifyToken: "indyfren-verify",
+      }),
+    );
 
     const response = await app.request(
       "/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=indyfren-verify&hub.challenge=12345",
@@ -365,7 +371,7 @@ describe("API server", () => {
 
   it("rejects unsigned WhatsApp webhook deliveries", async () => {
     const app = createApiServer();
-    app.route("/webhooks", webhooks);
+    app.route("/webhooks", createWebhookRoutes({ whatsappEnabled: true }));
 
     const response = await app.request("/webhooks/whatsapp", {
       method: "POST",

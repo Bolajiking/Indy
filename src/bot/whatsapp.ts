@@ -31,10 +31,12 @@ function isWhatsAppWebhookPayload(
 
 export function verifyWhatsAppWebhook(
   query: Record<string, string | undefined>,
+  verifyToken = env.WHATSAPP_VERIFY_TOKEN,
 ): { ok: boolean; challenge?: string } {
   if (
+    verifyToken.length > 0 &&
     query["hub.mode"] === "subscribe" &&
-    query["hub.verify_token"] === env.WHATSAPP_VERIFY_TOKEN
+    query["hub.verify_token"] === verifyToken
   ) {
     return { ok: true, challenge: query["hub.challenge"] ?? "" };
   }

@@ -128,4 +128,57 @@ describe("startTelegramMode", () => {
     expect(dependencies.registerWebhook).not.toHaveBeenCalled();
     expect(dependencies.bot.start).not.toHaveBeenCalled();
   });
+
+  it("creates no bot when Telegram is disabled by feature flag", () => {
+    const dependencies = makeDependencies();
+
+    const bot = startTelegramMode({
+      enabled: false,
+      configured: true,
+      mode: "polling",
+      ...dependencies,
+    });
+
+    expect(bot).toBeNull();
+    expect(dependencies.createBot).not.toHaveBeenCalled();
+    expect(dependencies.registerBot).not.toHaveBeenCalled();
+    expect(dependencies.registerWebhook).not.toHaveBeenCalled();
+    expect(dependencies.bot.start).not.toHaveBeenCalled();
+  });
+
+  it("creates no bot when Telegram is not configured", () => {
+    const dependencies = makeDependencies();
+
+    const bot = startTelegramMode({
+      enabled: true,
+      configured: false,
+      mode: "polling",
+      ...dependencies,
+    });
+
+    expect(bot).toBeNull();
+    expect(dependencies.createBot).not.toHaveBeenCalled();
+    expect(dependencies.registerBot).not.toHaveBeenCalled();
+    expect(dependencies.registerWebhook).not.toHaveBeenCalled();
+    expect(dependencies.bot.start).not.toHaveBeenCalled();
+  });
+
+  it("contains a rejected polling start without making startup throw", async () => {
+    const dependencies = makeDependencies();
+    dependencies.bot.start.mockRejectedValueOnce(new Error("polling failed"));
+
+    expect(() =>
+      startTelegramMode({
+        enabled: true,
+        configured: true,
+        mode: "polling",
+        ...dependencies,
+      }),
+    ).not.toThrow();
+
+    await vi.waitFor(() => {
+      expect(dependencies.bot.start).toHaveBeenCalledOnce();
+    });
+    expect(dependencies.registerWebhook).not.toHaveBeenCalled();
+  });
 });

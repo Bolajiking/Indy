@@ -80,6 +80,43 @@ describe("production env schema", () => {
       envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "v2" })),
     ).toThrow();
   });
+
+  it("permits an empty Telegram webhook secret outside webhook mode", () => {
+    expect(
+      envSchema.parse(
+        schemaInput({
+          TELEGRAM_MODE: "polling",
+          TELEGRAM_WEBHOOK_SECRET: "",
+        }),
+      ).TELEGRAM_WEBHOOK_SECRET,
+    ).toBe("");
+  });
+
+  it.each(["", "has spaces", "bad.secret", "bad/secret", "a".repeat(257)])(
+    "rejects an invalid Telegram webhook secret in webhook mode: %s",
+    (secret) => {
+      expect(() =>
+        envSchema.parse(
+          schemaInput({
+            TELEGRAM_MODE: "webhook",
+            TELEGRAM_WEBHOOK_SECRET: secret,
+          }),
+        ),
+      ).toThrow(/TELEGRAM_WEBHOOK_SECRET|Telegram webhook secret/);
+    },
+  );
+
+  it("accepts Telegram's 256-character webhook secret boundary", () => {
+    const secret = "a".repeat(256);
+    expect(
+      envSchema.parse(
+        schemaInput({
+          TELEGRAM_MODE: "webhook",
+          TELEGRAM_WEBHOOK_SECRET: secret,
+        }),
+      ).TELEGRAM_WEBHOOK_SECRET,
+    ).toBe(secret);
+  });
 });
 
 function productionEnv(
@@ -145,6 +182,26 @@ describe("validateProductionEnv", () => {
         }),
       ),
     ).toThrow(/TELEGRAM_WEBHOOK_SECRET/);
+  });
+
+  it("requires at least 32 characters for a production Telegram webhook secret", () => {
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({
+          TELEGRAM_MODE: "webhook",
+          TELEGRAM_WEBHOOK_SECRET: "short_webhook_secret",
+        }),
+      ),
+    ).toThrow(/TELEGRAM_WEBHOOK_SECRET/);
+
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({
+          TELEGRAM_MODE: "webhook",
+          TELEGRAM_WEBHOOK_SECRET: "a".repeat(32),
+        }),
+      ),
+    ).not.toThrow();
   });
 
   it("rejects a missing platform encryption key", () => {

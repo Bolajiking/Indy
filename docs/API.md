@@ -550,6 +550,9 @@ Get upcoming deadlines and scheduled tasks.
 
 Telegram bot webhook endpoint. It is active only when `TELEGRAM_MODE=webhook`.
 Polling and disabled modes return `404`.
+The configured secret must be a random 32-256 character value containing only
+letters, numbers, underscores, and hyphens; replace the example
+`replace_with_32_plus_random_chars_1234567890` before deployment.
 
 **Setup:**
 

@@ -11,7 +11,7 @@ function strictBoolean(defaultValue: boolean) {
     .transform((value) => value === "true");
 }
 
-const rawEnvSchema = z.object({
+const rawEnvObjectSchema = z.object({
   // ── AI provider selection ──────────────────────────────────────────────
   // "anthropic" (default) talks to the Anthropic Messages API. "openai" talks
   // to any OpenAI-compatible Chat Completions endpoint (OpenAI, Azure OpenAI,
@@ -73,6 +73,20 @@ const rawEnvSchema = z.object({
   NODE_ENV: z
     .enum(["development", "production", "test"])
     .default("development"),
+});
+
+const rawEnvSchema = rawEnvObjectSchema.superRefine((parsed, context) => {
+  if (
+    parsed.TELEGRAM_MODE === "webhook" &&
+    !/^[A-Za-z0-9_-]{1,256}$/.test(parsed.TELEGRAM_WEBHOOK_SECRET)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["TELEGRAM_WEBHOOK_SECRET"],
+      message:
+        "Telegram webhook secret must contain 1-256 letters, numbers, underscores, or hyphens",
+    });
+  }
 });
 
 export const envSchema = rawEnvSchema.transform((parsed) => ({

@@ -35,7 +35,7 @@ vi.mock("../../src/bot/whatsapp.js", async (importOriginal) => {
 
 import { processCreatorMessage } from "../../src/agent/conversation.js";
 import { createApiServer } from "../../src/api/server.js";
-import { webhooks } from "../../src/api/routes/webhooks.js";
+import { createWebhookRoutes } from "../../src/api/routes/webhooks.js";
 import {
   createCreator,
   findCreatorByWhatsApp,
@@ -75,7 +75,7 @@ describe("bot-to-agent integration", () => {
     } as never);
 
     const app = createApiServer();
-    app.route("/webhooks", webhooks);
+    app.route("/webhooks", createWebhookRoutes({ whatsappEnabled: true }));
 
     const response = await app.request("/webhooks/whatsapp", {
       method: "POST",
@@ -145,7 +145,7 @@ describe("bot-to-agent integration", () => {
     });
 
     const app = createApiServer();
-    app.route("/webhooks", webhooks);
+    app.route("/webhooks", createWebhookRoutes({ whatsappEnabled: true }));
 
     const response = await app.request("/webhooks/whatsapp", {
       method: "POST",
