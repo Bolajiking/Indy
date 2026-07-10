@@ -26,6 +26,10 @@ import {
 } from "./registry.js";
 import { isRecord, type JsonObject } from "../../db/json.js";
 import { errMsg } from "../../lib/errors.js";
+import {
+  inferActionTarget,
+  sanitizeMaterialArguments,
+} from "../action-preview.js";
 
 const log = pino({ name: "agent:mcp-adapter" });
 
@@ -190,6 +194,16 @@ export class MCPToolAdapter {
       autonomyLevel,
       costCategory: maxCostPerUseCents > 0 ? "mpp" : "free",
       maxCostPerUseCents,
+      buildApprovalPreview:
+        autonomyLevel === "hybrid"
+          ? (input) => ({
+              service: `mcp:${serverName}`,
+              operation: mcpTool.name,
+              target: inferActionTarget(input) ?? undefined,
+              materialArguments: sanitizeMaterialArguments(input),
+              maxCostCents: maxCostPerUseCents,
+            })
+          : undefined,
       parameters,
       execute: async (
         params: JsonObject,
@@ -216,7 +230,7 @@ export class MCPToolAdapter {
           };
         } catch (err: unknown) {
           log.error(
-            { server: serverName, tool: mcpTool.name, error: errMsg(err) },
+            { server: serverName, tool: mcpTool.name },
             "MCP tool call failed",
           );
           return { success: false, data: null, error: errMsg(err) };
@@ -270,7 +284,10 @@ export async function loadMCPServers(): Promise<MCPToolAdapter[]> {
       adapters.push(adapter);
     } catch (err: unknown) {
       log.error(
-        { server: config.name, error: errMsg(err) },
+        {
+          server: config.name,
+          errorType: err instanceof Error ? err.name : typeof err,
+        },
         "Failed to connect to MCP server",
       );
     }

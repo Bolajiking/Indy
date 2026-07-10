@@ -98,7 +98,7 @@ async function buildClient(): Promise<Composio> {
       const latest = toolkit.meta?.availableVersions?.[0];
       if (latest) toolkitVersions[slug] = latest;
     } catch (error) {
-      log.warn({ error, slug }, "Could not resolve Composio toolkit version");
+      log.warn({ slug }, "Could not resolve Composio toolkit version");
     }
   }
   return new Composio({ apiKey, toolkitVersions });
@@ -149,7 +149,7 @@ export async function getConnectedAppsForContext(
     ].filter((t) => !connected.includes(t));
     return { connected, reconnect };
   } catch (error) {
-    log.warn({ error, userId }, "Failed to load connected apps for context");
+    log.warn({ userId }, "Failed to load connected apps for context");
     return { connected: [], reconnect: [] };
   }
 }
@@ -186,15 +186,12 @@ export async function initiateComposioConnection(
         client.connectedAccounts
           .delete(i.id)
           .catch((error) =>
-            log.warn(
-              { error, slug, id: i.id },
-              "Stale connection cleanup failed",
-            ),
+            log.warn({ slug, id: i.id }, "Stale connection cleanup failed"),
           ),
       ),
     );
   } catch (error) {
-    log.warn({ error, slug }, "Could not enumerate connections for cleanup");
+    log.warn({ slug }, "Could not enumerate connections for cleanup");
   }
 
   // `link` is the current flow for both Composio-managed and custom OAuth
@@ -299,7 +296,7 @@ export async function disconnectComposioToolkit(
       await client.connectedAccounts.delete(account.id);
       removed += 1;
     } catch (error) {
-      log.warn({ error, toolkit, accountId: account.id }, "Disconnect failed");
+      log.warn({ toolkit, accountId: account.id }, "Disconnect failed");
     }
   }
   if (removed > 0) invalidateConnectionsCache(userId);
@@ -790,7 +787,7 @@ export async function composioLoopTools(
       ...new Set(all.filter((c) => !c.connected).map((c) => c.toolkit)),
     ].filter((t) => !connected.includes(t));
   } catch (error) {
-    log.warn({ error, userId }, "Failed to load Composio connections");
+    log.warn({ userId }, "Failed to load Composio connections");
     return {};
   }
 
@@ -828,7 +825,7 @@ export async function composioLoopTools(
       try {
         catalog = await getToolkitCatalog(app);
       } catch (error) {
-        log.warn({ error, app, userId }, "Failed to load toolkit catalog");
+        log.warn({ app, userId }, "Failed to load toolkit catalog");
         return {
           content: `Could not load the ${app} catalog right now — try again.`,
           isError: true,

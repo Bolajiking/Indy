@@ -22,10 +22,19 @@ import {
   type ToolContext,
 } from "./tools/registry.js";
 import type { PendingAgentAction } from "./types.js";
-import { serializeToolResult } from "./tool-result.js";
+import {
+  serializeUntrustedExternalData,
+  wrapUntrustedExternalData,
+} from "./tool-result.js";
 import { errMsg } from "../lib/errors.js";
-import { formatUsd } from "../lib/format.js";
 import llm from "./llm.js";
+import { TRUST_BOUNDARY_DIRECTIVE } from "./prompts.js";
+import {
+  formatActionPreview,
+  inferActionTarget,
+  sanitizeMaterialArguments,
+  validateActionPreview,
+} from "./action-preview.js";
 
 const log = pino({ name: "agent:loop" });
 
@@ -197,7 +206,9 @@ export async function runAgentLoop(
   // apps). The base prompt is what we snapshot for approval re-entry, so the
   // suffix is recomputed fresh on re-entry rather than double-stored.
   const effectiveSystemPrompt =
-    systemPrompt + (config.systemPromptSuffix ?? "");
+    systemPrompt +
+    (config.systemPromptSuffix ?? "") +
+    `\n\n${TRUST_BOUNDARY_DIRECTIVE}`;
 
   // Build a minimal context for free tools when no wallet is configured.
   // Free tools (create_deal, update_deal_stage, web search, etc.) only need creatorId —
@@ -282,12 +293,33 @@ export async function runAgentLoop(
                 ? toolInput.arguments
                 : {}
               : (toolInput ?? {});
+            const target = inferActionTarget(pendingInput);
+            const service = isAppToolWrapper
+              ? pendingType.split("_")[0]?.toLowerCase()
+              : toolUse.name.replace(/^mcp_/, "mcp:").split("_")[0];
+            const preview = validateActionPreview({
+              service,
+              operation: pendingType,
+              target: target ?? undefined,
+              materialArguments: sanitizeMaterialArguments(pendingInput),
+              maxCostCents: 0,
+            });
+            if (!preview) {
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: toolUse.id,
+                content:
+                  "Error: Approval preview unavailable because the write action is missing a recipient or target. Ask the creator for the exact destination before retrying.",
+                is_error: true,
+              });
+              continue;
+            }
             log.info(
               { tool: pendingType },
               "Connected-app write action — requesting approval",
             );
             const approvalId = randomUUID();
-            const approvalSummary = `Approval needed: ${pendingType}\nThis will act on your connected account.\nParameters: ${JSON.stringify(pendingInput)}`;
+            const approvalSummary = formatActionPreview(preview);
             const historyWithToolUse = [
               ...messages,
               { role: "assistant" as const, content: response.content },
@@ -316,7 +348,12 @@ export async function runAgentLoop(
             toolResults.push({
               type: "tool_result",
               tool_use_id: toolUse.id,
-              content: dynamic.content,
+              content: wrapUntrustedExternalData(
+                dynamic.content,
+                toolUse.name === "execute_app_tool"
+                  ? `composio:${String(toolInput?.slug ?? "unknown")}`
+                  : `composio:${toolUse.name}`,
+              ),
               is_error: dynamic.isError,
             });
             continue;
@@ -336,9 +373,22 @@ export async function runAgentLoop(
       const { tool, input } = resolution;
 
       if (tool.autonomyLevel === "hybrid") {
+        const preview = validateActionPreview(
+          tool.buildApprovalPreview?.(input) ?? {},
+        );
+        if (!preview) {
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content:
+              "Error: Approval preview unavailable because required service, operation, recipient/target, material arguments, or maximum cost is missing. Ask the creator for the missing destination before retrying.",
+            is_error: true,
+          });
+          continue;
+        }
         log.info({ tool: tool.name }, "Hybrid tool — requesting approval");
         const approvalId = randomUUID();
-        const approvalSummary = `Approval needed: ${tool.name}\n${tool.description}\nEstimated max cost: ${formatUsd(tool.maxCostPerUseCents)}\nParameters: ${JSON.stringify(input)}`;
+        const approvalSummary = formatActionPreview(preview);
         // Snapshot messages up to and including this assistant response so we can
         // re-enter the agent loop after approval with full conversation context.
         const historyWithToolUse = [
@@ -392,17 +442,22 @@ export async function runAgentLoop(
           // Clamp before the result re-enters the LLM — a registered tool
           // (web search, browser, enrichment, paid API) can return a payload
           // far larger than the model accepts in one follow-up call.
-          content: serializeToolResult(result.data),
+          content: serializeUntrustedExternalData(
+            result.data,
+            `tool:${tool.name}`,
+          ),
         });
       } catch (err: unknown) {
-        log.error(
-          { tool: tool.name, error: errMsg(err) },
-          "Tool execution failed",
-        );
+        // Provider errors can echo signed URLs, tokens, or request bodies.
+        // Keep those in the source-labelled model envelope, never in logs.
+        log.error({ tool: tool.name }, "Tool execution failed");
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,
-          content: `Error: ${errMsg(err)}`,
+          content: wrapUntrustedExternalData(
+            `Error: ${errMsg(err)}`,
+            `tool:${tool.name}`,
+          ),
           is_error: true,
         });
       }

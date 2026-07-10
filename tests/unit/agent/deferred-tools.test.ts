@@ -36,9 +36,17 @@ registerTool({
   autonomyLevel: "hybrid",
   costCategory: "mpp",
   maxCostPerUseCents: 50,
+  buildApprovalPreview: (input) => ({
+    service: "test-service",
+    operation: "test_deferred_hybrid",
+    target: typeof input.target === "string" ? input.target : undefined,
+    materialArguments: input,
+    maxCostCents: 50,
+  }),
   deferred: true,
   parameters: {
     payload: { type: "string", description: "Payload.", required: true },
+    target: { type: "string", description: "Destination.", required: true },
   },
   execute: async () => ({ success: true, data: "sent" }),
 });
@@ -140,7 +148,7 @@ describe("use_tool unwrapping in the agent loop", () => {
     vi.mocked(llm.messages.create).mockResolvedValueOnce(
       toolUse("use_tool", {
         tool: "test_deferred_hybrid",
-        arguments: { payload: "hello" },
+        arguments: { payload: "hello", target: "recipient-1" },
       }),
     );
 
@@ -155,7 +163,10 @@ describe("use_tool unwrapping in the agent loop", () => {
     // approval-execution runs getTool(approval.type).execute(approval.input) —
     // both must be the unwrapped target.
     expect(result.pendingAction?.type).toBe("test_deferred_hybrid");
-    expect(result.pendingAction?.input).toEqual({ payload: "hello" });
+    expect(result.pendingAction?.input).toEqual({
+      payload: "hello",
+      target: "recipient-1",
+    });
   });
 
   it("returns the target's full schema when required params are missing", async () => {

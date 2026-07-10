@@ -12,7 +12,10 @@ import {
 import { resolveWalletForCreator } from "../wallet/privy.js";
 import { getTool, type ToolContext } from "./tools/registry.js";
 import { runAgentLoop } from "./loop.js";
-import { serializeToolResult } from "./tool-result.js";
+import {
+  serializeUntrustedExternalData,
+  wrapUntrustedExternalData,
+} from "./tool-result.js";
 import {
   composioLoopTools,
   executeComposioToolBySlug,
@@ -105,7 +108,10 @@ export async function executePendingApprovalAction(
         if (err instanceof ApprovalExecutionError) throw err;
         // Balance check failed (network issue) — proceed anyway, MPP will catch it
         log.warn(
-          { err, creatorId },
+          {
+            errorType: err instanceof Error ? err.name : typeof err,
+            creatorId,
+          },
           "Balance pre-flight check failed — proceeding",
         );
       }
@@ -208,7 +214,10 @@ export async function executePendingApprovalAction(
                 type: "tool_result",
                 tool_use_id: toolUseId,
                 // Clamp the result fed back to the model (can be large).
-                content: serializeToolResult(result.data),
+                content: serializeUntrustedExternalData(
+                  result.data,
+                  `tool:${tool.name}`,
+                ),
               },
             ],
           },
@@ -224,7 +233,10 @@ export async function executePendingApprovalAction(
       };
     } catch (err: unknown) {
       log.warn(
-        { err, creatorId },
+        {
+          errorType: err instanceof Error ? err.name : typeof err,
+          creatorId,
+        },
         "Agent loop re-entry failed — returning raw result",
       );
       // Fall through to return raw result
@@ -321,7 +333,10 @@ async function executeComposioApproval(
                 tool_use_id: toolUseId,
                 // Triaged + clamped: surfaces buried errors and warns on empty
                 // write responses so the follow-up message reflects reality.
-                content: triageAppToolResult(claimedApproval.type, outcome),
+                content: wrapUntrustedExternalData(
+                  triageAppToolResult(claimedApproval.type, outcome),
+                  `composio:${claimedApproval.type}`,
+                ),
               },
             ],
           },
@@ -333,7 +348,10 @@ async function executeComposioApproval(
       return { message: loopResult.text };
     } catch (err) {
       log.warn(
-        { err, creatorId },
+        {
+          errorType: err instanceof Error ? err.name : typeof err,
+          creatorId,
+        },
         "Agent loop re-entry failed after Composio approval",
       );
     }

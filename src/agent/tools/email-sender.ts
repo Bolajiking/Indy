@@ -1,4 +1,8 @@
 import { readStringParam, registerTool, type AgentTool } from "./registry.js";
+import {
+  inferActionTarget,
+  sanitizeMaterialArguments,
+} from "../action-preview.js";
 
 const sendEmailTool: AgentTool = {
   name: "send_email",
@@ -7,6 +11,13 @@ const sendEmailTool: AgentTool = {
   autonomyLevel: "hybrid",
   costCategory: "mpp",
   maxCostPerUseCents: 50,
+  buildApprovalPreview: (input) => ({
+    service: "stableemail",
+    operation: "send_email",
+    target: inferActionTarget(input) ?? undefined,
+    materialArguments: sanitizeMaterialArguments(input),
+    maxCostCents: 50,
+  }),
   parameters: {
     to: {
       type: "string",
