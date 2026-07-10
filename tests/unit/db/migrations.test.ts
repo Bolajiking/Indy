@@ -27,6 +27,7 @@ describe("database migration files", () => {
     expect(filenames).toEqual([
       "0001_baseline.sql",
       "0002_public_launch_readiness.sql",
+      "0003_webhook_delivery_outcomes.sql",
     ]);
     expect(new Set(filenames).size).toBe(filenames.length);
     expect(filenames).toEqual([...filenames].sort());
@@ -57,6 +58,22 @@ describe("database migration files", () => {
     expect(sql).toMatch(/deny_anon_webhook_events/i);
   });
 
+  it("adds token-bound webhook delivery outcomes without changing prior migrations", async () => {
+    const sql = await readFile(
+      resolve(migrationsDirectory, "0003_webhook_delivery_outcomes.sql"),
+      "utf8",
+    );
+    expect(sql).toMatch(/ADD COLUMN delivery_lease_token UUID/i);
+    expect(sql).toMatch(/ADD COLUMN delivery_started_at TIMESTAMPTZ/i);
+    expect(sql).toMatch(
+      /ADD COLUMN delivery_outcome TEXT NOT NULL DEFAULT 'pending'/i,
+    );
+    expect(sql).toMatch(/webhook_events_status_check/i);
+    expect(sql).toMatch(/outcome_unknown/i);
+    expect(sql).toMatch(/webhook_events_delivery_outcome_check/i);
+    expect(sql).toMatch(/status = 'outcome_unknown'/i);
+  });
+
   it("keeps the clean-install snapshot and package commands in sync", async () => {
     const schema = await readFile(
       resolve(import.meta.dirname, "../../../src/db/schema.sql"),
@@ -70,6 +87,9 @@ describe("database migration files", () => {
     ) as { scripts: Record<string, string> };
     expect(schema).toMatch(/ordered migrations.*clean-install snapshot/i);
     expect(schema).toMatch(/CREATE TABLE IF NOT EXISTS webhook_events/i);
+    expect(schema).toMatch(/delivery_lease_token UUID/i);
+    expect(schema).toMatch(/delivery_started_at TIMESTAMPTZ/i);
+    expect(schema).toMatch(/delivery_outcome TEXT NOT NULL DEFAULT 'pending'/i);
     expect(schema).toMatch(/key_version INTEGER NOT NULL DEFAULT 1/i);
     expect(schema).toMatch(/account_status TEXT NOT NULL DEFAULT 'active'/i);
     expect(schema).toMatch(/deletion_requested_at TIMESTAMPTZ/i);
@@ -118,7 +138,7 @@ describe("database migration runner", () => {
     const db = new FakeDatabase();
 
     expect(await runMigrations(db, migrations)).toEqual({
-      applied: ["0001", "0002"],
+      applied: ["0001", "0002", "0003"],
     });
     expect(db.transactionEvents).toEqual([
       "BEGIN",
@@ -128,6 +148,10 @@ describe("database migration runner", () => {
       "BEGIN",
       migrations[1].sql,
       "INSERT:0002",
+      "COMMIT",
+      "BEGIN",
+      migrations[2].sql,
+      "INSERT:0003",
       "COMMIT",
     ]);
   });
@@ -255,7 +279,7 @@ describe("database migration runner", () => {
 
     expect(
       await runMigrations(db, migrations, { adoptBaseline: true }),
-    ).toEqual({ applied: ["0001", "0002"] });
+    ).toEqual({ applied: ["0001", "0002", "0003"] });
     expect(db.transactionEvents).toEqual([
       "BEGIN",
       "CATALOG",
@@ -264,6 +288,10 @@ describe("database migration runner", () => {
       "BEGIN",
       migrations[1].sql,
       "INSERT:0002",
+      "COMMIT",
+      "BEGIN",
+      migrations[2].sql,
+      "INSERT:0003",
       "COMMIT",
     ]);
   });

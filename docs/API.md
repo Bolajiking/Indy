@@ -548,8 +548,9 @@ Get upcoming deadlines and scheduled tasks.
 
 ### POST /webhooks/telegram
 
-Telegram bot webhook endpoint. It is active only when `TELEGRAM_MODE=webhook`.
-Polling and disabled modes return `404`.
+Telegram bot webhook endpoint. It is active only when `TELEGRAM_MODE=webhook`
+and `ENABLE_JOBS=true`; startup verifies the worker can reach Redis before the
+ingress binds. Polling and disabled modes return `404`.
 The configured secret must be a random 32-256 character value containing only
 letters, numbers, underscores, and hyphens. Generate one with
 `openssl rand -hex 32`.
@@ -569,12 +570,13 @@ URL. Telegram then supplies it in the
 **Request:** Telegram webhook payload with the
 `X-Telegram-Bot-Api-Secret-Token` header (automatically sent by Telegram)
 
-**Response:** `200 OK`
+**Response:** `202 Accepted` after a durable receipt is queued. An ambiguous
+external delivery is held for reconciliation rather than retried automatically.
 
 ### GET /webhooks/whatsapp
 
 WhatsApp webhook verification. This endpoint returns `404` unless
-`ENABLE_WHATSAPP=true`.
+`ENABLE_WHATSAPP=true` (which also requires `ENABLE_JOBS=true`).
 
 **Query Parameters:**
 
@@ -595,7 +597,8 @@ WhatsApp message webhook. This endpoint returns `404` unless
 
 **Request:** WhatsApp webhook payload
 
-**Response:** `200 OK`
+**Response:** `202 Accepted` after a durable receipt is queued. An ambiguous
+external delivery is held for reconciliation rather than retried automatically.
 
 ---
 

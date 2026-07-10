@@ -1,9 +1,31 @@
+import { UnrecoverableError } from "bullmq";
 import { describe, expect, it, vi } from "vitest";
 import {
   createWebhookDeliveryProcessor,
   enqueueWebhookDelivery,
   getWebhookJobId,
 } from "../../../src/jobs/webhook-delivery.js";
+
+const telegramJob = (attemptsMade = 0) => ({
+  data: {
+    provider: "telegram" as const,
+    providerEventId: "42",
+    payload: { update_id: 42 },
+  },
+  attemptsMade,
+  opts: { attempts: 5 },
+});
+
+function deliveryDependencies(overrides = {}) {
+  return {
+    processTelegram: vi.fn(async () => undefined),
+    processWhatsApp: vi.fn(async () => undefined),
+    acquireDelivery: vi.fn(async () => true),
+    markProcessed: vi.fn(async () => undefined),
+    markOutcomeUnknown: vi.fn(async () => undefined),
+    ...overrides,
+  };
+}
 
 describe("webhook delivery jobs", () => {
   it("builds deterministic BullMQ-safe job IDs", () => {
@@ -42,104 +64,126 @@ describe("webhook delivery jobs", () => {
     );
   });
 
-  it("marks success only after provider processing completes", async () => {
+  it("marks success only after it holds the durable delivery lease", async () => {
     const order: string[] = [];
-    const processTelegram = vi.fn(async () => {
-      order.push("processed");
-    });
-    const markAttempt = vi.fn(async () => undefined);
-    const markProcessed = vi.fn(async () => {
-      order.push("marked");
-    });
-    const processor = createWebhookDeliveryProcessor({
-      processTelegram,
-      processWhatsApp: vi.fn(),
-      markAttempt,
-      markProcessed,
-      markFailed: vi.fn(),
-    });
-
-    await processor({
-      data: {
-        provider: "telegram",
-        providerEventId: "42",
-        payload: { update_id: 42 },
-      },
-      attemptsMade: 0,
-      opts: { attempts: 5 },
-    });
-
-    expect(order).toEqual(["processed", "marked"]);
-    expect(markAttempt).toHaveBeenCalledWith("telegram", "42", 1);
-  });
-
-  it("keeps intermediate failures retryable and persists only terminal redacted errors", async () => {
-    const markFailed = vi.fn(async () => undefined);
-    const processor = createWebhookDeliveryProcessor({
-      processTelegram: vi.fn(async () => {
-        throw new Error("secret raw message content");
+    const dependencies = deliveryDependencies({
+      acquireDelivery: vi.fn(async () => {
+        order.push("leased");
+        return true;
       }),
-      processWhatsApp: vi.fn(),
-      markAttempt: vi.fn(async () => undefined),
-      markProcessed: vi.fn(async () => undefined),
-      markFailed,
+      processTelegram: vi.fn(async () => {
+        order.push("processed");
+      }),
+      markProcessed: vi.fn(async () => {
+        order.push("marked");
+      }),
     });
-    const job = {
-      data: {
-        provider: "telegram" as const,
-        providerEventId: "42",
-        payload: { update_id: 42 },
-      },
-      attemptsMade: 3,
-      opts: { attempts: 5 },
-    };
+    const processor = createWebhookDeliveryProcessor(dependencies);
 
-    await expect(processor(job)).rejects.toThrow("secret raw message content");
-    expect(markFailed).not.toHaveBeenCalled();
+    await processor(telegramJob());
 
-    await expect(processor({ ...job, attemptsMade: 4 })).rejects.toThrow(
-      "secret raw message content",
-    );
-    expect(markFailed).toHaveBeenCalledWith(
+    expect(order).toEqual(["leased", "processed", "marked"]);
+    expect(dependencies.acquireDelivery).toHaveBeenCalledWith(
       "telegram",
       "42",
-      5,
-      "Webhook delivery failed",
+      1,
+      expect.any(String),
+    );
+    expect(dependencies.markProcessed).toHaveBeenCalledWith(
+      "telegram",
+      "42",
+      expect.any(String),
     );
   });
 
-  it("bounds a delivery attempt with a terminal timeout", async () => {
-    vi.useFakeTimers();
-    const markFailed = vi.fn(async () => undefined);
-    const processor = createWebhookDeliveryProcessor({
-      processTelegram: vi.fn(() => new Promise<void>(() => undefined)),
-      processWhatsApp: vi.fn(),
-      markAttempt: vi.fn(async () => undefined),
-      markProcessed: vi.fn(async () => undefined),
-      markFailed,
+  it("keeps safe pre-delivery persistence failures retryable", async () => {
+    const dependencies = deliveryDependencies({
+      acquireDelivery: vi.fn(async () => {
+        throw new Error("database unavailable before provider invocation");
+      }),
     });
+    const processor = createWebhookDeliveryProcessor(dependencies);
+
+    await expect(processor(telegramJob())).rejects.toThrow(
+      "database unavailable before provider invocation",
+    );
+    expect(dependencies.processTelegram).not.toHaveBeenCalled();
+    expect(dependencies.markOutcomeUnknown).not.toHaveBeenCalled();
+  });
+
+  it("does not repeat an opaque provider failure after it has acquired a lease", async () => {
+    const dependencies = deliveryDependencies({
+      processTelegram: vi.fn(async () => {
+        throw new Error("provider may have completed after sending");
+      }),
+    });
+    const processor = createWebhookDeliveryProcessor(dependencies);
+
+    await expect(processor(telegramJob())).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+    expect(dependencies.markOutcomeUnknown).toHaveBeenCalledWith(
+      "telegram",
+      "42",
+      expect.any(String),
+      "Webhook delivery outcome requires reconciliation",
+    );
+
+    dependencies.acquireDelivery.mockResolvedValueOnce(false);
+    await processor(telegramJob(1));
+    expect(dependencies.processTelegram).toHaveBeenCalledOnce();
+  });
+
+  it("does not repeat an external side effect when recording success fails", async () => {
+    const dependencies = deliveryDependencies({
+      markProcessed: vi.fn(async () => {
+        throw new Error("database write lost after provider side effect");
+      }),
+    });
+    const processor = createWebhookDeliveryProcessor(dependencies);
+
+    await expect(processor(telegramJob())).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+    expect(dependencies.markOutcomeUnknown).toHaveBeenCalledOnce();
+
+    dependencies.acquireDelivery.mockResolvedValueOnce(false);
+    await processor(telegramJob(1));
+    expect(dependencies.processTelegram).toHaveBeenCalledOnce();
+  });
+
+  it("holds a timed-out delivery for reconciliation and records a later success without replaying", async () => {
+    vi.useFakeTimers();
+    let resolveDelivery: (() => void) | undefined;
+    const dependencies = deliveryDependencies({
+      processTelegram: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveDelivery = resolve;
+          }),
+      ),
+    });
+    const processor = createWebhookDeliveryProcessor(dependencies);
 
     try {
-      const pending = processor({
-        data: {
-          provider: "telegram",
-          providerEventId: "timeout-event",
-          payload: { update_id: 101 },
-        },
-        attemptsMade: 4,
-        opts: { attempts: 5 },
-      });
-      const rejection = expect(pending).rejects.toThrow(
-        "Webhook delivery timed out",
-      );
+      const pending = processor(telegramJob());
+      const rejection =
+        expect(pending).rejects.toBeInstanceOf(UnrecoverableError);
       await vi.advanceTimersByTimeAsync(30_000);
-
       await rejection;
-      expect(markFailed).toHaveBeenCalledWith(
+      expect(dependencies.markOutcomeUnknown).toHaveBeenCalledOnce();
+
+      dependencies.acquireDelivery.mockResolvedValueOnce(false);
+      await processor(telegramJob(1));
+      expect(dependencies.processTelegram).toHaveBeenCalledOnce();
+
+      resolveDelivery?.();
+      await vi.runAllTicks();
+      await Promise.resolve();
+      expect(dependencies.markProcessed).toHaveBeenCalledWith(
         "telegram",
-        "timeout-event",
-        5,
-        "Webhook delivery failed",
+        "42",
+        expect.any(String),
       );
     } finally {
       vi.useRealTimers();

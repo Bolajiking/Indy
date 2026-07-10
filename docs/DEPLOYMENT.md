@@ -441,7 +441,7 @@ Access via: https://vercel.com/{your-team}/{project}
 | `DASHBOARD_APP_URL`                | No            | -                  | Dashboard URL for redirects                                    |
 | `BROWSERBASE_API_KEY`              | No            | -                  | BrowserBase API key                                            |
 | `BROWSERBASE_PROJECT_ID`           | No            | -                  | BrowserBase project ID                                         |
-| `ENABLE_JOBS`                      | No            | true               | Strict boolean enabling jobs; requires Redis when true         |
+| `ENABLE_JOBS`                      | No            | true               | Strict boolean enabling jobs; required for Telegram webhook mode or WhatsApp, and requires Redis when true |
 | `ENABLE_DISTRIBUTED_RATE_LIMIT`    | Yes           | true in production | Must be true in production; false is development/test only     |
 | `ERROR_REPORTING_DSN`              | No            | -                  | Optional error-reporting provider DSN                          |
 | `PUBLIC_SUPPORT_EMAIL`             | No            | -                  | Optional valid public support email address                    |

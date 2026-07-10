@@ -140,7 +140,9 @@ export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
       providerEventId: data.providerEventId,
       payloadHash,
     });
-    if (claim.status !== "processed") {
+    // Only a queued claim can be safely enqueued. Events in flight, terminal,
+    // or awaiting reconciliation must never start a second external delivery.
+    if (claim.status === "queued") {
       await enqueueWebhook(data);
     }
   }

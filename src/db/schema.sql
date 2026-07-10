@@ -186,11 +186,16 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   payload_hash TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'queued',
   attempt_count INTEGER NOT NULL DEFAULT 0,
+  delivery_lease_token UUID,
+  delivery_started_at TIMESTAMPTZ,
+  delivery_outcome TEXT NOT NULL DEFAULT 'pending',
   error TEXT,
   processed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(provider, provider_event_id)
+  UNIQUE(provider, provider_event_id),
+  CONSTRAINT webhook_events_status_check CHECK (status IN ('queued', 'processing', 'processed', 'failed', 'outcome_unknown')),
+  CONSTRAINT webhook_events_delivery_outcome_check CHECK (delivery_outcome IN ('pending', 'confirmed', 'unknown'))
 );
 
 -- Indexes (IF NOT EXISTS requires Postgres 9.5+)
@@ -213,6 +218,7 @@ CREATE INDEX IF NOT EXISTS idx_creator_memories_skill ON creator_memories(creato
 CREATE INDEX IF NOT EXISTS idx_skill_outcomes_creator_skill ON skill_outcomes(creator_id, skill);
 CREATE INDEX IF NOT EXISTS idx_skill_outcomes_created_at ON skill_outcomes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_webhook_events_status_created_at ON webhook_events(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_reconciliation ON webhook_events(status, delivery_outcome, delivery_started_at) WHERE status = 'outcome_unknown';
 CREATE INDEX IF NOT EXISTS idx_agent_actions_expires_at ON agent_actions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_creators_account_status ON creators(account_status);
 
@@ -358,7 +364,7 @@ RETURNS TABLE(
 $$ LANGUAGE sql VOLATILE;
 
 -- Snapshot-to-migration handoff. A database installed from this file is current
--- through 0002 and can immediately use db:migrate or db:migrate:check.
+-- through 0003 and can immediately use db:migrate or db:migrate:check.
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version TEXT PRIMARY KEY,
   checksum TEXT NOT NULL,
@@ -367,7 +373,8 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 
 INSERT INTO schema_migrations (version, checksum) VALUES
   ('0001', 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94'),
-  ('0002', '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906')
+  ('0002', '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906'),
+  ('0003', 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad')
 ON CONFLICT (version) DO NOTHING;
 
 DO $$
@@ -380,6 +387,8 @@ BEGIN
     (version = '0001' AND checksum <> 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94')
     OR
     (version = '0002' AND checksum <> '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906')
+    OR
+    (version = '0003' AND checksum <> 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad')
   LIMIT 1;
 
   IF drift_version IS NOT NULL THEN

@@ -88,6 +88,21 @@ const rawEnvSchema = rawEnvObjectSchema.superRefine((parsed, context) => {
         "Telegram webhook secret must contain 1-256 letters, numbers, underscores, or hyphens",
     });
   }
+
+  // Webhook receipts are only acknowledged after they have been claimed for
+  // asynchronous delivery. Running an ingress without workers would therefore
+  // acknowledge provider updates that can never be processed.
+  const webhookDeliveryEnabled =
+    (parsed.ENABLE_TELEGRAM_BOT && parsed.TELEGRAM_MODE === "webhook") ||
+    parsed.ENABLE_WHATSAPP;
+  if (webhookDeliveryEnabled && !parsed.ENABLE_JOBS) {
+    context.addIssue({
+      code: "custom",
+      path: ["ENABLE_JOBS"],
+      message:
+        "ENABLE_JOBS must be true when Telegram webhook mode or WhatsApp webhooks are enabled",
+    });
+  }
 });
 
 export const envSchema = rawEnvSchema.transform((parsed) => ({

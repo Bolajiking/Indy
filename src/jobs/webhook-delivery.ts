@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import type { Bot } from "grammy";
-import type { JobsOptions, Queue } from "bullmq";
+import { UnrecoverableError, type JobsOptions, type Queue } from "bullmq";
 import type { WebhookProvider } from "../db/queries/webhook-events.js";
 
 export interface WebhookDeliveryData {
@@ -18,6 +18,9 @@ type WebhookJob = {
 };
 
 export const WEBHOOK_JOB_OPTIONS: JobsOptions = {
+  // BullMQ retries safe failures before a provider handler acquires and starts
+  // a delivery. Once an external effect may have started, the processor raises
+  // UnrecoverableError and requires reconciliation instead of replaying it.
   attempts: 5,
   backoff: { type: "exponential", delay: 1_000 },
   removeOnComplete: { age: 86_400, count: 10_000 },
@@ -48,19 +51,21 @@ export async function enqueueWebhookDelivery(
 export interface WebhookDeliveryDependencies {
   processTelegram: (payload: unknown) => Promise<void>;
   processWhatsApp: (payload: unknown, providerEventId: string) => Promise<void>;
-  markAttempt: (
+  acquireDelivery: (
     provider: WebhookProvider,
     providerEventId: string,
     attemptCount: number,
-  ) => Promise<void>;
+    leaseToken: string,
+  ) => Promise<boolean>;
   markProcessed: (
     provider: WebhookProvider,
     providerEventId: string,
+    leaseToken: string,
   ) => Promise<void>;
-  markFailed: (
+  markOutcomeUnknown: (
     provider: WebhookProvider,
     providerEventId: string,
-    attemptCount: number,
+    leaseToken: string,
     redactedError: string,
   ) => Promise<void>;
 }
@@ -71,36 +76,74 @@ export function createWebhookDeliveryProcessor(
   return async (job: WebhookJob): Promise<void> => {
     const { provider, providerEventId, payload } = job.data;
     const attempt = job.attemptsMade + 1;
-    await dependencies.markAttempt(provider, providerEventId, attempt);
+    const leaseToken = crypto.randomUUID();
+    const acquired = await dependencies.acquireDelivery(
+      provider,
+      providerEventId,
+      attempt,
+      leaseToken,
+    );
+    if (!acquired) return;
 
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const timeoutError = new Error("Webhook delivery timed out");
+    const delivery = Promise.resolve().then(() =>
+      provider === "telegram"
+        ? dependencies.processTelegram(payload)
+        : dependencies.processWhatsApp(payload, providerEventId),
+    );
     try {
-      const delivery =
-        provider === "telegram"
-          ? dependencies.processTelegram(payload)
-          : dependencies.processWhatsApp(payload, providerEventId);
-      let timeout: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
         delivery,
         new Promise<never>((_, reject) => {
           timeout = setTimeout(
-            () => reject(new Error("Webhook delivery timed out")),
+            () => reject(timeoutError),
             WEBHOOK_DELIVERY_TIMEOUT_MS,
           );
           timeout.unref?.();
         }),
-      ]).finally(() => clearTimeout(timeout));
-      await dependencies.markProcessed(provider, providerEventId);
+      ]);
+      await dependencies.markProcessed(provider, providerEventId, leaseToken);
     } catch (error) {
-      const maxAttempts = job.opts.attempts ?? 1;
-      if (attempt >= maxAttempts) {
-        await dependencies.markFailed(
+      clearTimeout(timeout);
+
+      // A provider handler can emit an external side effect immediately before
+      // rejecting, timing out, or losing the DB response that records success.
+      // Replaying that ambiguous attempt risks sending the user a duplicate
+      // message, so it is intentionally not retried by BullMQ. A later success
+      // from a timed-out handler may still confirm the same token-bound lease.
+      try {
+        await dependencies.markOutcomeUnknown(
           provider,
           providerEventId,
-          attempt,
-          "Webhook delivery failed",
+          leaseToken,
+          "Webhook delivery outcome requires reconciliation",
+        );
+      } catch {
+        // Do not retry an ambiguous provider delivery even if recording its
+        // outcome also fails. The worker's terminal failure remains visible.
+      }
+      if (error === timeoutError) {
+        void delivery.then(
+          async () => {
+            try {
+              await dependencies.markProcessed(
+                provider,
+                providerEventId,
+                leaseToken,
+              );
+            } catch {
+              // The durable unknown outcome above remains the safe state.
+            }
+          },
+          () => undefined,
         );
       }
-      throw error;
+      throw new UnrecoverableError(
+        "Webhook delivery outcome requires reconciliation",
+      );
+    } finally {
+      clearTimeout(timeout);
     }
   };
 }
@@ -122,20 +165,25 @@ export function createDefaultWebhookDeliveryProcessor(telegramBot: Bot | null) {
         responses.map(({ to, response }) => sendWhatsAppMessage(to, response)),
       );
     },
-    markAttempt: async (...args) => {
-      const { markWebhookAttempt } =
+    acquireDelivery: async (provider, providerEventId, attemptCount, token) => {
+      const { acquireWebhookDelivery } =
         await import("../db/queries/webhook-events.js");
-      await markWebhookAttempt(...args);
+      return acquireWebhookDelivery({
+        provider,
+        providerEventId,
+        attemptCount,
+        leaseToken: token,
+      });
     },
     markProcessed: async (...args) => {
       const { markWebhookProcessed } =
         await import("../db/queries/webhook-events.js");
       await markWebhookProcessed(...args);
     },
-    markFailed: async (...args) => {
-      const { markWebhookFailed } =
+    markOutcomeUnknown: async (...args) => {
+      const { markWebhookOutcomeUnknown } =
         await import("../db/queries/webhook-events.js");
-      await markWebhookFailed(...args);
+      await markWebhookOutcomeUnknown(...args);
     },
   });
 }

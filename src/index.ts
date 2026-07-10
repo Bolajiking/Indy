@@ -122,16 +122,6 @@ export async function main() {
   app.route("/api/messaging-links", messaging);
   app.route("/api/connections", connections);
 
-  serve(
-    {
-      fetch: app.fetch,
-      port: env.PORT,
-    },
-    (info) => {
-      log.info({ port: info.port }, "API server started");
-    },
-  );
-
   if (!env.ENABLE_TELEGRAM_BOT || env.TELEGRAM_MODE === "disabled") {
     log.warn("Telegram bot startup is disabled");
   } else if (!telegramBot) {
@@ -143,17 +133,26 @@ export async function main() {
   }
 
   if (env.ENABLE_JOBS) {
-    try {
-      const { scheduleRecurringJobs, startWorkers } =
-        await import("./jobs/queue.js");
-      startWorkers({ telegramBot: telegramWebhookBot });
-      await scheduleRecurringJobs();
-    } catch (error) {
-      log.warn({ error }, "Job system not started");
-    }
+    const { scheduleRecurringJobs, startWorkers } =
+      await import("./jobs/queue.js");
+    const worker = startWorkers({ telegramBot: telegramWebhookBot });
+    // Do not bind the webhook ingress until the same process has confirmed it
+    // can consume the durable receipts it will acknowledge.
+    await worker.waitUntilReady();
+    await scheduleRecurringJobs();
   } else {
     log.warn("Job system startup is disabled via ENABLE_JOBS=false");
   }
+
+  serve(
+    {
+      fetch: app.fetch,
+      port: env.PORT,
+    },
+    (info) => {
+      log.info({ port: info.port }, "API server started");
+    },
+  );
 
   log.info("Indyfren is running");
 }

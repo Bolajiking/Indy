@@ -132,6 +132,15 @@ describe("production env schema", () => {
       ).TELEGRAM_WEBHOOK_SECRET,
     ).toBe(secret);
   });
+
+  it.each([
+    { TELEGRAM_MODE: "webhook", TELEGRAM_WEBHOOK_SECRET: "webhook-secret" },
+    { ENABLE_WHATSAPP: "true" },
+  ])("requires jobs for enabled provider webhooks: %o", (overrides) => {
+    expect(() =>
+      envSchema.parse(schemaInput({ ...overrides, ENABLE_JOBS: "false" })),
+    ).toThrow(/ENABLE_JOBS.*webhook|webhook.*ENABLE_JOBS/i);
+  });
 });
 
 function productionEnv(
@@ -172,6 +181,26 @@ describe("validateProductionEnv", () => {
     expect(() =>
       validateProductionEnv(productionEnv({ MESSAGING_LINK_SECRET: "" })),
     ).toThrow(/MESSAGING_LINK_SECRET/);
+  });
+
+  it.each([
+    {
+      TELEGRAM_MODE: "webhook" as const,
+      TELEGRAM_WEBHOOK_SECRET: "a".repeat(32),
+    },
+    {
+      ENABLE_WHATSAPP: true,
+      WHATSAPP_PHONE_NUMBER_ID: "phone-id",
+      WHATSAPP_ACCESS_TOKEN: "access-token",
+      WHATSAPP_VERIFY_TOKEN: "verify-token",
+      WHATSAPP_WEBHOOK_SECRET: "webhook-secret",
+    },
+  ])("rejects disabled jobs for enabled provider webhooks: %o", (overrides) => {
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({ ...overrides, ENABLE_JOBS: false }),
+      ),
+    ).toThrow(/ENABLE_JOBS/);
   });
 
   it("rejects the known development WhatsApp verify token when enabled", () => {

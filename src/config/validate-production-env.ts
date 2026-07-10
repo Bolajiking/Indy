@@ -167,6 +167,17 @@ export function getProductionEnvIssues(
     }
   }
 
+  const webhookDeliveryEnabled =
+    (config.ENABLE_TELEGRAM_BOT && config.TELEGRAM_MODE === "webhook") ||
+    config.ENABLE_WHATSAPP;
+  if (webhookDeliveryEnabled && !config.ENABLE_JOBS) {
+    issues.push({
+      field: "ENABLE_JOBS",
+      message:
+        "must be enabled when Telegram webhook mode or WhatsApp webhooks are enabled",
+    });
+  }
+
   if (!config.ENABLE_DISTRIBUTED_RATE_LIMIT) {
     issues.push({
       field: "ENABLE_DISTRIBUTED_RATE_LIMIT",
