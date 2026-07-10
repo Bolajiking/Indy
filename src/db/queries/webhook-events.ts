@@ -185,6 +185,8 @@ export async function markWebhookOutcomeUnknown(
     .eq("provider", provider)
     .eq("provider_event_id", providerEventId)
     .eq("delivery_lease_token", leaseToken)
+    .eq("status", "processing")
+    .eq("delivery_outcome", "pending")
     .select("id")
     .maybeSingle();
   if (error) throw error;

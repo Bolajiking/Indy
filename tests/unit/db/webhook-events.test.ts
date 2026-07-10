@@ -7,6 +7,7 @@ vi.mock("../../../src/db/client.js", () => ({
 import { supabase } from "../../../src/db/client.js";
 import {
   markPendingWebhookLeaseOutcomeUnknown,
+  markWebhookOutcomeUnknown,
   markWebhookProcessed,
 } from "../../../src/db/queries/webhook-events.js";
 
@@ -59,5 +60,32 @@ describe("webhook event delivery leases", () => {
       "delivery_outcome",
       expect.anything(),
     );
+  });
+
+  it("only marks an active pending lease outcome unknown", async () => {
+    const final = Promise.resolve({ data: { id: "event-id" }, error: null });
+    const single = { maybeSingle: vi.fn(() => final) };
+    const selection = { select: vi.fn(() => single) };
+    const outcome = { eq: vi.fn(() => selection) };
+    const status = { eq: vi.fn(() => outcome) };
+    const token = { eq: vi.fn(() => status) };
+    const event = { eq: vi.fn(() => token) };
+    const provider = { eq: vi.fn(() => event) };
+    const update = vi.fn(() => provider);
+    vi.mocked(supabase.from).mockReturnValue({ update } as never);
+
+    await markWebhookOutcomeUnknown(
+      "telegram",
+      "42",
+      "original-lease-token",
+      "Delivery response was lost",
+    );
+
+    expect(token.eq).toHaveBeenCalledWith(
+      "delivery_lease_token",
+      "original-lease-token",
+    );
+    expect(status.eq).toHaveBeenCalledWith("status", "processing");
+    expect(outcome.eq).toHaveBeenCalledWith("delivery_outcome", "pending");
   });
 });

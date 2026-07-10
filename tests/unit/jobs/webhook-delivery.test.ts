@@ -155,7 +155,9 @@ describe("webhook delivery jobs", () => {
   it("records a redacted terminal failed state for exhausted pre-delivery retries", async () => {
     const dependencies = deliveryDependencies({
       processTelegram: vi.fn(async () => {
-        throw new RetryableWebhookPreDeliveryError("secret raw provider detail");
+        throw new RetryableWebhookPreDeliveryError(
+          "secret raw provider detail",
+        );
       }),
     });
     const processor = createWebhookDeliveryProcessor(dependencies);
