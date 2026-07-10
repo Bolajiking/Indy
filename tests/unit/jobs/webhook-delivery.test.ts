@@ -4,6 +4,7 @@ import {
   createWebhookDeliveryProcessor,
   enqueueWebhookDelivery,
   getWebhookJobId,
+  RetryableWebhookPreDeliveryError,
 } from "../../../src/jobs/webhook-delivery.js";
 
 const telegramJob = (attemptsMade = 0) => ({
@@ -23,6 +24,9 @@ function deliveryDependencies(overrides = {}) {
     acquireDelivery: vi.fn(async () => true),
     markProcessed: vi.fn(async () => undefined),
     markOutcomeUnknown: vi.fn(async () => undefined),
+    markPendingLeaseOutcomeUnknown: vi.fn(async () => undefined),
+    releaseForRetry: vi.fn(async () => undefined),
+    markFailed: vi.fn(async () => undefined),
     ...overrides,
   };
 }
@@ -108,6 +112,65 @@ describe("webhook delivery jobs", () => {
       "database unavailable before provider invocation",
     );
     expect(dependencies.processTelegram).not.toHaveBeenCalled();
+    expect(dependencies.markOutcomeUnknown).not.toHaveBeenCalled();
+  });
+
+  it("flags a recovered pending lease for reconciliation without re-running it", async () => {
+    const dependencies = deliveryDependencies({
+      acquireDelivery: vi.fn(async () => false),
+    });
+    const processor = createWebhookDeliveryProcessor(dependencies);
+
+    await processor(telegramJob(1));
+
+    expect(dependencies.processTelegram).not.toHaveBeenCalled();
+    expect(dependencies.markPendingLeaseOutcomeUnknown).toHaveBeenCalledWith(
+      "telegram",
+      "42",
+    );
+    expect(dependencies.markProcessed).not.toHaveBeenCalled();
+  });
+
+  it("releases only an explicit pre-delivery failure for a bounded retry", async () => {
+    const dependencies = deliveryDependencies({
+      processTelegram: vi.fn(async () => {
+        throw new RetryableWebhookPreDeliveryError("bot initialization failed");
+      }),
+    });
+    const processor = createWebhookDeliveryProcessor(dependencies);
+
+    await expect(processor(telegramJob())).rejects.toBeInstanceOf(
+      RetryableWebhookPreDeliveryError,
+    );
+    expect(dependencies.releaseForRetry).toHaveBeenCalledWith(
+      "telegram",
+      "42",
+      1,
+      expect.any(String),
+    );
+    expect(dependencies.markOutcomeUnknown).not.toHaveBeenCalled();
+    expect(dependencies.markFailed).not.toHaveBeenCalled();
+  });
+
+  it("records a redacted terminal failed state for exhausted pre-delivery retries", async () => {
+    const dependencies = deliveryDependencies({
+      processTelegram: vi.fn(async () => {
+        throw new RetryableWebhookPreDeliveryError("secret raw provider detail");
+      }),
+    });
+    const processor = createWebhookDeliveryProcessor(dependencies);
+
+    await expect(processor(telegramJob(4))).rejects.toBeInstanceOf(
+      UnrecoverableError,
+    );
+    expect(dependencies.markFailed).toHaveBeenCalledWith(
+      "telegram",
+      "42",
+      5,
+      expect.any(String),
+      "Webhook delivery failed before provider invocation",
+    );
+    expect(dependencies.releaseForRetry).not.toHaveBeenCalled();
     expect(dependencies.markOutcomeUnknown).not.toHaveBeenCalled();
   });
 

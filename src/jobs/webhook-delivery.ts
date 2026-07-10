@@ -11,6 +11,15 @@ export interface WebhookDeliveryData {
 
 export const WEBHOOK_DELIVERY_TIMEOUT_MS = 30_000;
 
+/**
+ * Provider adapters may throw this only before invoking an outbound provider
+ * operation. Its explicit type, rather than an error-message convention,
+ * allows the job to release its lease and use BullMQ's bounded retry policy.
+ */
+export class RetryableWebhookPreDeliveryError extends Error {
+  override name = "RetryableWebhookPreDeliveryError";
+}
+
 type WebhookJob = {
   data: WebhookDeliveryData;
   attemptsMade: number;
@@ -68,6 +77,23 @@ export interface WebhookDeliveryDependencies {
     leaseToken: string,
     redactedError: string,
   ) => Promise<void>;
+  markPendingLeaseOutcomeUnknown: (
+    provider: WebhookProvider,
+    providerEventId: string,
+  ) => Promise<void>;
+  releaseForRetry: (
+    provider: WebhookProvider,
+    providerEventId: string,
+    attemptCount: number,
+    leaseToken: string,
+  ) => Promise<void>;
+  markFailed: (
+    provider: WebhookProvider,
+    providerEventId: string,
+    attemptCount: number,
+    leaseToken: string,
+    redactedError: string,
+  ) => Promise<void>;
 }
 
 export function createWebhookDeliveryProcessor(
@@ -83,7 +109,16 @@ export function createWebhookDeliveryProcessor(
       attempt,
       leaseToken,
     );
-    if (!acquired) return;
+    if (!acquired) {
+      // This can be a recovered job after the prior worker died immediately
+      // after leasing. Do not re-run it: preserve that prior token for a late
+      // success and make the uncertain result visible to reconciliation.
+      await dependencies.markPendingLeaseOutcomeUnknown(
+        provider,
+        providerEventId,
+      );
+      return;
+    }
 
     let timeout: ReturnType<typeof setTimeout> | undefined;
     const timeoutError = new Error("Webhook delivery timed out");
@@ -106,6 +141,30 @@ export function createWebhookDeliveryProcessor(
       await dependencies.markProcessed(provider, providerEventId, leaseToken);
     } catch (error) {
       clearTimeout(timeout);
+
+      if (error instanceof RetryableWebhookPreDeliveryError) {
+        const maximumAttempts = job.opts.attempts ?? 1;
+        if (attempt >= maximumAttempts) {
+          await dependencies.markFailed(
+            provider,
+            providerEventId,
+            attempt,
+            leaseToken,
+            "Webhook delivery failed before provider invocation",
+          );
+          throw new UnrecoverableError(
+            "Webhook delivery failed before provider invocation",
+          );
+        }
+
+        await dependencies.releaseForRetry(
+          provider,
+          providerEventId,
+          attempt,
+          leaseToken,
+        );
+        throw error;
+      }
 
       // A provider handler can emit an external side effect immediately before
       // rejecting, timing out, or losing the DB response that records success.
@@ -151,7 +210,11 @@ export function createWebhookDeliveryProcessor(
 export function createDefaultWebhookDeliveryProcessor(telegramBot: Bot | null) {
   return createWebhookDeliveryProcessor({
     processTelegram: async (payload) => {
-      if (!telegramBot) throw new Error("Telegram bot is unavailable");
+      if (!telegramBot) {
+        throw new RetryableWebhookPreDeliveryError(
+          "Telegram bot is unavailable",
+        );
+      }
       await telegramBot.handleUpdate(payload as never);
     },
     processWhatsApp: async (payload, providerEventId) => {
@@ -184,6 +247,21 @@ export function createDefaultWebhookDeliveryProcessor(telegramBot: Bot | null) {
       const { markWebhookOutcomeUnknown } =
         await import("../db/queries/webhook-events.js");
       await markWebhookOutcomeUnknown(...args);
+    },
+    markPendingLeaseOutcomeUnknown: async (...args) => {
+      const { markPendingWebhookLeaseOutcomeUnknown } =
+        await import("../db/queries/webhook-events.js");
+      await markPendingWebhookLeaseOutcomeUnknown(...args);
+    },
+    releaseForRetry: async (...args) => {
+      const { releaseWebhookDeliveryForRetry } =
+        await import("../db/queries/webhook-events.js");
+      await releaseWebhookDeliveryForRetry(...args);
+    },
+    markFailed: async (...args) => {
+      const { markWebhookFailed } =
+        await import("../db/queries/webhook-events.js");
+      await markWebhookFailed(...args);
     },
   });
 }

@@ -115,6 +115,32 @@ export async function acquireWebhookDelivery(
   return data !== null;
 }
 
+/**
+ * A recovered Bull job must never take over an existing delivery lease. If a
+ * worker died after acquiring one, an outbound side effect may already have
+ * started. Flag that original token for reconciliation instead; its original
+ * worker can still record a late success with the same token.
+ */
+export async function markPendingWebhookLeaseOutcomeUnknown(
+  provider: WebhookProvider,
+  providerEventId: string,
+  client: SupabaseClient = supabase,
+): Promise<void> {
+  const { error } = await client
+    .from("webhook_events")
+    .update({
+      status: "outcome_unknown",
+      delivery_outcome: "unknown",
+      error: "Webhook delivery outcome requires reconciliation",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("provider", provider)
+    .eq("provider_event_id", providerEventId)
+    .eq("status", "processing")
+    .eq("delivery_outcome", "pending");
+  if (error) throw error;
+}
+
 export async function markWebhookProcessed(
   provider: WebhookProvider,
   providerEventId: string,
@@ -169,10 +195,11 @@ export async function markWebhookFailed(
   provider: WebhookProvider,
   providerEventId: string,
   attemptCount: number,
+  leaseToken: string,
   redactedError: string,
   client: SupabaseClient = supabase,
 ): Promise<void> {
-  const { error } = await client
+  const { data, error } = await client
     .from("webhook_events")
     .update({
       status: "failed",
@@ -181,6 +208,44 @@ export async function markWebhookFailed(
       updated_at: new Date().toISOString(),
     })
     .eq("provider", provider)
-    .eq("provider_event_id", providerEventId);
+    .eq("provider_event_id", providerEventId)
+    .eq("delivery_lease_token", leaseToken)
+    .select("id")
+    .maybeSingle();
   if (error) throw error;
+  if (!data) throw new Error("Webhook delivery lease was not held");
+}
+
+/**
+ * Only failures explicitly classified as pre-delivery are allowed to release
+ * a lease. Once an outbound provider invocation starts, the lease is kept for
+ * reconciliation so a retry cannot duplicate the user's message.
+ */
+export async function releaseWebhookDeliveryForRetry(
+  provider: WebhookProvider,
+  providerEventId: string,
+  attemptCount: number,
+  leaseToken: string,
+  client: SupabaseClient = supabase,
+): Promise<void> {
+  const { data, error } = await client
+    .from("webhook_events")
+    .update({
+      status: "queued",
+      attempt_count: attemptCount,
+      delivery_lease_token: null,
+      delivery_started_at: null,
+      delivery_outcome: "pending",
+      error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("provider", provider)
+    .eq("provider_event_id", providerEventId)
+    .eq("delivery_lease_token", leaseToken)
+    .eq("status", "processing")
+    .eq("delivery_outcome", "pending")
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Webhook delivery lease was not held");
 }

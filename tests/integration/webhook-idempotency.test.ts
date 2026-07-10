@@ -10,6 +10,7 @@ vi.hoisted(() => {
 
 import { createApiServer } from "../../src/api/server.js";
 import { createWebhookRoutes } from "../../src/api/routes/webhooks.js";
+import { getWebhookJobId } from "../../src/jobs/webhook-delivery.js";
 
 describe("webhook idempotency", () => {
   it("accepts a duplicate signed WhatsApp message with one durable claim and side effect", async () => {
@@ -18,12 +19,24 @@ describe("webhook idempotency", () => {
     const sideEffect = vi.fn();
     const claimWebhookEvent = vi.fn(async (input) => {
       const key = `${input.provider}:${input.providerEventId}`;
-      const claimed = !claims.has(key);
-      claims.add(key);
-      return { claimed, status: "queued" as const };
+      try {
+        if (claims.has(key)) {
+          throw Object.assign(new Error("duplicate key"), { code: "23505" });
+        }
+        claims.add(key);
+        return { claimed: true, status: "queued" as const };
+      } catch (error) {
+        // Mirror claimWebhookEvent's production unique-conflict recovery:
+        // duplicates read their existing receipt rather than claiming again.
+        if ((error as { code?: string }).code !== "23505") throw error;
+        return { claimed: false, status: "queued" as const };
+      }
     });
     const enqueueWebhook = vi.fn(async (job) => {
-      const key = `${job.provider}:${job.providerEventId}`;
+      // Mirror BullMQ's deterministic custom job ID handling. The route can
+      // intentionally retry enqueueing a queued receipt after a crash window,
+      // but Redis retains only one job for that provider event.
+      const key = getWebhookJobId(job.provider, job.providerEventId);
       if (!jobs.has(key)) jobs.set(key, job);
     });
     const payload = JSON.stringify({
@@ -78,6 +91,7 @@ describe("webhook idempotency", () => {
     expect(first.status).toBe(202);
     expect(second.status).toBe(202);
     expect(claims).toHaveLength(1);
+    expect(enqueueWebhook).toHaveBeenCalledTimes(2);
     expect(jobs).toHaveLength(1);
     expect(claimWebhookEvent).toHaveBeenCalledWith({
       provider: "whatsapp",
