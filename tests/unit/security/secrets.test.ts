@@ -2,6 +2,7 @@ import { createCipheriv, createHash } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   decryptSecretValue,
+  decryptStoredSecretValue,
   encryptSecretValue,
   getCurrentPlatformKeyVersion,
 } from "../../../src/security/secrets.js";
@@ -66,6 +67,36 @@ describe("versioned platform secrets", () => {
       /unavailable key version/,
     );
     expect(() => decryptSecretValue("v2:2:not-base64:bad:bad")).toThrow(
+      /Invalid encrypted secret/,
+    );
+  });
+
+  it("accepts plaintext only for the explicit legacy row version", () => {
+    expect(decryptStoredSecretValue("legacy-token", 1)).toBe("legacy-token");
+    expect(() => decryptStoredSecretValue("plaintext-current", 2)).toThrow(
+      /not encrypted/,
+    );
+    expect(() => decryptStoredSecretValue("v2-damaged", 1)).toThrow(
+      /not encrypted/,
+    );
+
+    process.env.PLATFORM_ENCRYPTION_KEY_VERSION = "1";
+    process.env.PLATFORM_ENCRYPTION_KEY_CURRENT = previousKey;
+    delete process.env.PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION;
+    delete process.env.PLATFORM_ENCRYPTION_KEY_PREVIOUS;
+    expect(() => decryptStoredSecretValue("plaintext-current", 1)).toThrow(
+      /not encrypted/,
+    );
+  });
+
+  it("requires the envelope version to exactly match the stored row version", () => {
+    const encrypted = encryptSecretValue("token");
+    expect(decryptStoredSecretValue(encrypted, 2)).toBe("token");
+    expect(() => decryptStoredSecretValue(encrypted, 1)).toThrow(/mismatch/);
+  });
+
+  it("rejects envelope versions outside JavaScript's safe integer range", () => {
+    expect(() => decryptSecretValue("v2:9007199254740993:abc:def:ghi")).toThrow(
       /Invalid encrypted secret/,
     );
   });

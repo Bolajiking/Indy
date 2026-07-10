@@ -79,6 +79,13 @@ describe("production env schema", () => {
     expect(() =>
       envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "v2" })),
     ).toThrow();
+    expect(() =>
+      envSchema.parse(
+        schemaInput({
+          PLATFORM_ENCRYPTION_KEY_VERSION: "9007199254740993",
+        }),
+      ),
+    ).toThrow(/safe integer/);
   });
 
   it("requires canonical 32-byte base64 platform keys and paired previous configuration", () => {

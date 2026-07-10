@@ -1,6 +1,6 @@
 import { supabase } from "../db/client.js";
 import {
-  decryptSecretValue,
+  decryptStoredSecretValue,
   encryptSecretValue,
   getCurrentPlatformKeyVersion,
   getEncryptedSecretKeyVersion,
@@ -72,23 +72,43 @@ export async function migrateLegacyPlatformSecrets(
       if (!needsRotation(row, currentVersion)) {
         // Treat authentication failure/corruption as a failed row, not as an
         // already-current credential that silently escapes the rotation audit.
-        decryptSecretValue(row.access_token);
-        decryptSecretValue(row.refresh_token);
+        decryptStoredSecretValue(row.access_token, row.key_version);
+        decryptStoredSecretValue(row.refresh_token, row.key_version);
         skipped += 1;
         continue;
       }
-      const accessToken = decryptSecretValue(row.access_token);
-      const refreshToken = decryptSecretValue(row.refresh_token);
+      const accessToken = decryptStoredSecretValue(
+        row.access_token,
+        row.key_version,
+      );
+      const refreshToken = decryptStoredSecretValue(
+        row.refresh_token,
+        row.key_version,
+      );
       if (!dryRun) {
-        const { error: updateError } = await supabase
+        let updateQuery = supabase
           .from("platform_connections")
           .update({
             access_token: encryptSecretValue(accessToken),
             refresh_token: encryptSecretValue(refreshToken),
             key_version: currentVersion,
           })
-          .eq("id", row.id);
+          .eq("id", row.id)
+          .eq("key_version", row.key_version);
+        updateQuery =
+          row.access_token === null
+            ? updateQuery.is("access_token", null)
+            : updateQuery.eq("access_token", row.access_token);
+        updateQuery =
+          row.refresh_token === null
+            ? updateQuery.is("refresh_token", null)
+            : updateQuery.eq("refresh_token", row.refresh_token);
+        const { data: updatedRows, error: updateError } =
+          await updateQuery.select("id");
         if (updateError) throw updateError;
+        if (!updatedRows || updatedRows.length !== 1) {
+          throw new Error("Platform credential changed during rotation");
+        }
       }
       rotated += 1;
     } catch {

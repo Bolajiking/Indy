@@ -89,6 +89,20 @@ const rawEnvObjectSchema = z.object({
 });
 
 const rawEnvSchema = rawEnvObjectSchema.superRefine((parsed, context) => {
+  for (const field of [
+    "PLATFORM_ENCRYPTION_KEY_VERSION",
+    "PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION",
+  ] as const) {
+    const raw = parsed[field];
+    if (raw && !Number.isSafeInteger(Number(raw))) {
+      context.addIssue({
+        code: "custom",
+        path: [field],
+        message:
+          "Platform encryption key version must be a positive safe integer",
+      });
+    }
+  }
   const validKey = (value: string) => {
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
     const decoded = Buffer.from(value, "base64");

@@ -95,7 +95,41 @@ export function getEncryptedSecretKeyVersion(
   if (value.startsWith("v1:")) return 1;
   const match = /^v2:([1-9]\d*):/.exec(value);
   if (!match) throw new Error("Invalid encrypted secret");
-  return Number(match[1]);
+  const version = Number(match[1]);
+  if (!Number.isSafeInteger(version)) {
+    throw new Error("Invalid encrypted secret");
+  }
+  return version;
+}
+
+/**
+ * Decrypt a credential read from platform_connections. Plaintext is accepted
+ * only for rows explicitly marked as the legacy migration state (version 1).
+ */
+export function decryptStoredSecretValue(
+  value: string | null | undefined,
+  storedKeyVersion: number,
+): string | null {
+  if (!value) return null;
+  if (!Number.isSafeInteger(storedKeyVersion) || storedKeyVersion < 1) {
+    throw new Error("Invalid platform credential key version");
+  }
+  const envelopeVersion = getEncryptedSecretKeyVersion(value);
+  if (envelopeVersion === null) {
+    // A version-looking value is damaged ciphertext, never legacy plaintext.
+    if (
+      storedKeyVersion !== 1 ||
+      getCurrentPlatformKeyVersion() === 1 ||
+      /^v\d/.test(value)
+    ) {
+      throw new Error("Platform credential is not encrypted");
+    }
+    return value;
+  }
+  if (envelopeVersion !== storedKeyVersion) {
+    throw new Error("Platform credential key version mismatch");
+  }
+  return decryptSecretValue(value);
 }
 
 function decryptLegacyV1(value: string): string {
@@ -200,6 +234,9 @@ export function decryptSecretValue(
     throw new Error("Invalid encrypted secret");
   }
   const version = Number(versionRaw);
+  if (!Number.isSafeInteger(version)) {
+    throw new Error("Invalid encrypted secret");
+  }
   const key = getKeyring().keys.get(version);
   if (!key)
     throw new Error(`Platform secret unavailable key version ${version}`);

@@ -604,8 +604,9 @@ PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION=2
 PLATFORM_ENCRYPTION_KEY_PREVIOUS=<old-key>
 ```
 
-Preview one bounded batch without reading or changing staging/production data from
-an untrusted workstation:
+From a trusted, controlled environment with access to both configured keys,
+preview one bounded batch. Dry-run reads and decrypts credentials to validate
+them, but performs no database writes:
 
 ```bash
 npm run migrate:platform-secrets -- --dry-run --batch-size 100

@@ -1,9 +1,8 @@
 import { supabase } from "../client.js";
 import {
-  decryptSecretValue,
+  decryptStoredSecretValue,
   encryptSecretValue,
   getCurrentPlatformKeyVersion,
-  getEncryptedSecretKeyVersion,
 } from "../../security/secrets.js";
 import type { JsonObject } from "../json.js";
 
@@ -22,19 +21,17 @@ export interface PlatformConnection {
 }
 
 function hydrateSecrets(connection: PlatformConnection): PlatformConnection {
-  for (const token of [connection.access_token, connection.refresh_token]) {
-    const envelopeVersion = getEncryptedSecretKeyVersion(token);
-    if (
-      envelopeVersion !== null &&
-      envelopeVersion !== connection.key_version
-    ) {
-      throw new Error("Platform credential key version mismatch");
-    }
-  }
   return {
     ...connection,
-    access_token: decryptSecretValue(connection.access_token) ?? "",
-    refresh_token: decryptSecretValue(connection.refresh_token),
+    access_token:
+      decryptStoredSecretValue(
+        connection.access_token,
+        connection.key_version,
+      ) ?? "",
+    refresh_token: decryptStoredSecretValue(
+      connection.refresh_token,
+      connection.key_version,
+    ),
   };
 }
 
