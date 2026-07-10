@@ -40,8 +40,17 @@ const TARGET_KEYS = [
 const SECRET_KEY =
   /(secret|token|password|credential|private.?key|api.?key|authorization|cookie)/i;
 
+function redactEmbeddedSecrets(value: string): string {
+  return value
+    .replace(
+      /((?:secret|token|password|credential|private.?key|api.?key|authorization|cookie)\s*[=:]\s*)[^\s,;&]+/gi,
+      "$1[redacted]",
+    )
+    .replace(/\bBearer\s+[^\s,;&]+/gi, "Bearer [redacted]");
+}
+
 export function sanitizeActionTarget(value: string): string {
-  const trimmed = value.trim();
+  const trimmed = redactEmbeddedSecrets(value.trim());
   try {
     const url = new URL(trimmed);
     if (url.protocol === "http:" || url.protocol === "https:") {
@@ -121,7 +130,16 @@ export function validateActionPreview(
   ) {
     return null;
   }
-  return preview as ActionPreview;
+  // Sanitize again at the trust boundary. Individual builders should provide
+  // clean values, but a new integration cannot bypass redaction by forgetting
+  // the helper calls (or by returning a signed URL as its target).
+  return {
+    service: sanitizeActionTarget(preview.service),
+    operation: sanitizeActionTarget(preview.operation),
+    target: sanitizeActionTarget(preview.target),
+    materialArguments: sanitizeMaterialArguments(preview.materialArguments),
+    maxCostCents: preview.maxCostCents,
+  };
 }
 
 export function formatActionPreview(preview: ActionPreview): string {

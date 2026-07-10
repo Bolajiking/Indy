@@ -418,9 +418,15 @@ function readComposioExecuteResponse(value: unknown): ComposioExecuteResponse {
 // behind approval), so an unrecognised/destructive action never runs silently.
 const READ_VERB =
   /_(GET|FETCH|LIST|SEARCH|READ|RETRIEVE|FIND|COUNT|CHECK|VIEW|STATISTICS|DETAILS|DOWNLOAD|LOAD)/i;
+// Mutation precedence is intentional: compound actions such as
+// GET_OR_CREATE and FIND_OR_UPDATE still change external state and must never
+// become autonomous merely because their slug also contains a read verb.
+const WRITE_VERB =
+  /(?:^|_)(CREATE|SEND|UPDATE|PATCH|DELETE|REMOVE|TRASH|POST|REPLY|DRAFT|UPLOAD|MOVE|SUBSCRIBE|UNSUBSCRIBE|MARK|SET|PUT|WRITE|MODIFY|ARCHIVE|INVITE|PUBLISH)(?:_|$)/i;
 
 /** True if a Composio tool slug mutates the connected account (send/create/…). */
 export function isComposioWriteSlug(slug: string): boolean {
+  if (WRITE_VERB.test(slug)) return true;
   return !READ_VERB.test(slug);
 }
 
