@@ -2,6 +2,8 @@ import { supabase } from "../client.js";
 import {
   decryptSecretValue,
   encryptSecretValue,
+  getCurrentPlatformKeyVersion,
+  getEncryptedSecretKeyVersion,
 } from "../../security/secrets.js";
 import type { JsonObject } from "../json.js";
 
@@ -15,10 +17,20 @@ export interface PlatformConnection {
   platform_username: string | null;
   metadata: JsonObject;
   expires_at: string | null;
+  key_version: number;
   created_at: string;
 }
 
 function hydrateSecrets(connection: PlatformConnection): PlatformConnection {
+  for (const token of [connection.access_token, connection.refresh_token]) {
+    const envelopeVersion = getEncryptedSecretKeyVersion(token);
+    if (
+      envelopeVersion !== null &&
+      envelopeVersion !== connection.key_version
+    ) {
+      throw new Error("Platform credential key version mismatch");
+    }
+  }
   return {
     ...connection,
     access_token: decryptSecretValue(connection.access_token) ?? "",
@@ -27,12 +39,13 @@ function hydrateSecrets(connection: PlatformConnection): PlatformConnection {
 }
 
 export async function upsertConnection(
-  connectionData: Omit<PlatformConnection, "id" | "created_at">,
+  connectionData: Omit<PlatformConnection, "id" | "created_at" | "key_version">,
 ): Promise<PlatformConnection> {
   const encryptedConnectionData = {
     ...connectionData,
     access_token: encryptSecretValue(connectionData.access_token) ?? "",
     refresh_token: encryptSecretValue(connectionData.refresh_token),
+    key_version: getCurrentPlatformKeyVersion(),
   };
 
   const { data, error } = await supabase

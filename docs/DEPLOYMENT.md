@@ -112,8 +112,8 @@ railway variables set PRIVY_APP_ID=clxxx...
 railway variables set PRIVY_APP_SECRET=xxx...
 railway variables set PRIVY_JWT_VERIFICATION_KEY=xxx...
 railway variables set MESSAGING_LINK_SECRET=replace-with-generated-unique-secret
-railway variables set PLATFORM_ENCRYPTION_KEY_VERSION=v1
-railway variables set PLATFORM_ENCRYPTION_KEY_V1=replace-with-generated-unique-encryption-key
+railway variables set PLATFORM_ENCRYPTION_KEY_VERSION=2
+railway variables set PLATFORM_ENCRYPTION_KEY_CURRENT=replace-with-output-of-openssl-rand-base64-32
 
 # Telegram polling (set ENABLE_TELEGRAM_BOT=false and TELEGRAM_MODE=disabled to disable)
 railway variables set ENABLE_TELEGRAM_BOT=true
@@ -418,9 +418,10 @@ Access via: https://vercel.com/{your-team}/{project}
 | `PRIVY_APP_SECRET`                 | Yes           | -                  | Privy application secret                                       |
 | `PRIVY_JWT_VERIFICATION_KEY`       | Yes           | -                  | JWT verification key                                           |
 | `MESSAGING_LINK_SECRET`            | Yes           | -                  | Unique secret used to sign messaging-link tokens               |
-| `PLATFORM_ENCRYPTION_KEY_VERSION`  | Yes           | -                  | Active key version; currently only `v1`                        |
-| `PLATFORM_ENCRYPTION_KEY_V1`       | Yes           | -                  | Unique platform credential encryption key                      |
-| `PLATFORM_ENCRYPTION_KEY_PREVIOUS` | No            | -                  | Previous key retained temporarily during rotation              |
+| `PLATFORM_ENCRYPTION_KEY_VERSION`  | Yes           | -                  | Positive integer identifying the active key                    |
+| `PLATFORM_ENCRYPTION_KEY_CURRENT`  | Yes           | -                  | Canonical base64 encoding of the active 32-byte key             |
+| `PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION` | No     | -                  | Previous integer version, configured only during rotation       |
+| `PLATFORM_ENCRYPTION_KEY_PREVIOUS` | No            | -                  | Previous 32-byte base64 key retained during rotation            |
 | `REDIS_URL`                        | Yes           | -                  | Mandatory non-loopback Redis service in production             |
 | `PORT`                             | No            | 3000               | API server port                                                |
 | `NODE_ENV`                         | No            | development        | Node environment                                               |
@@ -590,6 +591,34 @@ vercel logs
 4. Verify database connection
 
 ---
+
+## Rotating Platform Credential Keys
+
+Generate a new key with `openssl rand -base64 32`. Keep the old key available as
+the previous version, increment the active positive-integer version, and deploy:
+
+```bash
+PLATFORM_ENCRYPTION_KEY_VERSION=3
+PLATFORM_ENCRYPTION_KEY_CURRENT=<new-key>
+PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION=2
+PLATFORM_ENCRYPTION_KEY_PREVIOUS=<old-key>
+```
+
+Preview one bounded batch without reading or changing staging/production data from
+an untrusted workstation:
+
+```bash
+npm run migrate:platform-secrets -- --dry-run --batch-size 100
+```
+
+Apply the same batch without `--dry-run`. When output includes a resume cursor,
+rerun with `--after-id <cursor>` until `Complete: yes`. A failed count produces a
+non-zero exit; retain both keys, investigate configuration/database access, and
+resume from the last successful batch boundary. Logs contain row counts and cursor
+IDs only, never decrypted credentials. After all rows are current and application
+reads have been observed healthy, remove both previous-key variables in a separate
+deployment. Legacy `v1` envelopes are read only to support this migration; all new
+writes use authenticated `v2:<key-version>:...` envelopes.
 
 ## Security Checklist
 

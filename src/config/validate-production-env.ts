@@ -26,7 +26,9 @@ export type ProductionEnvironment = Pick<
   | "ENABLE_DISTRIBUTED_RATE_LIMIT"
   | "REDIS_URL"
   | "PLATFORM_ENCRYPTION_KEY_VERSION"
-  | "PLATFORM_ENCRYPTION_KEY_V1"
+  | "PLATFORM_ENCRYPTION_KEY_CURRENT"
+  | "PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION"
+  | "PLATFORM_ENCRYPTION_KEY_PREVIOUS"
 >;
 
 export type ProductionEnvIssue = {
@@ -85,16 +87,15 @@ export function getProductionEnvIssues(
     config.MESSAGING_LINK_SECRET,
     "required to sign messaging link tokens",
   );
-  if (config.PLATFORM_ENCRYPTION_KEY_VERSION !== "v1") {
-    issues.push({
-      field: "PLATFORM_ENCRYPTION_KEY_VERSION",
-      message: "must be v1 in production",
-    });
-  }
   requireValue(
-    "PLATFORM_ENCRYPTION_KEY_V1",
-    config.PLATFORM_ENCRYPTION_KEY_V1,
-    "required to encrypt stored platform credentials",
+    "PLATFORM_ENCRYPTION_KEY_VERSION",
+    config.PLATFORM_ENCRYPTION_KEY_VERSION,
+    "a positive integer key version is required",
+  );
+  requireValue(
+    "PLATFORM_ENCRYPTION_KEY_CURRENT",
+    config.PLATFORM_ENCRYPTION_KEY_CURRENT,
+    "a canonical base64 32-byte key is required to encrypt stored platform credentials",
   );
 
   if (config.ENABLE_YOUTUBE_OAUTH) {

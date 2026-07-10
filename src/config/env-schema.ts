@@ -64,8 +64,15 @@ const rawEnvObjectSchema = z.object({
     .default(900),
   ENABLE_DISTRIBUTED_RATE_LIMIT: strictBoolean(false),
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(2).default(0),
-  PLATFORM_ENCRYPTION_KEY_VERSION: z.enum(["", "v1"]).default(""),
-  PLATFORM_ENCRYPTION_KEY_V1: z.string().default(""),
+  PLATFORM_ENCRYPTION_KEY_VERSION: z
+    .string()
+    .regex(/^$|^[1-9]\d*$/)
+    .default(""),
+  PLATFORM_ENCRYPTION_KEY_CURRENT: z.string().default(""),
+  PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION: z
+    .string()
+    .regex(/^$|^[1-9]\d*$/)
+    .default(""),
   PLATFORM_ENCRYPTION_KEY_PREVIOUS: z.string().default(""),
   ERROR_REPORTING_DSN: z.string().default(""),
   PUBLIC_SUPPORT_EMAIL: z
@@ -82,6 +89,55 @@ const rawEnvObjectSchema = z.object({
 });
 
 const rawEnvSchema = rawEnvObjectSchema.superRefine((parsed, context) => {
+  const validKey = (value: string) => {
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+    const decoded = Buffer.from(value, "base64");
+    return decoded.length === 32 && decoded.toString("base64") === value;
+  };
+  if (
+    parsed.PLATFORM_ENCRYPTION_KEY_CURRENT &&
+    !validKey(parsed.PLATFORM_ENCRYPTION_KEY_CURRENT)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["PLATFORM_ENCRYPTION_KEY_CURRENT"],
+      message:
+        "Platform encryption key must be canonical base64 encoding of exactly 32 bytes",
+    });
+  }
+  if (
+    parsed.PLATFORM_ENCRYPTION_KEY_PREVIOUS &&
+    !validKey(parsed.PLATFORM_ENCRYPTION_KEY_PREVIOUS)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["PLATFORM_ENCRYPTION_KEY_PREVIOUS"],
+      message:
+        "Previous platform encryption key must be canonical base64 encoding of exactly 32 bytes",
+    });
+  }
+  if (
+    Boolean(parsed.PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION) !==
+    Boolean(parsed.PLATFORM_ENCRYPTION_KEY_PREVIOUS)
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION"],
+      message:
+        "Previous platform key version and key must be configured together",
+    });
+  }
+  if (
+    parsed.PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION ===
+      parsed.PLATFORM_ENCRYPTION_KEY_VERSION &&
+    parsed.PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION
+  ) {
+    context.addIssue({
+      code: "custom",
+      path: ["PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION"],
+      message: "Previous platform key version must differ from current",
+    });
+  }
   if (
     parsed.ENABLE_TELEGRAM_BOT &&
     parsed.TELEGRAM_MODE === "webhook" &&

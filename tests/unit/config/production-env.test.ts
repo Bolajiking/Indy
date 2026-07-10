@@ -67,11 +67,11 @@ describe("production env schema", () => {
     ).toThrow();
   });
 
-  it("only accepts v1 or an empty platform encryption key version", () => {
+  it("only accepts positive integer or empty platform encryption key versions", () => {
     expect(
-      envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "v1" }))
+      envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "2" }))
         .PLATFORM_ENCRYPTION_KEY_VERSION,
-    ).toBe("v1");
+    ).toBe("2");
     expect(
       envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "" }))
         .PLATFORM_ENCRYPTION_KEY_VERSION,
@@ -79,6 +79,24 @@ describe("production env schema", () => {
     expect(() =>
       envSchema.parse(schemaInput({ PLATFORM_ENCRYPTION_KEY_VERSION: "v2" })),
     ).toThrow();
+  });
+
+  it("requires canonical 32-byte base64 platform keys and paired previous configuration", () => {
+    const key = Buffer.alloc(32, 1).toString("base64");
+    expect(() =>
+      envSchema.parse(
+        schemaInput({ PLATFORM_ENCRYPTION_KEY_CURRENT: "short" }),
+      ),
+    ).toThrow();
+    expect(() =>
+      envSchema.parse(
+        schemaInput({
+          PLATFORM_ENCRYPTION_KEY_VERSION: "2",
+          PLATFORM_ENCRYPTION_KEY_CURRENT: key,
+          PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION: "1",
+        }),
+      ),
+    ).toThrow(/configured together/);
   });
 
   it("permits an empty Telegram webhook secret outside webhook mode", () => {
@@ -170,8 +188,10 @@ function productionEnv(
     ENABLE_JOBS: true,
     ENABLE_DISTRIBUTED_RATE_LIMIT: true,
     REDIS_URL: "redis://redis:6379",
-    PLATFORM_ENCRYPTION_KEY_VERSION: "v1",
-    PLATFORM_ENCRYPTION_KEY_V1: "platform-encryption-key",
+    PLATFORM_ENCRYPTION_KEY_VERSION: "2",
+    PLATFORM_ENCRYPTION_KEY_CURRENT: Buffer.alloc(32, 1).toString("base64"),
+    PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION: "",
+    PLATFORM_ENCRYPTION_KEY_PREVIOUS: "",
     ...overrides,
   };
 }
@@ -250,8 +270,10 @@ describe("validateProductionEnv", () => {
 
   it("rejects a missing platform encryption key", () => {
     expect(() =>
-      validateProductionEnv(productionEnv({ PLATFORM_ENCRYPTION_KEY_V1: "" })),
-    ).toThrow(/PLATFORM_ENCRYPTION_KEY_V1/);
+      validateProductionEnv(
+        productionEnv({ PLATFORM_ENCRYPTION_KEY_CURRENT: "" }),
+      ),
+    ).toThrow(/PLATFORM_ENCRYPTION_KEY_CURRENT/);
   });
 
   it("reports all unsafe production fields in one error", () => {
@@ -260,11 +282,11 @@ describe("validateProductionEnv", () => {
         productionEnv({
           MESSAGING_LINK_SECRET: "",
           PLATFORM_ENCRYPTION_KEY_VERSION: "",
-          PLATFORM_ENCRYPTION_KEY_V1: "",
+          PLATFORM_ENCRYPTION_KEY_CURRENT: "",
         }),
       ),
     ).toThrow(
-      /MESSAGING_LINK_SECRET[\s\S]*PLATFORM_ENCRYPTION_KEY_VERSION[\s\S]*PLATFORM_ENCRYPTION_KEY_V1/,
+      /MESSAGING_LINK_SECRET[\s\S]*PLATFORM_ENCRYPTION_KEY_VERSION[\s\S]*PLATFORM_ENCRYPTION_KEY_CURRENT/,
     );
   });
 
@@ -353,7 +375,7 @@ describe("validateProductionEnv", () => {
           NODE_ENV: "test",
           MESSAGING_LINK_SECRET: "",
           PLATFORM_ENCRYPTION_KEY_VERSION: "",
-          PLATFORM_ENCRYPTION_KEY_V1: "",
+          PLATFORM_ENCRYPTION_KEY_CURRENT: "",
           REDIS_URL: "",
         }),
       ),
