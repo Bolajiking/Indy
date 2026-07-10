@@ -56,6 +56,12 @@ const rawEnvObjectSchema = z.object({
   WHATSAPP_WEBHOOK_SECRET: z.string().default(""),
   ENABLE_WHATSAPP: strictBoolean(false),
   REDIS_URL: z.string().default("redis://localhost:6379"),
+  APPROVAL_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(86_400)
+    .default(900),
   ENABLE_DISTRIBUTED_RATE_LIMIT: strictBoolean(false),
   TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(2).default(0),
   PLATFORM_ENCRYPTION_KEY_VERSION: z.enum(["", "v1"]).default(""),

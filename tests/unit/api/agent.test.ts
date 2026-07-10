@@ -12,7 +12,7 @@ vi.mock("../../../src/db/queries/messages.js", () => ({
 vi.mock("../../../src/bot/approval.js", () => ({
   getPendingApprovalByAction: vi.fn(),
   getPendingApprovalsForCreator: vi.fn(),
-  markApprovalApproved: vi.fn(),
+  claimPendingApproval: vi.fn(),
   markApprovalExecuted: vi.fn(),
   markApprovalSkipped: vi.fn(),
   storePendingApproval: vi.fn(),
@@ -43,6 +43,9 @@ vi.mock("../../../src/wallet/mpp.js", () => ({
   getOnChainBalance: vi
     .fn()
     .mockResolvedValue({ balanceCents: 100000, balanceFormatted: "1.00" }),
+  getOnChainBalanceWithTimeout: vi
+    .fn()
+    .mockResolvedValue({ balanceCents: 100000, balanceFormatted: "1.00" }),
 }));
 
 import { Hono } from "hono";
@@ -53,7 +56,7 @@ import { getTool } from "../../../src/agent/tools/registry.js";
 import {
   getPendingApprovalByAction,
   getPendingApprovalsForCreator,
-  markApprovalApproved,
+  claimPendingApproval,
   markApprovalExecuted,
   markApprovalSkipped,
   storePendingApproval,
@@ -186,7 +189,16 @@ describe("agent API", () => {
         costCents: 42,
       }),
     } as never);
-    vi.mocked(markApprovalApproved).mockResolvedValue(true as never);
+    vi.mocked(claimPendingApproval).mockResolvedValue({
+      id: "action-1",
+      creatorId: "creator-1",
+      actionId: "action-1",
+      type: "email_sender",
+      description: "Send pitch email",
+      preview: "Draft pitch ready",
+      input: { to: "brand@acme.com" },
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    } as never);
     vi.mocked(getPendingApprovalsForCreator).mockResolvedValue([]);
 
     const response = await app.request("/agent/approvals/action-1/approve", {
@@ -196,7 +208,7 @@ describe("agent API", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(markApprovalApproved).toHaveBeenCalledWith("action-1");
+    expect(claimPendingApproval).toHaveBeenCalledWith("creator-1", "action-1");
     expect(markApprovalExecuted).toHaveBeenCalledWith(
       "action-1",
       {
@@ -208,7 +220,7 @@ describe("agent API", () => {
     expect(body.execution.message).toBe("Pitch email sent.");
   });
 
-  it("POST /agent/approvals/:actionId/approve rejects duplicate approval execution", async () => {
+  it("POST /agent/approvals/:actionId/approve allows only one concurrent atomic claim", async () => {
     vi.mocked(getPendingApprovalByAction).mockResolvedValue({
       id: "action-1",
       creatorId: "creator-1",
@@ -228,17 +240,33 @@ describe("agent API", () => {
       address: "0x123",
     } as never);
     vi.mocked(createMppClient).mockResolvedValue({ fetch: vi.fn() } as never);
+    const execute = vi.fn().mockResolvedValue({ success: true, data: "sent" });
     vi.mocked(getTool).mockReturnValue({
-      execute: vi.fn().mockResolvedValue({ success: true, data: "sent" }),
+      execute,
     } as never);
-    vi.mocked(markApprovalApproved).mockResolvedValue(false as never);
+    const claimed = {
+      id: "action-1",
+      creatorId: "creator-1",
+      actionId: "action-1",
+      type: "email_sender",
+      description: "Send pitch email",
+      preview: "Draft pitch ready",
+      input: { to: "brand@acme.com" },
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+    };
+    vi.mocked(claimPendingApproval)
+      .mockResolvedValueOnce(claimed as never)
+      .mockResolvedValueOnce(undefined);
 
-    const response = await app.request("/agent/approvals/action-1/approve", {
-      method: "POST",
-      headers: { Authorization: "Bearer access-token" },
-    });
+    const request = () =>
+      app.request("/agent/approvals/action-1/approve", {
+        method: "POST",
+        headers: { Authorization: "Bearer access-token" },
+      });
+    const [first, second] = await Promise.all([request(), request()]);
 
-    expect(response.status).toBe(404);
+    expect([first.status, second.status].sort()).toEqual([200, 404]);
+    expect(execute).toHaveBeenCalledOnce();
   });
 
   it("POST /agent/approvals/:actionId/skip marks the approval as skipped", async () => {

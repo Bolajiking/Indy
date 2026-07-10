@@ -1,6 +1,6 @@
 import {
   getPendingApprovalByAction,
-  markApprovalApproved,
+  claimPendingApproval,
   markApprovalExecuted,
   markApprovalFailed,
 } from "../bot/approval.js";
@@ -126,10 +126,10 @@ export async function executePendingApprovalAction(
     );
   }
 
-  // Mark approved first to act as an optimistic lock preventing double-execution.
-  // If execution subsequently fails we mark it as failed (not left stuck in "approved").
-  const approvalLocked = await markApprovalApproved(actionId);
-  if (!approvalLocked) {
+  // Claim the pending action atomically before the tool can make any external write.
+  // If execution subsequently fails we mark it failed rather than leaving it approved.
+  const claimedApproval = await claimPendingApproval(creatorId, actionId);
+  if (!claimedApproval) {
     throw new ApprovalExecutionError(
       "not_found",
       "That action has expired or was already handled.",
@@ -138,7 +138,7 @@ export async function executePendingApprovalAction(
 
   let result: Awaited<ReturnType<typeof tool.execute>>;
   try {
-    result = await tool.execute(approval.input, toolContext);
+    result = await tool.execute(claimedApproval.input, toolContext);
   } catch (execErr: unknown) {
     const msg =
       execErr instanceof Error
@@ -188,8 +188,9 @@ export async function executePendingApprovalAction(
 
   // If we have continuation context, re-enter the agent loop so the LLM can
   // produce a natural follow-up response rather than a raw tool result string.
-  if (approval.continuation) {
-    const { toolUseId, messageHistory, systemPrompt } = approval.continuation;
+  if (claimedApproval.continuation) {
+    const { toolUseId, messageHistory, systemPrompt } =
+      claimedApproval.continuation;
     log.info(
       { creatorId, actionId, toolUseId },
       "Re-entering agent loop after approval",
@@ -251,8 +252,8 @@ async function executeComposioApproval(
   actionId: string,
   approval: PendingApproval,
 ): Promise<{ message: string }> {
-  const locked = await markApprovalApproved(actionId);
-  if (!locked) {
+  const claimedApproval = await claimPendingApproval(creatorId, actionId);
+  if (!claimedApproval) {
     throw new ApprovalExecutionError(
       "not_found",
       "That action has expired or was already handled.",
@@ -263,8 +264,8 @@ async function executeComposioApproval(
   try {
     outcome = await executeComposioToolBySlug(
       creatorId,
-      approval.type,
-      approval.input,
+      claimedApproval.type,
+      claimedApproval.input,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Execution failed";
@@ -303,8 +304,9 @@ async function executeComposioApproval(
       : JSON.stringify(outcome.data);
   await markApprovalExecuted(actionId, { success: true, data: outcome.data });
 
-  if (approval.continuation) {
-    const { toolUseId, messageHistory, systemPrompt } = approval.continuation;
+  if (claimedApproval.continuation) {
+    const { toolUseId, messageHistory, systemPrompt } =
+      claimedApproval.continuation;
     const composio = await composioLoopTools(creatorId);
     try {
       const loopResult = await runAgentLoop({
@@ -319,7 +321,7 @@ async function executeComposioApproval(
                 tool_use_id: toolUseId,
                 // Triaged + clamped: surfaces buried errors and warns on empty
                 // write responses so the follow-up message reflects reality.
-                content: triageAppToolResult(approval.type, outcome),
+                content: triageAppToolResult(claimedApproval.type, outcome),
               },
             ],
           },

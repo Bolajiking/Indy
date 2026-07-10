@@ -28,6 +28,7 @@ describe("database migration files", () => {
       "0001_baseline.sql",
       "0002_public_launch_readiness.sql",
       "0003_webhook_delivery_outcomes.sql",
+      "0004_approval_expiry.sql",
     ]);
     expect(new Set(filenames).size).toBe(filenames.length);
     expect(filenames).toEqual([...filenames].sort());
@@ -74,6 +75,16 @@ describe("database migration files", () => {
     expect(sql).toMatch(/status = 'outcome_unknown'/i);
   });
 
+  it("backfills and requires durable approval expiries", async () => {
+    const sql = await readFile(
+      resolve(migrationsDirectory, "0004_approval_expiry.sql"),
+      "utf8",
+    );
+    expect(sql).toMatch(/UPDATE agent_actions/i);
+    expect(sql).toMatch(/COALESCE\(approved_at, executed_at, created_at\)/i);
+    expect(sql).toMatch(/ALTER COLUMN expires_at SET NOT NULL/i);
+  });
+
   it("keeps the clean-install snapshot and package commands in sync", async () => {
     const schema = await readFile(
       resolve(import.meta.dirname, "../../../src/db/schema.sql"),
@@ -93,6 +104,9 @@ describe("database migration files", () => {
     expect(schema).toMatch(/key_version INTEGER NOT NULL DEFAULT 1/i);
     expect(schema).toMatch(/account_status TEXT NOT NULL DEFAULT 'active'/i);
     expect(schema).toMatch(/deletion_requested_at TIMESTAMPTZ/i);
+    expect(schema).toMatch(
+      /agent_actions[\s\S]*expires_at TIMESTAMPTZ NOT NULL/i,
+    );
     expect(packageJson.scripts["db:migrate"]).toBe("tsx scripts/migrate-db.ts");
     expect(packageJson.scripts["db:migrate:check"]).toBe(
       "tsx scripts/migrate-db.ts --check",
@@ -138,7 +152,7 @@ describe("database migration runner", () => {
     const db = new FakeDatabase();
 
     expect(await runMigrations(db, migrations)).toEqual({
-      applied: ["0001", "0002", "0003"],
+      applied: ["0001", "0002", "0003", "0004"],
     });
     expect(db.transactionEvents).toEqual([
       "BEGIN",
@@ -152,6 +166,10 @@ describe("database migration runner", () => {
       "BEGIN",
       migrations[2].sql,
       "INSERT:0003",
+      "COMMIT",
+      "BEGIN",
+      migrations[3].sql,
+      "INSERT:0004",
       "COMMIT",
     ]);
   });
@@ -279,7 +297,7 @@ describe("database migration runner", () => {
 
     expect(
       await runMigrations(db, migrations, { adoptBaseline: true }),
-    ).toEqual({ applied: ["0001", "0002", "0003"] });
+    ).toEqual({ applied: ["0001", "0002", "0003", "0004"] });
     expect(db.transactionEvents).toEqual([
       "BEGIN",
       "CATALOG",
@@ -292,6 +310,10 @@ describe("database migration runner", () => {
       "BEGIN",
       migrations[2].sql,
       "INSERT:0003",
+      "COMMIT",
+      "BEGIN",
+      migrations[3].sql,
+      "INSERT:0004",
       "COMMIT",
     ]);
   });

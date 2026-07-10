@@ -13,6 +13,7 @@ export interface AgentAction {
   requires_approval: boolean;
   approved_at: string | null;
   executed_at: string | null;
+  expires_at: string;
   created_at: string;
 }
 
@@ -22,6 +23,7 @@ export async function createPendingAgentAction(action: {
   action_type: string;
   description: string;
   input: JsonObject;
+  expires_at: string;
 }): Promise<AgentAction> {
   const { data, error } = await supabase
     .from("agent_actions")
@@ -51,6 +53,7 @@ export async function getAgentActionByIdForCreator(
     .select("*")
     .eq("creator_id", creatorId)
     .eq("id", actionId)
+    .gt("expires_at", new Date().toISOString())
     .single();
 
   if (error) {
@@ -71,6 +74,7 @@ export async function listPendingAgentActionsForCreator(
     .select("*")
     .eq("creator_id", creatorId)
     .eq("status", "pending")
+    .gt("expires_at", new Date().toISOString())
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -117,6 +121,33 @@ export async function updatePendingAgentActionStatus(
     .update(updates)
     .eq("id", actionId)
     .eq("status", "pending")
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+/**
+ * Claim a creator's pending, unexpired action before any external write. The
+ * status and expiry predicates are applied by Postgres in the same update, so
+ * competing dashboard and messaging requests cannot both execute it.
+ */
+export async function claimPendingAgentActionForCreator(
+  creatorId: string,
+  actionId: string,
+  approvedAt: string,
+): Promise<AgentAction | null> {
+  const { data, error } = await supabase
+    .from("agent_actions")
+    .update({ status: "approved", approved_at: approvedAt })
+    .eq("creator_id", creatorId)
+    .eq("id", actionId)
+    .eq("status", "pending")
+    .gt("expires_at", approvedAt)
     .select()
     .maybeSingle();
 

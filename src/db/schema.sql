@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS agent_actions (
   requires_approval BOOLEAN DEFAULT false,
   approved_at TIMESTAMPTZ,
   executed_at TIMESTAMPTZ,
-  expires_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -364,7 +364,7 @@ RETURNS TABLE(
 $$ LANGUAGE sql VOLATILE;
 
 -- Snapshot-to-migration handoff. A database installed from this file is current
--- through 0003 and can immediately use db:migrate or db:migrate:check.
+-- through 0004 and can immediately use db:migrate or db:migrate:check.
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version TEXT PRIMARY KEY,
   checksum TEXT NOT NULL,
@@ -374,7 +374,8 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 INSERT INTO schema_migrations (version, checksum) VALUES
   ('0001', 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94'),
   ('0002', '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906'),
-  ('0003', 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad')
+  ('0003', 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad'),
+  ('0004', '7ea646dd9556b30742bcfeafe88375a335f494d72d25a8f819603b2a98ab446d')
 ON CONFLICT (version) DO NOTHING;
 
 DO $$
@@ -389,6 +390,8 @@ BEGIN
     (version = '0002' AND checksum <> '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906')
     OR
     (version = '0003' AND checksum <> 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad')
+    OR
+    (version = '0004' AND checksum <> '7ea646dd9556b30742bcfeafe88375a335f494d72d25a8f819603b2a98ab446d')
   LIMIT 1;
 
   IF drift_version IS NOT NULL THEN
