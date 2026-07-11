@@ -1,3 +1,5 @@
+import { redactSensitive } from "./redaction.js";
+
 export interface PublicErrorEnvelope {
   error: { code: string; message: string; requestId: string };
 }
@@ -34,4 +36,3 @@ export function publicError(
 ): PublicErrorEnvelope {
   return { error: { code, message, requestId } };
 }
-import { redactSensitive } from "./redaction.js";

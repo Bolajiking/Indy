@@ -136,7 +136,7 @@ export function createApiServer(options: ApiServerOptions = {}) {
     "*",
     cors({
       origin: (origin) => (allowedOrigins.has(origin) ? origin : undefined),
-      allowHeaders: ["Authorization", "Content-Type"],
+      allowHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
       exposeHeaders: ["X-Request-Id"],
       allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
