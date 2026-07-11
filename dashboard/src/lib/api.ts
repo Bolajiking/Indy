@@ -54,6 +54,8 @@ export class ApiRequestError extends Error {
   constructor(
     message: string,
     public readonly fieldErrors: Record<string, string[]> = {},
+    public readonly code?: string,
+    public readonly requestId?: string,
   ) {
     super(message);
     this.name = "ApiRequestError";
@@ -75,6 +77,17 @@ async function parseProxyResponse<T>(response: Response): Promise<T> {
 
     try {
       const body: unknown = await response.json();
+      if (isRecord(body) && isRecord(body.error)) {
+        const stable = body.error;
+        if (typeof stable.message === "string") {
+          throw new ApiRequestError(
+            stable.message,
+            {},
+            typeof stable.code === "string" ? stable.code : undefined,
+            typeof stable.requestId === "string" ? stable.requestId : undefined,
+          );
+        }
+      }
       if (isRecord(body) && typeof body.error === "string") {
         message = body.error;
         const fieldErrors = isRecord(body.fieldErrors)

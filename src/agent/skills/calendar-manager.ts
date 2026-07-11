@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { getDealsForCreator } from "../../db/queries/deals.js";
 import { formatUsdWhole } from "../../lib/format.js";
 

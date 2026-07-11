@@ -135,6 +135,6 @@ describe("platform routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(500);
-    expect(body.error).toBe("Failed to disconnect platform");
+    expect(body.error.message).toBe("Failed to disconnect platform");
   });
 });

@@ -2,11 +2,13 @@ import crypto from "node:crypto";
 import type { Bot } from "grammy";
 import { UnrecoverableError, type JobsOptions, type Queue } from "bullmq";
 import type { WebhookProvider } from "../db/queries/webhook-events.js";
+import { getRequestId } from "../observability/request-context.js";
 
 export interface WebhookDeliveryData {
   provider: WebhookProvider;
   providerEventId: string;
   payload: unknown;
+  requestId?: string;
 }
 
 export const WEBHOOK_DELIVERY_TIMEOUT_MS = 30_000;
@@ -51,10 +53,14 @@ export async function enqueueWebhookDelivery(
   queue: Pick<Queue, "add">,
   data: WebhookDeliveryData,
 ): Promise<void> {
-  await queue.add("webhook-delivery", data, {
-    ...WEBHOOK_JOB_OPTIONS,
-    jobId: getWebhookJobId(data.provider, data.providerEventId),
-  });
+  await queue.add(
+    "webhook-delivery",
+    { ...data, requestId: data.requestId ?? getRequestId() },
+    {
+      ...WEBHOOK_JOB_OPTIONS,
+      jobId: getWebhookJobId(data.provider, data.providerEventId),
+    },
+  );
 }
 
 export interface WebhookDeliveryDependencies {

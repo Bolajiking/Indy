@@ -9,7 +9,7 @@ import { getStoredYoutubeIdentity } from "./connected-identities.js";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { JsonObject } from "../db/json.js";
 import { formatUsd, formatUsdWhole } from "../lib/format.js";
-import pino from "pino";
+import pino from "#logger";
 
 const log = pino({ name: "agent:memory" });
 

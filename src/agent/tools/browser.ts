@@ -1,5 +1,5 @@
 import { readStringParam, registerTool, type AgentTool } from "./registry.js";
-import pino from "pino";
+import pino from "#logger";
 import { env } from "../../config/env.js";
 import { isRecord } from "../../db/json.js";
 

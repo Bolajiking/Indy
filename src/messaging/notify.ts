@@ -6,7 +6,7 @@
  * creators without importing bot internals directly.
  */
 
-import pino from "pino";
+import pino from "#logger";
 import { getCreatorById } from "../db/queries/creators.js";
 import { sendMessageToCreator } from "../bot/telegram-sender.js";
 import { sendWhatsAppMessage } from "../bot/whatsapp-sender.js";

@@ -22,7 +22,8 @@ import {
   isComposioEnabled,
   triageAppToolResult,
 } from "../integrations/composio.js";
-import pino from "pino";
+import pino from "#logger";
+import { incrementMetric } from "../observability/metrics.js";
 import { formatUsd } from "../lib/format.js";
 
 const log = pino({ name: "agent:approval-execution" });
@@ -191,6 +192,10 @@ export async function executePendingApprovalAction(
     { success: true, data: result.data },
     result.costCents,
   );
+  incrementMetric("approval_outcomes_total", {
+    tool: tool.name,
+    outcome: "executed",
+  });
 
   // If we have continuation context, re-enter the agent loop so the LLM can
   // produce a natural follow-up response rather than a raw tool result string.
@@ -315,6 +320,10 @@ async function executeComposioApproval(
       ? outcome.data
       : JSON.stringify(outcome.data);
   await markApprovalExecuted(actionId, { success: true, data: outcome.data });
+  incrementMetric("approval_outcomes_total", {
+    tool: "composio",
+    outcome: "executed",
+  });
 
   if (claimedApproval.continuation) {
     const { toolUseId, messageHistory, systemPrompt } =

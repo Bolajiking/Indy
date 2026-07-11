@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { scanForBrandDeals } from "../agent/skills/brand-deal-scanner.js";
 import {
   getCreatorById,

@@ -12,7 +12,8 @@
 
 import { Composio } from "@composio/core";
 import type Anthropic from "@anthropic-ai/sdk";
-import pino from "pino";
+import pino from "#logger";
+import { incrementMetric } from "../observability/metrics.js";
 import { env } from "../config/env.js";
 import { isJsonObject, isRecord, type JsonObject } from "../db/json.js";
 import { serializeToolResult } from "../agent/tool-result.js";
@@ -809,6 +810,10 @@ export async function composioLoopTools(
       ...new Set(all.filter((c) => !c.connected).map((c) => c.toolkit)),
     ].filter((t) => !connected.includes(t));
   } catch (error) {
+    incrementMetric("external_provider_health_total", {
+      provider: "composio",
+      outcome: "error",
+    });
     log.warn({ userId }, "Failed to load Composio connections");
     return {};
   }

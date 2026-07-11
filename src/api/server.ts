@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
 import type { Context } from "hono";
 import { getConnInfo } from "@hono/node-server/conninfo";
@@ -15,6 +14,15 @@ import {
   resolveNetworkIdentity,
   type RateLimitPolicy,
 } from "./middleware/rate-limit.js";
+import {
+  resolveRequestId,
+  runWithRequestId,
+} from "../observability/request-context.js";
+import { publicError } from "../observability/errors.js";
+import { incrementMetric, observeDuration } from "../observability/metrics.js";
+import createLogger from "../observability/logger.js";
+
+const log = createLogger({ name: "api:server" });
 
 interface RateLimitOptions {
   windowMs: number;
@@ -71,7 +79,59 @@ export function createApiServer(options: ApiServerOptions = {}) {
   const trustedProxyHops = options.trustedProxyHops ?? 0;
   const fallbackStore = createBoundedFallbackStore();
 
-  app.use("*", logger());
+  app.use("*", async (context, next) => {
+    const requestId = resolveRequestId(context.req.header("X-Request-Id"));
+    const startedAt = performance.now();
+    context.header("X-Request-Id", requestId);
+    await runWithRequestId(requestId, async () => {
+      try {
+        await next();
+        if (
+          context.res.status >= 400 &&
+          context.res.headers.get("Content-Type")?.includes("application/json")
+        ) {
+          const body: unknown = await context.res
+            .clone()
+            .json()
+            .catch(() => null);
+          if (
+            body &&
+            typeof body === "object" &&
+            typeof (body as { error?: unknown }).error === "string"
+          ) {
+            const legacy = body as Record<string, unknown> & { error: string };
+            const { error: legacyMessage, ...legacyMetadata } = legacy;
+            const headers = new Headers(context.res.headers);
+            headers.set("X-Request-Id", requestId);
+            context.res = new Response(
+              JSON.stringify({
+                ...legacyMetadata,
+                ...publicError(
+                  `HTTP_${context.res.status}`,
+                  legacyMessage,
+                  requestId,
+                ),
+              }),
+              { status: context.res.status, headers },
+            );
+          }
+        }
+      } finally {
+        observeDuration(
+          "http_request_duration_ms",
+          performance.now() - startedAt,
+          {
+            method: context.req.method,
+            status: context.res.status,
+          },
+        );
+        incrementMetric("http_requests_total", {
+          method: context.req.method,
+          status: context.res.status,
+        });
+      }
+    });
+  });
   app.use(
     "*",
     cors({
@@ -106,11 +166,23 @@ export function createApiServer(options: ApiServerOptions = {}) {
   );
 
   app.onError((error, context) => {
+    const requestId = resolveRequestId(context.res.headers.get("X-Request-Id"));
+    incrementMetric("http_errors_total", {
+      status: error instanceof HTTPException ? error.status : 500,
+    });
     if (error instanceof HTTPException) {
-      return context.json({ error: error.message }, error.status);
+      return context.json(
+        publicError(`HTTP_${error.status}`, error.message, requestId),
+        error.status,
+        { "X-Request-Id": requestId },
+      );
     }
-
-    return context.json({ error: "Internal server error" }, 500);
+    log.error({ error }, "Unhandled API error");
+    return context.json(
+      publicError("INTERNAL_ERROR", "Internal server error", requestId),
+      500,
+      { "X-Request-Id": requestId },
+    );
   });
 
   app.get("/health", (context) =>

@@ -12,7 +12,7 @@
  * - learned: What the agent learned from analysis ("creator's audience is 70% female 25-34")
  */
 
-import pino from "pino";
+import pino from "#logger";
 import {
   upsertCreatorMemory,
   recordSkillOutcome,

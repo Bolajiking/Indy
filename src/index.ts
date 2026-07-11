@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { pathToFileURL } from "node:url";
-import pino from "pino";
+import pino from "#logger";
 import { createApiServer } from "./api/server.js";
 import { initializeRateLimitStore } from "./api/rate-limit-store.js";
 import { installCreatorRateLimits } from "./api/middleware/rate-limit.js";

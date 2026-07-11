@@ -5,7 +5,7 @@ import { env } from "../config/env.js";
 import { updateCreator } from "../db/queries/creators.js";
 import { supabase } from "../db/client.js";
 import type { JsonObject } from "../db/json.js";
-import pino from "pino";
+import pino from "#logger";
 import { ipv4Fetch } from "../network/ipv4-fetch.js";
 import {
   buildAgentWalletCreateParams,

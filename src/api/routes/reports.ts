@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { HTTPException } from "hono/http-exception";
-import pino from "pino";
+import pino from "#logger";
 import { generateRevenueReport } from "../../agent/skills/revenue-advisor.js";
 import { generateContentStrategy } from "../../agent/skills/content-strategy.js";
 import { generateFinancialSnapshot } from "../../agent/skills/financial-tracker.js";

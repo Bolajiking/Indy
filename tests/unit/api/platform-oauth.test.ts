@@ -106,8 +106,10 @@ describe("platform OAuth routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(503);
-    expect(body).toEqual({
-      error: "YouTube OAuth is not configured",
+    expect(body).toMatchObject({
+      error: expect.objectContaining({
+        message: "YouTube OAuth is not configured",
+      }),
       missing: ["GOOGLE_OAUTH_CLIENT_SECRET"],
     });
   });
@@ -122,7 +124,7 @@ describe("platform OAuth routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body.error).toContain("Missing bearer token");
+    expect(body.error.message).toContain("Missing bearer token");
   });
 
   it("exchanges the callback code, stores the connection, and redirects back to settings", async () => {

@@ -14,7 +14,7 @@ import { resolveWalletForCreator } from "../wallet/privy.js";
 import { getCreatorById, deductCredits } from "../db/queries/creators.js";
 import { maybeSendLowCreditAlert } from "../messaging/notify.js";
 import { runAgentLoop } from "./loop.js";
-import pino from "pino";
+import pino from "#logger";
 
 import "./tools/enrichment.js";
 import "./tools/web-search.js";

@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import {
   getCreatorById,
   listCreatorsForMorningBriefs,

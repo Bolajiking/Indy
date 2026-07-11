@@ -6,7 +6,7 @@ import {
   upsertConnection,
 } from "../../db/queries/platform-connections.js";
 import { getCreatorById } from "../../db/queries/creators.js";
-import pino from "pino";
+import pino from "#logger";
 import { getAuthContext, requireCreatorAuth } from "../middleware/auth.js";
 import {
   buildPlatformOAuthRedirect,

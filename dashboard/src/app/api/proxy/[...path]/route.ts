@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3000";
 const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const VALID_REQUEST_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+function requestId(req: NextRequest): string {
+  const inbound = req.headers.get("X-Request-Id");
+  return inbound && VALID_REQUEST_ID.test(inbound)
+    ? inbound
+    : crypto.randomUUID();
+}
 
 function isTrustedProxyOrigin(req: NextRequest): boolean {
   if (!MUTATING_METHODS.has(req.method)) {
@@ -24,10 +32,11 @@ async function proxyRequest(
   req: NextRequest,
   { params }: { params: Promise<{ path: string[] }> },
 ) {
+  const correlationId = requestId(req);
   if (!isTrustedProxyOrigin(req)) {
     return NextResponse.json(
       { error: "Untrusted request origin" },
-      { status: 403 },
+      { status: 403, headers: { "X-Request-Id": correlationId } },
     );
   }
 
@@ -48,6 +57,7 @@ async function proxyRequest(
     "Content-Type",
     req.headers.get("Content-Type") ?? "application/json",
   );
+  headers.set("X-Request-Id", correlationId);
 
   try {
     const response = await fetch(url.toString(), {
@@ -66,10 +76,20 @@ async function proxyRequest(
       headers: {
         "Content-Type":
           response.headers.get("Content-Type") ?? "application/json",
+        "X-Request-Id": response.headers.get("X-Request-Id") ?? correlationId,
       },
     });
   } catch {
-    return NextResponse.json({ error: "Backend unavailable" }, { status: 502 });
+    return NextResponse.json(
+      {
+        error: {
+          code: "BACKEND_UNAVAILABLE",
+          message: "Backend unavailable",
+          requestId: correlationId,
+        },
+      },
+      { status: 502, headers: { "X-Request-Id": correlationId } },
+    );
   }
 }
 

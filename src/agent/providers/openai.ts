@@ -8,7 +8,7 @@
  */
 
 import type Anthropic from "@anthropic-ai/sdk";
-import pino from "pino";
+import pino from "#logger";
 import { ipv4Fetch } from "../../network/ipv4-fetch.js";
 
 const log = pino({ name: "agent:openai-provider" });

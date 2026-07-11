@@ -1,4 +1,4 @@
-import type pino from "pino";
+import type { Logger } from "#logger";
 import type { OutgoingMessage } from "../bot/messages.js";
 import { sendMessageToCreator } from "../bot/telegram.js";
 import { sendWhatsAppMessage } from "../bot/whatsapp.js";
@@ -12,7 +12,7 @@ export async function sendCreatorMessageToChannels(
   creatorId: string,
   creator: CreatorMessageChannels,
   message: OutgoingMessage,
-  log: pino.Logger,
+  log: Logger,
   successMessage: string,
 ): Promise<void> {
   if (creator.telegram_chat_id) {

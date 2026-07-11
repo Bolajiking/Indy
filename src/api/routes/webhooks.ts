@@ -5,7 +5,8 @@ import {
   verifyWhatsAppSignature,
   verifyWhatsAppWebhook,
 } from "../../bot/whatsapp.js";
-import pino from "pino";
+import pino from "#logger";
+import { incrementMetric } from "../../observability/metrics.js";
 import type {
   ClaimWebhookEventInput,
   WebhookEventClaim,
@@ -144,6 +145,11 @@ export function createWebhookRoutes(options: WebhookRouteOptions = {}) {
     // or awaiting reconciliation must never start a second external delivery.
     if (claim.status === "queued") {
       await enqueueWebhook(data);
+    } else {
+      incrementMetric("webhook_duplicates_total", {
+        provider: data.provider,
+        status: claim.status,
+      });
     }
   }
 

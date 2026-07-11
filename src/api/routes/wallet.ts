@@ -6,7 +6,7 @@ import { getAuthContext, requireCreatorAuth } from "../middleware/auth.js";
 import { getOnChainBalanceWithTimeout } from "../../wallet/mpp.js";
 import { AGENT, NETWORK } from "../../config/constants.js";
 import { resolveCreatorSpendingLimits } from "../../wallet/spending.js";
-import pino from "pino";
+import pino from "#logger";
 import type {
   ApiPaymentAttempt,
   ApiTransaction,

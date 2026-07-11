@@ -9,7 +9,7 @@
  * connected-app tools before entering the shared tool-use loop.
  */
 
-import pino from "pino";
+import pino from "#logger";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";

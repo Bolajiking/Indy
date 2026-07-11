@@ -12,7 +12,8 @@ import {
   extractTempoAmountCents,
 } from "./spending.js";
 import { Mppx, tempo } from "mppx/client";
-import pino from "pino";
+import pino from "#logger";
+import { incrementMetric } from "../observability/metrics.js";
 import { createClient, http, createPublicClient } from "viem";
 import { tempo as tempoChain } from "viem/chains";
 import { NETWORK } from "../config/constants.js";
@@ -253,6 +254,9 @@ export async function createMppClient(
         metadata: {
           requestMethod: options?.method ?? "GET",
         },
+      });
+      incrementMetric("wallet_payment_attempts_total", {
+        service: serviceUrl.hostname,
       });
 
       let quotedAmountCents: number | null = null;

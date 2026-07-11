@@ -1,6 +1,6 @@
 import { createMiddleware } from "hono/factory";
 import { HTTPException } from "hono/http-exception";
-import pino from "pino";
+import pino from "#logger";
 import {
   authenticateAccessToken,
   AuthTokenVerificationError,

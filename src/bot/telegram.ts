@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { Bot } from "grammy";
 import { env } from "../config/env.js";
 import { getPendingApprovalByAction, markApprovalSkipped } from "./approval.js";

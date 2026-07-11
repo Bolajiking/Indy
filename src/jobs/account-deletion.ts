@@ -12,6 +12,7 @@ import {
 } from "../db/queries/account-lifecycle.js";
 import { disconnectAllComposioConnections } from "../integrations/composio.js";
 import { deletePrivyUser } from "../wallet/privy.js";
+import { getRequestId } from "../observability/request-context.js";
 
 export function getAccountDeletionJobId(creatorId: string): string {
   return `account-delete-${createHash("sha256").update(creatorId).digest("hex")}`;
@@ -23,7 +24,7 @@ export async function enqueueAccountDeletion(
 ): Promise<void> {
   await queue.add(
     "account-deletion",
-    { creatorId },
+    { creatorId, requestId: getRequestId() },
     {
       jobId: getAccountDeletionJobId(creatorId),
       attempts: 8,

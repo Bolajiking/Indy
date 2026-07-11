@@ -5,7 +5,7 @@
  * tools discoverable when the bazaar is unavailable or unset.
  */
 
-import pino from "pino";
+import pino from "#logger";
 import { isRecord } from "../../db/json.js";
 import { errMsg } from "../../lib/errors.js";
 

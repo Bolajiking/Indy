@@ -1,8 +1,13 @@
 import type { ConnectionOptions } from "bullmq";
 import { Queue, Worker } from "bullmq";
 import type { Bot } from "grammy";
-import pino from "pino";
+import pino from "#logger";
 import { env } from "../config/env.js";
+import { incrementMetric, setMetric } from "../observability/metrics.js";
+import {
+  resolveRequestId,
+  runWithRequestId,
+} from "../observability/request-context.js";
 
 const log = pino({ name: "jobs:queue" });
 
@@ -42,8 +47,9 @@ export function getAgentQueue(): Queue {
 
 export async function processJob(job: {
   name: string;
-  data: { creatorId?: string };
+  data: { creatorId?: string; requestId?: string };
 }): Promise<void> {
+  incrementMetric("queue_jobs_started_total", { job: job.name });
   switch (job.name) {
     case "morning-scan": {
       const { runMorningScan } = await import("./morning-scan.js");
@@ -99,16 +105,25 @@ export function startWorkers(
   const worker = new Worker(
     "indyfren-agent",
     async (job) => {
-      if (job.name === "webhook-delivery") {
-        const { createDefaultWebhookDeliveryProcessor } =
-          await import("./webhook-delivery.js");
-        const processor = createDefaultWebhookDeliveryProcessor(
-          options.telegramBot ?? null,
-        );
-        await processor(job as never);
-        return;
-      }
-      await processJob(job);
+      await runWithRequestId(
+        resolveRequestId(
+          typeof job.data?.requestId === "string"
+            ? job.data.requestId
+            : undefined,
+        ),
+        async () => {
+          if (job.name === "webhook-delivery") {
+            const { createDefaultWebhookDeliveryProcessor } =
+              await import("./webhook-delivery.js");
+            const processor = createDefaultWebhookDeliveryProcessor(
+              options.telegramBot ?? null,
+            );
+            await processor(job as never);
+            return;
+          }
+          await processJob(job);
+        },
+      );
     },
     {
       connection: getQueueConnection(),
@@ -117,6 +132,9 @@ export function startWorkers(
   );
 
   worker.on("failed", (job, error) => {
+    incrementMetric("queue_job_failures_total", {
+      job: job?.name ?? "unknown",
+    });
     log.error(
       {
         jobId: job?.id,
@@ -130,7 +148,22 @@ export function startWorkers(
     );
   });
 
+  const recordDepth = async () => {
+    const counts = await getAgentQueue().getJobCounts(
+      "waiting",
+      "active",
+      "delayed",
+      "failed",
+    );
+    for (const [state, count] of Object.entries(counts)) {
+      setMetric("queue_depth", count, { state });
+    }
+  };
+  worker.on("completed", () => void recordDepth().catch(() => undefined));
+  worker.on("failed", () => void recordDepth().catch(() => undefined));
+
   worker.on("error", (error) => {
+    incrementMetric("queue_worker_errors_total");
     log.error(
       { error: error.message },
       "Worker error (Redis connection issue)",

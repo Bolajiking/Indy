@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { isIP } from "node:net";
 import type { Context, Hono, MiddlewareHandler } from "hono";
-import pino from "pino";
+import pino from "#logger";
 import {
   InMemoryRateLimitStore,
   type RateLimitStore,

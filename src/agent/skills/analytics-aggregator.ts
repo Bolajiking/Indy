@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { getConnectionsForCreator } from "../../db/queries/platform-connections.js";
 import { getPlatformAnalyticsEndpoint } from "../platform-analytics-endpoints.js";
 import { isRecord } from "../../db/json.js";

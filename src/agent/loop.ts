@@ -10,7 +10,8 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { randomUUID } from "node:crypto";
-import pino from "pino";
+import pino from "#logger";
+import { incrementMetric, observeDuration } from "../observability/metrics.js";
 import { AGENT } from "../config/constants.js";
 import { isJsonObject, type JsonObject } from "../db/json.js";
 import {
@@ -195,6 +196,10 @@ async function callLlm(
 export async function runAgentLoop(
   config: AgentLoopConfig,
 ): Promise<AgentLoopResult> {
+  const agentStartedAt = performance.now();
+  incrementMetric("agent_runs_total", {
+    entry: config.activeSkill ? "skill" : "orchestrator",
+  });
   const {
     systemPrompt,
     toolContext,
@@ -238,6 +243,10 @@ export async function runAgentLoop(
       messages,
     });
   } catch (err: unknown) {
+    incrementMetric("agent_errors_total", { phase: "initial" });
+    observeDuration("agent_duration_ms", performance.now() - agentStartedAt, {
+      outcome: "error",
+    });
     log.error({ error: errMsg(err) }, "Initial LLM call failed");
     return {
       text: "Sorry, I'm having trouble thinking right now. Please try again.",
@@ -344,6 +353,10 @@ export async function runAgentLoop(
             toolInput ?? {},
           );
           if (dynamic) {
+            incrementMetric("tool_outcomes_total", {
+              tool: toolUse.name,
+              outcome: dynamic.isError ? "error" : "success",
+            });
             toolCallNames.push(toolUse.name);
             toolResults.push({
               type: "tool_result",
@@ -373,6 +386,10 @@ export async function runAgentLoop(
       const { tool, input } = resolution;
 
       if (tool.autonomyLevel === "hybrid") {
+        incrementMetric("approval_outcomes_total", {
+          tool: tool.name,
+          outcome: "requested",
+        });
         const preview = validateActionPreview(
           tool.buildApprovalPreview?.(input) ?? {},
         );
@@ -426,6 +443,10 @@ export async function runAgentLoop(
 
       try {
         const result = await tool.execute(input, execContext);
+        incrementMetric("tool_outcomes_total", {
+          tool: tool.name,
+          outcome: result.success ? "success" : "error",
+        });
         onToolUsed?.(tool.name, tool.maxCostPerUseCents);
         toolCallNames.push(tool.name);
         // Capture connection prompts so the dashboard can render inline cards.
@@ -448,6 +469,10 @@ export async function runAgentLoop(
           ),
         });
       } catch (err: unknown) {
+        incrementMetric("tool_outcomes_total", {
+          tool: tool.name,
+          outcome: "error",
+        });
         // Provider errors can echo signed URLs, tokens, or request bodies.
         // Keep those in the source-labelled model envelope, never in logs.
         log.error({ tool: tool.name }, "Tool execution failed");
@@ -486,6 +511,10 @@ export async function runAgentLoop(
   const textBlocks = response.content.filter(
     (b): b is Anthropic.TextBlock => b.type === "text",
   );
+
+  observeDuration("agent_duration_ms", performance.now() - agentStartedAt, {
+    outcome: "success",
+  });
 
   return {
     text:
