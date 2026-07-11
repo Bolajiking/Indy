@@ -197,7 +197,10 @@ describe("API server", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toContain("Invalid stage");
+    expect(body).toMatchObject({
+      error: "Validation failed",
+      fieldErrors: { stage: expect.any(Array) },
+    });
     expect(updateDealStage).not.toHaveBeenCalled();
   });
 
@@ -275,7 +278,7 @@ describe("API server", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(updateDeal).toHaveBeenCalledWith("deal-1", {
+    expect(updateDeal).toHaveBeenCalledWith("creator-1", "deal-1", {
       next_action: "Send follow-up",
       follow_up_at: "2026-06-10T09:00:00.000Z",
     });

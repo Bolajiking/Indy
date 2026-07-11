@@ -9,6 +9,7 @@ import type {
   ApiConnectionsInfo,
   ApiCreatorProfile,
   ApiDeal,
+  ApiDealMutationInput,
   ApiDealStage,
   ApiFinancialSnapshot,
   ApiMessagingLink,
@@ -25,6 +26,7 @@ import type {
 } from "../../../src/api/contracts.js";
 
 export type DashboardDeal = ApiDeal;
+export type DashboardDealMutationInput = ApiDealMutationInput;
 export type DashboardDealStage = ApiDealStage;
 export type DashboardTransaction = ApiTransaction;
 export type DashboardPaymentAttempt = ApiPaymentAttempt;
@@ -48,6 +50,16 @@ export type DashboardAccountDeletion = ApiAccountDeletionResponse;
 
 const PROXY_BASE = "/api/proxy";
 
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly fieldErrors: Record<string, string[]> = {},
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -65,12 +77,23 @@ async function parseProxyResponse<T>(response: Response): Promise<T> {
       const body: unknown = await response.json();
       if (isRecord(body) && typeof body.error === "string") {
         message = body.error;
+        const fieldErrors = isRecord(body.fieldErrors)
+          ? Object.fromEntries(
+              Object.entries(body.fieldErrors).filter(
+                (entry): entry is [string, string[]] =>
+                  Array.isArray(entry[1]) &&
+                  entry[1].every((value) => typeof value === "string"),
+              ),
+            )
+          : {};
+        throw new ApiRequestError(message, fieldErrors);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiRequestError) throw error;
       // Ignore parse failures and preserve the generic message.
     }
 
-    throw new Error(message);
+    throw new ApiRequestError(message);
   }
 
   return (await response.json()) as T;
@@ -172,6 +195,27 @@ export async function patchDealStage(
       body: JSON.stringify({ stage }),
     },
   );
+}
+
+export async function createDashboardDeal(
+  accessToken: string,
+  input: DashboardDealMutationInput & { brandName: string },
+): Promise<DashboardDeal> {
+  return fetchAuthedJson<DashboardDeal>("/api/deals", accessToken, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function updateDashboardDeal(
+  accessToken: string,
+  dealId: string,
+  input: DashboardDealMutationInput,
+): Promise<DashboardDeal> {
+  return fetchAuthedJson<DashboardDeal>(`/api/deals/${dealId}`, accessToken, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
 }
 
 export async function fetchTransactions(

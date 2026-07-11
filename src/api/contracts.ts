@@ -44,6 +44,28 @@ export interface ApiDealStageUpdateInput {
   stage: ApiDealStage;
 }
 
+export interface ApiDealMutationInput {
+  brandName?: string;
+  brandContactEmail?: string | null;
+  brandContactName?: string | null;
+  stage?: ApiDealStage;
+  fitScore?: number | null;
+  estimatedValueCents?: number | null;
+  actualValueCents?: number | null;
+  sourceUrl?: string | null;
+  deadlineAt?: string | null;
+  followUpAt?: string | null;
+  probability?: number | null;
+  nextAction?: string | null;
+  archivedAt?: string | null;
+  notes?: string | null;
+}
+
+export interface ApiValidationError {
+  error: "Validation failed";
+  fieldErrors: Record<string, string[]>;
+}
+
 export interface ApiTransaction {
   id: string;
   type: string;
