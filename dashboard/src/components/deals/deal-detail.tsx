@@ -25,7 +25,12 @@ export function DealDetail({
         aria-modal="true"
         aria-labelledby="deal-detail-title"
         onMouseDown={(event) => event.stopPropagation()}
-        style={{ width: "min(680px, 92vw)", padding: 24 }}
+        style={{
+          width: "min(680px, 92vw)",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          padding: 24,
+        }}
       >
         <h2 id="deal-detail-title">{deal.brand_name}</h2>
         <p>{deal.next_action ?? "No next action set."}</p>

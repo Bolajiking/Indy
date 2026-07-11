@@ -108,7 +108,12 @@ export function DealForm({
         aria-modal="true"
         aria-labelledby="deal-form-title"
         onMouseDown={(event) => event.stopPropagation()}
-        style={{ width: "min(560px, 92vw)", padding: 24 }}
+        style={{
+          width: "min(560px, 92vw)",
+          maxHeight: "90vh",
+          overflowY: "auto",
+          padding: 24,
+        }}
       >
         <h2 id="deal-form-title">{deal ? "Edit deal" : "Add deal"}</h2>
         <form onSubmit={submit} noValidate style={{ display: "grid", gap: 14 }}>
@@ -217,6 +222,24 @@ export function DealForm({
               {message}
             </p>
           ))}
+          <div aria-live="polite">
+            {Object.entries(serverFieldErrors ?? {})
+              .filter(
+                ([field]) =>
+                  field !== "brandName" && field !== "brandContactEmail",
+              )
+              .flatMap(([field, messages]) =>
+                messages.map((message) => (
+                  <p
+                    role="alert"
+                    key={`${field}:${message}`}
+                    style={{ color: "var(--cf-coral)", margin: 0 }}
+                  >
+                    {message}
+                  </p>
+                )),
+              )}
+          </div>
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
             <button type="button" className="dark-pill" onClick={onCancel}>
               Cancel

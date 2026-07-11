@@ -165,6 +165,29 @@ describe("DealsPage", () => {
     container.remove();
   });
 
+  it("surfaces server validation for every field, not only primary identity fields", () => {
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const { unmount } = render(
+      React.createElement(DealForm, {
+        onCancel: vi.fn(),
+        onSubmit: vi.fn(),
+        serverError: "Validation failed",
+        serverFieldErrors: {
+          probability: ["Probability must be between 0 and 100"],
+          followUpAt: ["Follow up must be a valid date"],
+        },
+      }),
+      container,
+    );
+    expect(container.textContent).toContain(
+      "Probability must be between 0 and 100",
+    );
+    expect(container.textContent).toContain("Follow up must be a valid date");
+    unmount();
+    container.remove();
+  });
+
   it("renders read-only evidence, deliverables, and agent provenance in detail", () => {
     const container = document.createElement("div");
     document.body.appendChild(container);
