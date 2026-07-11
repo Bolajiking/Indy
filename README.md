@@ -1,8 +1,6 @@
 # Indyfren
 
-[![CI/CD](https://github.com/your-org/indyfren/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/indyfren/actions/workflows/ci.yml)
-[![Tests](https://img.shields.io/badge/tests-352%20passing-success)](./docs/TEST_RESULTS.md)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI/CD](https://github.com/Bolajiking/Indy/actions/workflows/ci.yml/badge.svg)](https://github.com/Bolajiking/Indy/actions/workflows/ci.yml)
 
 AI business manager for independent content creators. Manages brand deals, rate negotiations, pitching, financial tracking, and content strategy through Telegram/WhatsApp chat and a companion web dashboard.
 
@@ -13,6 +11,7 @@ AI business manager for independent content creators. Manages brand deals, rate 
 - **[Testing Guide](docs/TESTING_CHECKLIST.md)** - End-to-end testing checklist
 - **[Test Results](docs/TEST_RESULTS.md)** - Latest test validation
 - **[Wallet Funding](docs/WALLET_FUNDING.md)** - How to fund agent wallets
+- **[Operations Runbooks](docs/runbooks/DEPLOY.md)** - Deploy, rollback, incidents, recovery, and backups
 
 ## 📊 Status
 
@@ -73,6 +72,8 @@ cd dashboard
 vercel --prod
 ```
 
+The Vercel CLI is required for dashboard environment, deployment, rollback, and log workflows. Install it with `npm i -g vercel` before operating a Vercel environment.
+
 Full guide: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**
 
 ## YouTube OAuth Setup
@@ -116,7 +117,7 @@ cp .env.example .env
 If you start or build the dashboard from `dashboard/` directly, also provide its public envs in that process. The simplest local option is `dashboard/.env.local` with at least:
 
 ```bash
-NEXT_PUBLIC_PRIVY_APP_ID=...
+NEXT_PUBLIC_PRIVY_APP_ID="$PRIVY_APP_ID"
 NEXT_PUBLIC_API_URL=http://localhost:3000
 ```
 
@@ -218,6 +219,7 @@ If a live MPP smoke reports that `payment_attempts` is missing, set `DATABASE_UR
 | `npm run build`                             | TypeScript compile                                                              |
 | `npm test`                                  | Run all tests                                                                   |
 | `npm run verify`                            | Run the shared test, build, format, and audit contract                          |
+| `npm run jobs:retry-failed -- --dry-run`    | Preview explicitly retryable failed account/webhook jobs                        |
 | `npm run db:init`                           | Print/verify database schema                                                    |
 | `npm run db:migrate:payment-attempts`       | Apply the MPP payment-attempt ledger table/index/RLS slice                      |
 | `npm run db:seed`                           | Seed demo data                                                                  |

@@ -1,6 +1,6 @@
 # Indyfren Deployment Guide
 
-**Last Updated:** March 20, 2026
+**Last Updated:** July 11, 2026
 
 ---
 
@@ -12,6 +12,18 @@ Indyfren runs as two separate services:
 - **Dashboard** - Next.js app → **Vercel**
 
 Both services are deployed automatically via GitHub Actions on push to `main`.
+
+Production operators must use the reviewed runbooks:
+
+- [Deploy](runbooks/DEPLOY.md)
+- [Rollback](runbooks/ROLLBACK.md)
+- [Incidents](runbooks/INCIDENTS.md)
+- [Secret rotation](runbooks/SECRET_ROTATION.md)
+- [Queue recovery](runbooks/QUEUE_RECOVERY.md)
+- [Backup and restore](runbooks/BACKUP_RESTORE.md)
+- [Account deletion recovery](runbooks/ACCOUNT_DELETION.md)
+
+`src/db/schema.sql` is a bootstrap schema for a new project. Existing staging and production databases must export `DATABASE_URL`, run `npm run db:migrate:check`, and then run `npm run db:migrate` before application promotion.
 
 ---
 
@@ -39,8 +51,8 @@ Both services are deployed automatically via GitHub Actions on push to `main`.
 ### 1. Fork and Clone
 
 ```bash
-git clone https://github.com/your-org/indyfren.git
-cd indyfren
+git clone https://github.com/Bolajiking/Indy.git
+cd Indy
 ```
 
 ### 2. Set Up GitHub Secrets
@@ -83,6 +95,13 @@ GitHub Actions will automatically:
 
 ## Manual Deployment
 
+Set the actual environment URLs once for the commands below:
+
+```bash
+export API_BASE_URL="https://api.indyfren.xyz"
+export DASHBOARD_BASE_URL="https://indyfren.vercel.app"
+```
+
 ### Backend (Railway)
 
 #### 1. Create Railway Project
@@ -105,38 +124,38 @@ In Railway dashboard or via CLI:
 
 ```bash
 # Required
-railway variables set ANTHROPIC_API_KEY=sk-ant-...
-railway variables set SUPABASE_URL=https://xxx.supabase.co
-railway variables set SUPABASE_SERVICE_KEY=eyJ...
-railway variables set PRIVY_APP_ID=clxxx...
-railway variables set PRIVY_APP_SECRET=xxx...
-railway variables set PRIVY_JWT_VERIFICATION_KEY=xxx...
-railway variables set MESSAGING_LINK_SECRET=replace-with-generated-unique-secret
+railway variables set ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+railway variables set SUPABASE_URL="$SUPABASE_URL"
+railway variables set SUPABASE_SERVICE_KEY="$SUPABASE_SERVICE_KEY"
+railway variables set PRIVY_APP_ID="$PRIVY_APP_ID"
+railway variables set PRIVY_APP_SECRET="$PRIVY_APP_SECRET"
+railway variables set PRIVY_JWT_VERIFICATION_KEY="$PRIVY_JWT_VERIFICATION_KEY"
+railway variables set MESSAGING_LINK_SECRET="$MESSAGING_LINK_SECRET"
 railway variables set PLATFORM_ENCRYPTION_KEY_VERSION=2
-railway variables set PLATFORM_ENCRYPTION_KEY_CURRENT=replace-with-output-of-openssl-rand-base64-32
+railway variables set PLATFORM_ENCRYPTION_KEY_CURRENT="$PLATFORM_ENCRYPTION_KEY_CURRENT"
 
 # Telegram polling (set ENABLE_TELEGRAM_BOT=false and TELEGRAM_MODE=disabled to disable)
 railway variables set ENABLE_TELEGRAM_BOT=true
 railway variables set TELEGRAM_MODE=polling
-railway variables set TELEGRAM_BOT_TOKEN=123456:ABC...
+railway variables set TELEGRAM_BOT_TOKEN="$TELEGRAM_BOT_TOKEN"
 
 # Optional WhatsApp integration
 railway variables set ENABLE_WHATSAPP=true
-railway variables set WHATSAPP_PHONE_NUMBER_ID=...
-railway variables set WHATSAPP_ACCESS_TOKEN=...
-railway variables set WHATSAPP_VERIFY_TOKEN=replace-with-generated-unique-verify-token
-railway variables set WHATSAPP_WEBHOOK_SECRET=replace-with-meta-app-secret
+railway variables set WHATSAPP_PHONE_NUMBER_ID="$WHATSAPP_PHONE_NUMBER_ID"
+railway variables set WHATSAPP_ACCESS_TOKEN="$WHATSAPP_ACCESS_TOKEN"
+railway variables set WHATSAPP_VERIFY_TOKEN="$WHATSAPP_VERIFY_TOKEN"
+railway variables set WHATSAPP_WEBHOOK_SECRET="$WHATSAPP_WEBHOOK_SECRET"
 
 # Optional YouTube OAuth integration
 railway variables set ENABLE_YOUTUBE_OAUTH=true
-railway variables set GOOGLE_OAUTH_CLIENT_ID=...
-railway variables set GOOGLE_OAUTH_CLIENT_SECRET=...
-railway variables set YOUTUBE_OAUTH_REDIRECT_URI=https://your-api.railway.app/api/platforms/oauth/youtube/callback
-railway variables set DASHBOARD_APP_URL=https://your-dashboard.vercel.app
+railway variables set GOOGLE_OAUTH_CLIENT_ID="$GOOGLE_OAUTH_CLIENT_ID"
+railway variables set GOOGLE_OAUTH_CLIENT_SECRET="$GOOGLE_OAUTH_CLIENT_SECRET"
+railway variables set YOUTUBE_OAUTH_REDIRECT_URI="$API_BASE_URL/api/platforms/oauth/youtube/callback"
+railway variables set DASHBOARD_APP_URL="$DASHBOARD_BASE_URL"
 
 # Optional (for browser automation)
-railway variables set BROWSERBASE_API_KEY=...
-railway variables set BROWSERBASE_PROJECT_ID=...
+railway variables set BROWSERBASE_API_KEY="$BROWSERBASE_API_KEY"
+railway variables set BROWSERBASE_PROJECT_ID="$BROWSERBASE_PROJECT_ID"
 
 # System
 railway variables set NODE_ENV=production
@@ -171,7 +190,7 @@ railway run npm run db:seed
 
 ```bash
 railway domain
-# Returns: https://your-app.railway.app
+# Record the returned HTTPS origin as API_BASE_URL.
 ```
 
 ---
@@ -204,13 +223,13 @@ In Vercel dashboard → Settings → Environment Variables:
 
 **Production:**
 
-- `NEXT_PUBLIC_API_URL` = `https://your-api.railway.app`
-- `NEXT_PUBLIC_PRIVY_APP_ID` = `clxxx...`
+- `NEXT_PUBLIC_API_URL` = the deployed backend API origin (`API_BASE_URL` above)
+- `NEXT_PUBLIC_PRIVY_APP_ID` = the public Privy app ID
 
 **Preview & Development:**
 
 - `NEXT_PUBLIC_API_URL` = `http://localhost:3000`
-- `NEXT_PUBLIC_PRIVY_APP_ID` = `clxxx...`
+- `NEXT_PUBLIC_PRIVY_APP_ID` = the non-production public Privy app ID
 
 #### 4. Deploy to Production
 
@@ -292,7 +311,7 @@ a value generated with `openssl rand -hex 32`.
 
 ```bash
 curl --request POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
-  --form-string "url=https://your-api.railway.app/webhooks/telegram" \
+  --form-string "url=${API_BASE_URL}/webhooks/telegram" \
   --form-string "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
 ```
 
@@ -310,7 +329,7 @@ curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
 #### WhatsApp Bot
 
 1. Go to Meta Business Suite → WhatsApp → Configuration
-2. Set webhook URL: `https://your-api.railway.app/webhooks/whatsapp`
+2. Set webhook URL to `${API_BASE_URL}/webhooks/whatsapp`
 3. Set verify token: (same as `WHATSAPP_VERIFY_TOKEN`)
 4. Subscribe to `messages` events
 
@@ -319,7 +338,7 @@ curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
 In Google Cloud Console:
 
 1. Add authorized redirect URI:
-   - `https://your-api.railway.app/api/platforms/oauth/youtube/callback`
+   - `${API_BASE_URL}/api/platforms/oauth/youtube/callback`
 2. Update `YOUTUBE_OAUTH_REDIRECT_URI` in Railway
 
 ### 4. Update CORS (if needed)
@@ -335,7 +354,7 @@ If dashboard and API are on different domains, verify CORS headers in backend.
 **Backend:**
 
 ```bash
-curl https://your-api.railway.app/health
+curl "$API_BASE_URL/health"
 ```
 
 Expected:
@@ -350,7 +369,7 @@ Expected:
 This is a cheap liveness check. Verify dependency readiness separately:
 
 ```bash
-curl https://your-api.railway.app/health/ready
+curl "$API_BASE_URL/health/ready"
 ```
 
 Expected when ready:
@@ -384,7 +403,7 @@ Railway provides:
 - Build logs
 - Service status
 
-Access via: https://railway.app/project/{your-project}
+Open the linked Railway project dashboard and select the backend service.
 
 ### Vercel Monitoring
 
@@ -395,7 +414,7 @@ Vercel provides:
 - Function logs
 - Build logs
 
-Access via: https://vercel.com/{your-team}/{project}
+Open the linked Vercel project dashboard and select the deployment environment.
 
 ---
 
@@ -403,49 +422,49 @@ Access via: https://vercel.com/{your-team}/{project}
 
 ### Backend (Railway)
 
-| Variable                           | Required      | Default            | Description                                                    |
-| ---------------------------------- | ------------- | ------------------ | -------------------------------------------------------------- |
-| `AI_PROVIDER`                      | No            | anthropic          | Agent AI provider: `anthropic` or `openai`                     |
-| `AI_API_KEY`                       | No            | -                  | Provider-neutral API key override                              |
-| `AI_BASE_URL`                      | No            | -                  | OpenAI-compatible or Anthropic-compatible provider base URL    |
-| `AI_MODEL`                         | No            | -                  | Default-tier model override                                    |
-| `AI_FAST_MODEL`                    | No            | -                  | Fast-tier model override                                       |
-| `ANTHROPIC_API_KEY`                | Conditionally | -                  | Required for Anthropic unless `AI_API_KEY` is set              |
-| `OPENAI_API_KEY`                   | Conditionally | -                  | Required for OpenAI unless `AI_API_KEY` is set                 |
-| `SUPABASE_URL`                     | Yes           | -                  | Supabase project URL                                           |
-| `SUPABASE_SERVICE_KEY`             | Yes           | -                  | Supabase service role key                                      |
-| `PRIVY_APP_ID`                     | Yes           | -                  | Privy application ID                                           |
-| `PRIVY_APP_SECRET`                 | Yes           | -                  | Privy application secret                                       |
-| `PRIVY_JWT_VERIFICATION_KEY`       | Yes           | -                  | JWT verification key                                           |
-| `MESSAGING_LINK_SECRET`            | Yes           | -                  | Unique secret used to sign messaging-link tokens               |
-| `PLATFORM_ENCRYPTION_KEY_VERSION`  | Yes           | -                  | Positive integer identifying the active key                    |
-| `PLATFORM_ENCRYPTION_KEY_CURRENT`  | Yes           | -                  | Canonical base64 encoding of the active 32-byte key             |
-| `PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION` | No     | -                  | Previous integer version, configured only during rotation       |
-| `PLATFORM_ENCRYPTION_KEY_PREVIOUS` | No            | -                  | Previous 32-byte base64 key retained during rotation            |
-| `REDIS_URL`                        | Yes           | -                  | Mandatory non-loopback Redis service in production             |
-| `PORT`                             | No            | 3000               | API server port                                                |
-| `NODE_ENV`                         | No            | development        | Node environment                                               |
-| `TRUSTED_PROXY_HOPS`               | No            | 0                  | Trusted reverse-proxy hops; integer from 0 through 2           |
-| `ENABLE_TELEGRAM_BOT`              | No            | true               | Strict boolean master switch for Telegram configuration        |
-| `TELEGRAM_MODE`                    | No            | polling            | Telegram mode: `disabled`, `polling`, or `webhook`             |
-| `TELEGRAM_BOT_TOKEN`               | Conditionally | -                  | Required when Telegram is enabled and mode is not `disabled`   |
-| `TELEGRAM_WEBHOOK_SECRET`          | Conditionally | -                  | Required when Telegram is enabled in `webhook` mode            |
-| `ENABLE_WHATSAPP`                  | No            | false              | Strict boolean enabling WhatsApp production configuration      |
-| `WHATSAPP_PHONE_NUMBER_ID`         | Conditionally | -                  | Required when WhatsApp is enabled                              |
-| `WHATSAPP_ACCESS_TOKEN`            | Conditionally | -                  | Required when WhatsApp is enabled                              |
-| `WHATSAPP_VERIFY_TOKEN`            | Conditionally | -                  | Unique verify token required when WhatsApp is enabled          |
-| `WHATSAPP_WEBHOOK_SECRET`          | Conditionally | -                  | Meta app secret required when WhatsApp is enabled              |
-| `ENABLE_YOUTUBE_OAUTH`             | No            | false              | Strict boolean enabling YouTube OAuth production configuration |
-| `GOOGLE_OAUTH_CLIENT_ID`           | Conditionally | -                  | Required when YouTube OAuth is enabled                         |
-| `GOOGLE_OAUTH_CLIENT_SECRET`       | Conditionally | -                  | Required when YouTube OAuth is enabled                         |
-| `YOUTUBE_OAUTH_REDIRECT_URI`       | Conditionally | -                  | Required when YouTube OAuth is enabled                         |
-| `DASHBOARD_APP_URL`                | No            | -                  | Dashboard URL for redirects                                    |
-| `BROWSERBASE_API_KEY`              | No            | -                  | BrowserBase API key                                            |
-| `BROWSERBASE_PROJECT_ID`           | No            | -                  | BrowserBase project ID                                         |
-| `ENABLE_JOBS`                      | No            | true               | Strict boolean enabling jobs; required for Telegram webhook mode or WhatsApp, and requires Redis when true |
-| `ENABLE_DISTRIBUTED_RATE_LIMIT`    | Yes           | true in production | Must be true in production; false is development/test only     |
-| `ERROR_REPORTING_DSN`              | No            | -                  | Optional error-reporting provider DSN                          |
-| `PUBLIC_SUPPORT_EMAIL`             | No            | -                  | Optional valid public support email address                    |
+| Variable                                   | Required      | Default            | Description                                                                                                |
+| ------------------------------------------ | ------------- | ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `AI_PROVIDER`                              | No            | anthropic          | Agent AI provider: `anthropic` or `openai`                                                                 |
+| `AI_API_KEY`                               | No            | -                  | Provider-neutral API key override                                                                          |
+| `AI_BASE_URL`                              | No            | -                  | OpenAI-compatible or Anthropic-compatible provider base URL                                                |
+| `AI_MODEL`                                 | No            | -                  | Default-tier model override                                                                                |
+| `AI_FAST_MODEL`                            | No            | -                  | Fast-tier model override                                                                                   |
+| `ANTHROPIC_API_KEY`                        | Conditionally | -                  | Required for Anthropic unless `AI_API_KEY` is set                                                          |
+| `OPENAI_API_KEY`                           | Conditionally | -                  | Required for OpenAI unless `AI_API_KEY` is set                                                             |
+| `SUPABASE_URL`                             | Yes           | -                  | Supabase project URL                                                                                       |
+| `SUPABASE_SERVICE_KEY`                     | Yes           | -                  | Supabase service role key                                                                                  |
+| `PRIVY_APP_ID`                             | Yes           | -                  | Privy application ID                                                                                       |
+| `PRIVY_APP_SECRET`                         | Yes           | -                  | Privy application secret                                                                                   |
+| `PRIVY_JWT_VERIFICATION_KEY`               | Yes           | -                  | JWT verification key                                                                                       |
+| `MESSAGING_LINK_SECRET`                    | Yes           | -                  | Unique secret used to sign messaging-link tokens                                                           |
+| `PLATFORM_ENCRYPTION_KEY_VERSION`          | Yes           | -                  | Positive integer identifying the active key                                                                |
+| `PLATFORM_ENCRYPTION_KEY_CURRENT`          | Yes           | -                  | Canonical base64 encoding of the active 32-byte key                                                        |
+| `PLATFORM_ENCRYPTION_KEY_PREVIOUS_VERSION` | No            | -                  | Previous integer version, configured only during rotation                                                  |
+| `PLATFORM_ENCRYPTION_KEY_PREVIOUS`         | No            | -                  | Previous 32-byte base64 key retained during rotation                                                       |
+| `REDIS_URL`                                | Yes           | -                  | Mandatory non-loopback Redis service in production                                                         |
+| `PORT`                                     | No            | 3000               | API server port                                                                                            |
+| `NODE_ENV`                                 | No            | development        | Node environment                                                                                           |
+| `TRUSTED_PROXY_HOPS`                       | No            | 0                  | Trusted reverse-proxy hops; integer from 0 through 2                                                       |
+| `ENABLE_TELEGRAM_BOT`                      | No            | true               | Strict boolean master switch for Telegram configuration                                                    |
+| `TELEGRAM_MODE`                            | No            | polling            | Telegram mode: `disabled`, `polling`, or `webhook`                                                         |
+| `TELEGRAM_BOT_TOKEN`                       | Conditionally | -                  | Required when Telegram is enabled and mode is not `disabled`                                               |
+| `TELEGRAM_WEBHOOK_SECRET`                  | Conditionally | -                  | Required when Telegram is enabled in `webhook` mode                                                        |
+| `ENABLE_WHATSAPP`                          | No            | false              | Strict boolean enabling WhatsApp production configuration                                                  |
+| `WHATSAPP_PHONE_NUMBER_ID`                 | Conditionally | -                  | Required when WhatsApp is enabled                                                                          |
+| `WHATSAPP_ACCESS_TOKEN`                    | Conditionally | -                  | Required when WhatsApp is enabled                                                                          |
+| `WHATSAPP_VERIFY_TOKEN`                    | Conditionally | -                  | Unique verify token required when WhatsApp is enabled                                                      |
+| `WHATSAPP_WEBHOOK_SECRET`                  | Conditionally | -                  | Meta app secret required when WhatsApp is enabled                                                          |
+| `ENABLE_YOUTUBE_OAUTH`                     | No            | false              | Strict boolean enabling YouTube OAuth production configuration                                             |
+| `GOOGLE_OAUTH_CLIENT_ID`                   | Conditionally | -                  | Required when YouTube OAuth is enabled                                                                     |
+| `GOOGLE_OAUTH_CLIENT_SECRET`               | Conditionally | -                  | Required when YouTube OAuth is enabled                                                                     |
+| `YOUTUBE_OAUTH_REDIRECT_URI`               | Conditionally | -                  | Required when YouTube OAuth is enabled                                                                     |
+| `DASHBOARD_APP_URL`                        | No            | -                  | Dashboard URL for redirects                                                                                |
+| `BROWSERBASE_API_KEY`                      | No            | -                  | BrowserBase API key                                                                                        |
+| `BROWSERBASE_PROJECT_ID`                   | No            | -                  | BrowserBase project ID                                                                                     |
+| `ENABLE_JOBS`                              | No            | true               | Strict boolean enabling jobs; required for Telegram webhook mode or WhatsApp, and requires Redis when true |
+| `ENABLE_DISTRIBUTED_RATE_LIMIT`            | Yes           | true in production | Must be true in production; false is development/test only                                                 |
+| `ERROR_REPORTING_DSN`                      | No            | -                  | Optional error-reporting provider DSN                                                                      |
+| `PUBLIC_SUPPORT_EMAIL`                     | No            | -                  | Optional valid public support email address                                                                |
 
 ### Dashboard (Vercel)
 
@@ -642,7 +661,7 @@ Before going live:
 ## Support
 
 - **Documentation:** This file + `/docs`
-- **GitHub Issues:** https://github.com/your-org/indyfren/issues
+- **GitHub Issues:** https://github.com/Bolajiking/Indy/issues
 - **Railway Docs:** https://docs.railway.app
 - **Vercel Docs:** https://vercel.com/docs
 
