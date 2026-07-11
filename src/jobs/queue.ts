@@ -78,6 +78,14 @@ export async function processJob(job: {
       await runWeeklyReview(job.data.creatorId);
       return;
     }
+    case "account-deletion": {
+      const { createAccountDeletionProcessor } =
+        await import("./account-deletion.js");
+      await createAccountDeletionProcessor()(
+        job as { data: { creatorId: string } },
+      );
+      return;
+    }
     default:
       log.warn({ jobName: job.name }, "Unknown job type");
   }

@@ -21,6 +21,7 @@ import type {
   ApiRegistrationInput,
   ApiTransaction,
   ApiWalletBalance,
+  ApiAccountDeletionResponse,
 } from "../../../src/api/contracts.js";
 
 export type DashboardDeal = ApiDeal;
@@ -43,6 +44,7 @@ export type DashboardMessagingPlatform = ApiMessagingPlatform;
 export type DashboardConnectionsInfo = ApiConnectionsInfo;
 export type FinancialSnapshot = ApiFinancialSnapshot;
 export type AggregatedAnalytics = ApiAggregatedAnalytics;
+export type DashboardAccountDeletion = ApiAccountDeletionResponse;
 
 const PROXY_BASE = "/api/proxy";
 
@@ -323,6 +325,55 @@ export async function disconnectConnection(
   );
 
   return response.disconnected;
+}
+
+export async function downloadAccountExport(
+  accessToken: string,
+): Promise<Blob> {
+  const response = await fetch(toProxyPath("/api/account/export"), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+    cache: "no-store",
+  });
+  if (!response.ok) await parseProxyResponse<never>(response);
+  return response.blob();
+}
+
+export async function requestAccountDeletion(
+  accessToken: string,
+  confirmation: string,
+): Promise<DashboardAccountDeletion> {
+  return fetchAuthedJson<DashboardAccountDeletion>(
+    "/api/account",
+    accessToken,
+    {
+      method: "DELETE",
+      body: JSON.stringify({ confirmation }),
+    },
+  );
+}
+
+export async function fetchAccountDeletionStatus(
+  receiptToken: string,
+): Promise<DashboardAccountDeletion> {
+  const response = await fetch(toProxyPath("/api/account/deletion/status"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ receiptToken }),
+    cache: "no-store",
+  });
+  return parseProxyResponse<DashboardAccountDeletion>(response);
+}
+
+export async function retryAccountDeletion(
+  receiptToken: string,
+): Promise<DashboardAccountDeletion> {
+  const response = await fetch(toProxyPath("/api/account/deletion/retry"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ receiptToken }),
+    cache: "no-store",
+  });
+  return parseProxyResponse<DashboardAccountDeletion>(response);
 }
 
 export function formatCurrency(amountCents: number): string {

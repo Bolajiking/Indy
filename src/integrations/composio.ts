@@ -303,6 +303,22 @@ export async function disconnectComposioToolkit(
   return removed;
 }
 
+/** Revoke every Composio account belonging to a creator during account cleanup. */
+export async function disconnectAllComposioConnections(
+  userId: string,
+): Promise<number> {
+  if (!isComposioEnabled()) return 0;
+  const client = await getClient();
+  const response = await client.connectedAccounts.list({ userIds: [userId] });
+  let removed = 0;
+  for (const account of response.items) {
+    await client.connectedAccounts.delete(account.id);
+    removed += 1;
+  }
+  invalidateConnectionsCache(userId);
+  return removed;
+}
+
 /* ──────────────────────────────────────────────────────────────────────────
    Action tools — let the agent actually use connected apps (read Gmail, post
    to Slack, …). Exposed to the agent loop as dynamic tools and executed by slug.

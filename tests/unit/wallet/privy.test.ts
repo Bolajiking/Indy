@@ -75,7 +75,23 @@ vi.mock("../../../src/wallet/privy-provisioning.js", () => ({
 }));
 
 import { updateCreator } from "../../../src/db/queries/creators.js";
-import { createWalletForCreator } from "../../../src/wallet/privy.js";
+import {
+  createWalletForCreator,
+  deletePrivyUserWithClient,
+} from "../../../src/wallet/privy.js";
+
+describe("deletePrivyUserWithClient", () => {
+  it("treats an already-deleted Privy user as idempotent", async () => {
+    const users = {
+      delete: vi.fn(async () => {
+        throw Object.assign(new Error("not found"), { status: 404 });
+      }),
+    };
+    await expect(
+      deletePrivyUserWithClient(users, "did:privy:deleted"),
+    ).resolves.toBeUndefined();
+  });
+});
 
 describe("createWalletForCreator", () => {
   beforeEach(() => {

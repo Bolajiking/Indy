@@ -12,6 +12,7 @@ import { reports } from "./api/routes/reports.js";
 import { wallet } from "./api/routes/wallet.js";
 import { messaging } from "./api/routes/messaging.js";
 import { connections } from "./api/routes/connections.js";
+import { account } from "./api/routes/account.js";
 import { createWebhookRoutes } from "./api/routes/webhooks.js";
 import { createHealthRoutes } from "./api/routes/health.js";
 import {
@@ -121,6 +122,7 @@ export async function main() {
   app.route("/api/wallet", wallet);
   app.route("/api/messaging-links", messaging);
   app.route("/api/connections", connections);
+  app.route("/api/account", account);
 
   if (!env.ENABLE_TELEGRAM_BOT || env.TELEGRAM_MODE === "disabled") {
     log.warn("Telegram bot startup is disabled");

@@ -235,6 +235,27 @@ export interface ApiWalletBalance {
   error?: string;
 }
 
+export type ApiAccountDeletionState =
+  | "requested"
+  | "revoking-connections"
+  | "deleting"
+  | "completed"
+  | "retryable-failure";
+
+export interface ApiAccountDeletionInput {
+  confirmation: string;
+}
+
+export interface ApiAccountDeletionResponse {
+  state: ApiAccountDeletionState;
+  residuals: Array<{ kind: string; identifier?: string; detail: string }>;
+  error?: string | null;
+  receiptToken?: string;
+  receiptExpiresAt?: string;
+  /** True only after cleanup completed; then the dashboard purges and logs out. */
+  sessionEnds: boolean;
+}
+
 export interface ApiConnectionAccount {
   toolkit: string;
   status: string;

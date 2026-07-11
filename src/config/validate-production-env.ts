@@ -168,14 +168,11 @@ export function getProductionEnvIssues(
     }
   }
 
-  const webhookDeliveryEnabled =
-    (config.ENABLE_TELEGRAM_BOT && config.TELEGRAM_MODE === "webhook") ||
-    config.ENABLE_WHATSAPP;
-  if (webhookDeliveryEnabled && !config.ENABLE_JOBS) {
+  if (!config.ENABLE_JOBS) {
     issues.push({
       field: "ENABLE_JOBS",
       message:
-        "must be enabled when Telegram webhook mode or WhatsApp webhooks are enabled",
+        "must be enabled for public account deletion and background work",
     });
   }
 

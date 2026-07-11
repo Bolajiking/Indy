@@ -103,6 +103,8 @@ CREATE TABLE IF NOT EXISTS payment_attempts (
   receipt_reference TEXT,
   tx_hash TEXT,
   error TEXT,
+  status_token_hash TEXT NOT NULL,
+  status_token_expires_at TIMESTAMPTZ NOT NULL,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -198,6 +200,20 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   CONSTRAINT webhook_events_delivery_outcome_check CHECK (delivery_outcome IN ('pending', 'confirmed', 'unknown'))
 );
 
+CREATE TABLE IF NOT EXISTS account_deletions (
+  creator_id UUID PRIMARY KEY,
+  privy_user_id TEXT,
+  agent_wallet_id TEXT,
+  wallet_address TEXT,
+  state TEXT NOT NULL DEFAULT 'requested',
+  residuals JSONB NOT NULL DEFAULT '[]',
+  error TEXT,
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  CONSTRAINT account_deletions_state_check CHECK (state IN ('requested', 'revoking-connections', 'deleting', 'completed', 'retryable-failure'))
+);
+
 -- Indexes (IF NOT EXISTS requires Postgres 9.5+)
 CREATE INDEX IF NOT EXISTS idx_creators_telegram_chat_id ON creators(telegram_chat_id);
 CREATE INDEX IF NOT EXISTS idx_creators_whatsapp_phone ON creators(whatsapp_phone);
@@ -219,6 +235,8 @@ CREATE INDEX IF NOT EXISTS idx_skill_outcomes_creator_skill ON skill_outcomes(cr
 CREATE INDEX IF NOT EXISTS idx_skill_outcomes_created_at ON skill_outcomes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_webhook_events_status_created_at ON webhook_events(status, created_at);
 CREATE INDEX IF NOT EXISTS idx_webhook_events_reconciliation ON webhook_events(status, delivery_outcome, delivery_started_at) WHERE status = 'outcome_unknown';
+CREATE INDEX IF NOT EXISTS idx_account_deletions_state_updated_at ON account_deletions(state, updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_deletions_status_token_hash ON account_deletions(status_token_hash);
 CREATE INDEX IF NOT EXISTS idx_agent_actions_expires_at ON agent_actions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_creators_account_status ON creators(account_status);
 
@@ -234,6 +252,7 @@ ALTER TABLE messaging_link_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creator_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE skill_outcomes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE webhook_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE account_deletions ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies: allow service_role full access (backend uses service key)
 -- These are no-ops for service_role but protect against anon-key access.
@@ -325,6 +344,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_webhook_events') THEN
     CREATE POLICY deny_anon_webhook_events ON webhook_events FOR ALL TO anon USING (false);
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'service_role_account_deletions') THEN
+    CREATE POLICY service_role_account_deletions ON account_deletions FOR ALL TO service_role USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_account_deletions') THEN
+    CREATE POLICY deny_anon_account_deletions ON account_deletions FOR ALL TO anon USING (false);
+  END IF;
 END $$;
 
 -- Auto-update updated_at trigger
@@ -349,6 +374,9 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_webhook_events_updated_at') THEN
     CREATE TRIGGER trg_webhook_events_updated_at BEFORE UPDATE ON webhook_events FOR EACH ROW EXECUTE FUNCTION update_updated_at();
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_account_deletions_updated_at') THEN
+    CREATE TRIGGER trg_account_deletions_updated_at BEFORE UPDATE ON account_deletions FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
 END $$;
 
 -- Atomic credit deduction function (prevents race conditions)
@@ -364,7 +392,7 @@ RETURNS TABLE(
 $$ LANGUAGE sql VOLATILE;
 
 -- Snapshot-to-migration handoff. A database installed from this file is current
--- through 0004 and can immediately use db:migrate or db:migrate:check.
+-- through 0005 and can immediately use db:migrate or db:migrate:check.
 CREATE TABLE IF NOT EXISTS schema_migrations (
   version TEXT PRIMARY KEY,
   checksum TEXT NOT NULL,
@@ -375,7 +403,8 @@ INSERT INTO schema_migrations (version, checksum) VALUES
   ('0001', 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94'),
   ('0002', '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906'),
   ('0003', 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad'),
-  ('0004', '7ea646dd9556b30742bcfeafe88375a335f494d72d25a8f819603b2a98ab446d')
+  ('0004', '7ea646dd9556b30742bcfeafe88375a335f494d72d25a8f819603b2a98ab446d'),
+  ('0005', 'e19405cf8e5d4b40f71db732235d89725843e478d42f0477f2831725771fb498')
 ON CONFLICT (version) DO NOTHING;
 
 DO $$
@@ -392,6 +421,8 @@ BEGIN
     (version = '0003' AND checksum <> 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad')
     OR
     (version = '0004' AND checksum <> '7ea646dd9556b30742bcfeafe88375a335f494d72d25a8f819603b2a98ab446d')
+    OR
+    (version = '0005' AND checksum <> 'e19405cf8e5d4b40f71db732235d89725843e478d42f0477f2831725771fb498')
   LIMIT 1;
 
   IF drift_version IS NOT NULL THEN

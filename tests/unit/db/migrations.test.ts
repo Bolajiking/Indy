@@ -29,6 +29,7 @@ describe("database migration files", () => {
       "0002_public_launch_readiness.sql",
       "0003_webhook_delivery_outcomes.sql",
       "0004_approval_expiry.sql",
+      "0005_account_deletions.sql",
     ]);
     expect(new Set(filenames).size).toBe(filenames.length);
     expect(filenames).toEqual([...filenames].sort());
@@ -37,6 +38,18 @@ describe("database migration files", () => {
         (await readFile(resolve(migrationsDirectory, filename), "utf8")).trim(),
       ).not.toBe("");
     }
+  });
+
+  it("persists deletion progress independently and restricts lifecycle access", async () => {
+    const sql = await readFile(
+      resolve(migrationsDirectory, "0005_account_deletions.sql"),
+      "utf8",
+    );
+    expect(sql).toMatch(/CREATE TABLE account_deletions/i);
+    expect(sql).not.toMatch(/REFERENCES creators/i);
+    expect(sql).toMatch(/retryable-failure/i);
+    expect(sql).toMatch(/ENABLE ROW LEVEL SECURITY/i);
+    expect(sql).toMatch(/deny_anon_account_deletions/i);
   });
 
   it("defines the public-launch schema additions and access controls", async () => {
@@ -152,7 +165,7 @@ describe("database migration runner", () => {
     const db = new FakeDatabase();
 
     expect(await runMigrations(db, migrations)).toEqual({
-      applied: ["0001", "0002", "0003", "0004"],
+      applied: ["0001", "0002", "0003", "0004", "0005"],
     });
     expect(db.transactionEvents).toEqual([
       "BEGIN",
@@ -170,6 +183,10 @@ describe("database migration runner", () => {
       "BEGIN",
       migrations[3].sql,
       "INSERT:0004",
+      "COMMIT",
+      "BEGIN",
+      migrations[4].sql,
+      "INSERT:0005",
       "COMMIT",
     ]);
   });
@@ -297,7 +314,7 @@ describe("database migration runner", () => {
 
     expect(
       await runMigrations(db, migrations, { adoptBaseline: true }),
-    ).toEqual({ applied: ["0001", "0002", "0003", "0004"] });
+    ).toEqual({ applied: ["0001", "0002", "0003", "0004", "0005"] });
     expect(db.transactionEvents).toEqual([
       "BEGIN",
       "CATALOG",
@@ -314,6 +331,10 @@ describe("database migration runner", () => {
       "BEGIN",
       migrations[3].sql,
       "INSERT:0004",
+      "COMMIT",
+      "BEGIN",
+      migrations[4].sql,
+      "INSERT:0005",
       "COMMIT",
     ]);
   });

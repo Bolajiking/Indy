@@ -230,6 +230,19 @@ describe("validateProductionEnv", () => {
     ).toThrow(/ENABLE_JOBS/);
   });
 
+  it("requires job workers for public account deletion", () => {
+    expect(() =>
+      validateProductionEnv(
+        productionEnv({
+          ENABLE_TELEGRAM_BOT: false,
+          TELEGRAM_MODE: "disabled",
+          ENABLE_WHATSAPP: false,
+          ENABLE_JOBS: false,
+        }),
+      ),
+    ).toThrow(/ENABLE_JOBS/);
+  });
+
   it("rejects the known development WhatsApp verify token when enabled", () => {
     expect(() =>
       validateProductionEnv(
