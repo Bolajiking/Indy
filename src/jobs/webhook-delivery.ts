@@ -12,6 +12,8 @@ export interface WebhookDeliveryData {
 }
 
 export const WEBHOOK_DELIVERY_TIMEOUT_MS = 30_000;
+export const RETRYABLE_WEBHOOK_FAILURE =
+  "Webhook delivery failed before provider invocation";
 
 /**
  * Provider adapters may throw this only before invoking an outbound provider
@@ -156,11 +158,9 @@ export function createWebhookDeliveryProcessor(
             providerEventId,
             attempt,
             leaseToken,
-            "Webhook delivery failed before provider invocation",
+            RETRYABLE_WEBHOOK_FAILURE,
           );
-          throw new UnrecoverableError(
-            "Webhook delivery failed before provider invocation",
-          );
+          throw new UnrecoverableError(RETRYABLE_WEBHOOK_FAILURE);
         }
 
         await dependencies.releaseForRetry(

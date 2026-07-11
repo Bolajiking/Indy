@@ -22,6 +22,10 @@ import {
 } from "./bot/telegram.js";
 import { env } from "./config/env.js";
 import { validateProductionEnv } from "./config/validate-production-env.js";
+import {
+  createSignalShutdownHandler,
+  RuntimeLifecycle,
+} from "./runtime/shutdown.js";
 
 import "./agent/tools/enrichment.js";
 import "./agent/tools/web-search.js";
@@ -34,7 +38,10 @@ import { loadMCPServers } from "./agent/tools/mcp-adapter.js";
 const log = pino({ name: "indyfren" });
 
 type TelegramMode = "disabled" | "polling" | "webhook";
-type StartableTelegramBot = { start: () => Promise<void> | void };
+type StartableTelegramBot = {
+  start: () => Promise<void> | void;
+  stop?: () => Promise<void> | void;
+};
 
 export function startTelegramMode<T extends StartableTelegramBot>(options: {
   enabled: boolean;
@@ -63,6 +70,7 @@ export function startTelegramMode<T extends StartableTelegramBot>(options: {
 
 export async function main() {
   validateProductionEnv(env);
+  const lifecycle = new RuntimeLifecycle();
 
   // Load MCP tool servers (non-blocking — failures logged, not fatal)
   loadMCPServers().catch((err) =>
@@ -101,6 +109,13 @@ export async function main() {
             await rateLimitStore.ready();
           }
         : undefined,
+      checkQueue: env.ENABLE_JOBS
+        ? async () => {
+            const { checkQueueReadiness } = await import("./jobs/queue.js");
+            await checkQueueReadiness();
+          }
+        : undefined,
+      isShuttingDown: () => lifecycle.isShuttingDown,
     }),
   );
   app.route(
@@ -146,7 +161,7 @@ export async function main() {
     log.warn("Job system startup is disabled via ENABLE_JOBS=false");
   }
 
-  serve(
+  const server = serve(
     {
       fetch: app.fetch,
       port: env.PORT,
@@ -156,7 +171,47 @@ export async function main() {
     },
   );
 
+  lifecycle.register({
+    name: "http-server",
+    close: () =>
+      new Promise<void>((resolve, reject) => {
+        server.close((error) => (error ? reject(error) : resolve()));
+      }),
+  });
+  if (telegramBot?.stop) {
+    lifecycle.register({
+      name: "telegram",
+      close: () => telegramBot.stop?.(),
+    });
+  }
+  if (env.ENABLE_JOBS) {
+    lifecycle.register({
+      name: "job-queue",
+      close: async () => {
+        const { closeQueueResources } = await import("./jobs/queue.js");
+        await closeQueueResources();
+      },
+    });
+  }
+  if (rateLimitStore.close) {
+    lifecycle.register({
+      name: "rate-limit-store",
+      close: () => rateLimitStore.close?.(),
+    });
+  }
+
+  const shutdown = createSignalShutdownHandler({
+    lifecycle,
+    timeoutMs: 30_000,
+    onTimeout: (pending) =>
+      log.error({ pending }, "Graceful shutdown deadline exceeded"),
+    onError: (error) => log.error({ error }, "Graceful shutdown failed"),
+  });
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
+
   log.info("Indyfren is running");
+  return { lifecycle, server };
 }
 
 const isEntrypoint =

@@ -84,4 +84,22 @@ describe("health routes", () => {
       checks: { database: "ok", rateLimit: "ok" },
     });
   });
+
+  it("fails readiness while shutting down without probing dependencies", async () => {
+    const checkDatabase = vi.fn();
+    const checkQueue = vi.fn();
+    const app = createHealthRoutes({
+      checkDatabase,
+      checkQueue,
+      isShuttingDown: () => true,
+    });
+    const response = await app.request("/ready");
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({
+      ready: false,
+      checks: { runtime: "shutting_down" },
+    });
+    expect(checkDatabase).not.toHaveBeenCalled();
+    expect(checkQueue).not.toHaveBeenCalled();
+  });
 });

@@ -1,4 +1,4 @@
-import type { ConnectionOptions } from "bullmq";
+import type { ConnectionOptions, JobsOptions } from "bullmq";
 import { Queue, Worker } from "bullmq";
 import type { Bot } from "grammy";
 import pino from "#logger";
@@ -14,6 +14,15 @@ const log = pino({ name: "jobs:queue" });
 let connection: ConnectionOptions | null = null;
 let agentQueue: Queue | null = null;
 let agentWorker: Worker | null = null;
+
+export const DEFAULT_JOB_OPTIONS: JobsOptions = {
+  attempts: 3,
+  backoff: { type: "exponential", delay: 1_000 },
+  removeOnComplete: { age: 86_400, count: 5_000 },
+  removeOnFail: { age: 604_800, count: 5_000 },
+};
+
+export const WORKER_CONCURRENCY = 5;
 
 function getQueueConnection(): ConnectionOptions {
   if (!connection) {
@@ -39,6 +48,7 @@ export function getAgentQueue(): Queue {
   if (!agentQueue) {
     agentQueue = new Queue("indyfren-agent", {
       connection: getQueueConnection(),
+      defaultJobOptions: DEFAULT_JOB_OPTIONS,
     });
   }
 
@@ -127,7 +137,10 @@ export function startWorkers(
     },
     {
       connection: getQueueConnection(),
-      concurrency: 5,
+      concurrency: WORKER_CONCURRENCY,
+      // Reclaim work after a crashed worker while allowing long provider calls
+      // enough time to renew their lock.
+      lockDuration: 120_000,
     },
   );
 
@@ -175,6 +188,32 @@ export function startWorkers(
   return agentWorker;
 }
 
+export async function checkQueueReadiness(): Promise<void> {
+  await getAgentQueue().waitUntilReady();
+  if (env.ENABLE_JOBS) {
+    if (!agentWorker) throw new Error("Queue worker is not running");
+    await agentWorker.waitUntilReady();
+  }
+}
+
+export async function closeQueueResources(): Promise<void> {
+  const worker = agentWorker;
+  const queue = agentQueue;
+  // Stop consumption before closing the producer connection. Worker.close()
+  // waits for active jobs, bounded by the runtime shutdown deadline.
+  try {
+    if (worker) await worker.close();
+  } finally {
+    try {
+      if (queue) await queue.close();
+    } finally {
+      agentWorker = null;
+      agentQueue = null;
+      connection = null;
+    }
+  }
+}
+
 export async function scheduleRecurringJobs(
   queue: Pick<Queue, "add"> = getAgentQueue(),
 ): Promise<void> {
@@ -184,7 +223,7 @@ export async function scheduleRecurringJobs(
     {
       jobId: "morning-scan-all",
       repeat: { pattern: "0 6 * * *" },
-      removeOnComplete: true,
+      removeOnComplete: DEFAULT_JOB_OPTIONS.removeOnComplete,
     },
   );
 
@@ -194,7 +233,7 @@ export async function scheduleRecurringJobs(
     {
       jobId: "morning-brief-all",
       repeat: { pattern: "0 7 * * *" },
-      removeOnComplete: true,
+      removeOnComplete: DEFAULT_JOB_OPTIONS.removeOnComplete,
     },
   );
 
@@ -204,7 +243,7 @@ export async function scheduleRecurringJobs(
     {
       jobId: "invoice-reminder-all",
       repeat: { pattern: "0 10 * * 1" }, // Mondays at 10am
-      removeOnComplete: true,
+      removeOnComplete: DEFAULT_JOB_OPTIONS.removeOnComplete,
     },
   );
 
@@ -214,7 +253,7 @@ export async function scheduleRecurringJobs(
     {
       jobId: "eod-summary-all",
       repeat: { pattern: "0 18 * * *" }, // Daily at 6pm
-      removeOnComplete: true,
+      removeOnComplete: DEFAULT_JOB_OPTIONS.removeOnComplete,
     },
   );
 
@@ -224,7 +263,7 @@ export async function scheduleRecurringJobs(
     {
       jobId: "weekly-review-all",
       repeat: { pattern: "0 10 * * 0" }, // Sundays at 10am
-      removeOnComplete: true,
+      removeOnComplete: DEFAULT_JOB_OPTIONS.removeOnComplete,
     },
   );
 

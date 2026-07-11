@@ -28,6 +28,7 @@
     "db:migrate:check": "tsx scripts/migrate-db.ts --check",
     "db:migrate:payment-attempts": "tsx scripts/apply-payment-attempts-schema.ts",
     "migrate:platform-secrets": "tsx scripts/migrate-platform-secrets.ts",
+    "jobs:retry-failed": "tsx scripts/retry-failed-jobs.ts",
     "smoke:preflight": "node --import tsx scripts/preflight.ts",
     "smoke:auth": "node --import tsx scripts/smoke-auth.ts",
     "test:mpp": "tsx scripts/test-mpp.ts",

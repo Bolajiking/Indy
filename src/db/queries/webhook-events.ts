@@ -8,6 +8,9 @@ export type WebhookEventStatus =
   | "failed"
   | "outcome_unknown";
 
+export const RETRYABLE_WEBHOOK_FAILURE =
+  "Webhook delivery failed before provider invocation";
+
 export interface ClaimWebhookEventInput {
   provider: WebhookProvider;
   providerEventId: string;
@@ -216,6 +219,32 @@ export async function markWebhookFailed(
     .maybeSingle();
   if (error) throw error;
   if (!data) throw new Error("Webhook delivery lease was not held");
+}
+
+/** Requeue only the terminal failure known to have happened pre-delivery. */
+export async function requeueRetryableWebhookFailure(
+  provider: WebhookProvider,
+  providerEventId: string,
+  client: SupabaseClient = supabase,
+): Promise<void> {
+  const { data, error } = await client
+    .from("webhook_events")
+    .update({
+      status: "queued",
+      delivery_lease_token: null,
+      delivery_started_at: null,
+      delivery_outcome: "pending",
+      error: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("provider", provider)
+    .eq("provider_event_id", providerEventId)
+    .eq("status", "failed")
+    .eq("error", RETRYABLE_WEBHOOK_FAILURE)
+    .select("id")
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error("Webhook failure is not safe to retry");
 }
 
 /**
