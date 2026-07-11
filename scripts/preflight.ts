@@ -46,6 +46,15 @@ function checkValue(name: string, value: string | boolean): CheckResult {
   };
 }
 
+function checkEnabled(name: string, enabled: boolean): CheckResult {
+  return {
+    name,
+    ok: enabled,
+    level: enabled ? "ok" : "fail",
+    detail: enabled ? "enabled" : "disabled",
+  };
+}
+
 function checkGroupedValues(
   label: string,
   fields: Array<{ name: string; value: string }>,
@@ -83,6 +92,8 @@ function checkGroupedValues(
 
 async function main() {
   const supabaseHost = new URL(env.SUPABASE_URL).hostname;
+  const requireLiveProviders =
+    process.env.SMOKE_REQUIRE_LIVE_PROVIDERS?.trim().toLowerCase() === "true";
   const productionIssues = getProductionEnvIssues(env);
   const productionChecks: CheckResult[] =
     productionIssues.length === 0
@@ -107,6 +118,22 @@ async function main() {
     checkValue("SUPABASE_SERVICE_KEY", env.SUPABASE_SERVICE_KEY),
     checkValue("PRIVY_APP_ID", env.PRIVY_APP_ID),
     checkValue("PRIVY_APP_SECRET", env.PRIVY_APP_SECRET),
+    ...(requireLiveProviders
+      ? [
+          checkEnabled("ENABLE_JOBS", env.ENABLE_JOBS),
+          checkEnabled("ENABLE_TELEGRAM_BOT", env.ENABLE_TELEGRAM_BOT),
+          checkEnabled("ENABLE_WHATSAPP", env.ENABLE_WHATSAPP),
+          checkEnabled("ENABLE_YOUTUBE_OAUTH", env.ENABLE_YOUTUBE_OAUTH),
+          checkValue(
+            "MPP_TEST_CREATOR_ID",
+            process.env.MPP_TEST_CREATOR_ID?.trim() ?? "",
+          ),
+          checkValue(
+            "SMOKE_PRIVY_ACCESS_TOKEN",
+            process.env.SMOKE_PRIVY_ACCESS_TOKEN?.trim() ?? "",
+          ),
+        ]
+      : []),
     checkGroupedValues(
       "Dashboard public env",
       [
