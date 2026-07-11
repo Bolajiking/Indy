@@ -18,7 +18,7 @@ import {
   resolveRequestId,
   runWithRequestId,
 } from "../observability/request-context.js";
-import { publicError } from "../observability/errors.js";
+import { publicError, reportError } from "../observability/errors.js";
 import { incrementMetric, observeDuration } from "../observability/metrics.js";
 import createLogger from "../observability/logger.js";
 
@@ -137,6 +137,7 @@ export function createApiServer(options: ApiServerOptions = {}) {
     cors({
       origin: (origin) => (allowedOrigins.has(origin) ? origin : undefined),
       allowHeaders: ["Authorization", "Content-Type"],
+      exposeHeaders: ["X-Request-Id"],
       allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
     }),
@@ -178,6 +179,11 @@ export function createApiServer(options: ApiServerOptions = {}) {
       );
     }
     log.error({ error }, "Unhandled API error");
+    reportError(error, {
+      component: "api",
+      operation: `${context.req.method} ${new URL(context.req.url).pathname}`,
+      requestId,
+    });
     return context.json(
       publicError("INTERNAL_ERROR", "Internal server error", requestId),
       500,
