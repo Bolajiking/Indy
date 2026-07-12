@@ -17,3 +17,5 @@ dashboard/tsconfig.tsbuildinfo
 playwright-report/
 test-results/
 .worktrees/
+.vercel/
+.env*
