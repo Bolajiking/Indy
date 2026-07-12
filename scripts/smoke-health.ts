@@ -54,6 +54,23 @@ async function checkUrl(label: string, url: string): Promise<boolean> {
   return ok;
 }
 
+async function checkReadiness(url: string): Promise<boolean> {
+  const response = await fetch(url, { cache: "no-store" });
+  const body = (await response.json().catch(() => null)) as {
+    ready?: boolean;
+    checks?: Record<string, string>;
+  } | null;
+  const ok =
+    response.ok &&
+    body?.ready === true &&
+    body.checks !== undefined &&
+    Object.values(body.checks).every((status) => status === "ok");
+  console.log(
+    `${ok ? "OK" : "FAIL"}  API readiness: ${url} (${response.status})`,
+  );
+  return ok;
+}
+
 async function runHealthSmoke(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<void> {
@@ -68,7 +85,7 @@ async function runHealthSmoke(
 
   const checks = [
     await checkUrl("API health", config.apiHealthUrl),
-    await checkUrl("API readiness", config.apiReadyUrl),
+    await checkReadiness(config.apiReadyUrl),
   ];
 
   if (config.dashboardUrl) {

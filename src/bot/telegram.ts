@@ -1,7 +1,8 @@
-import pino from "pino";
+import pino from "#logger";
 import { Bot } from "grammy";
 import { env } from "../config/env.js";
 import { getPendingApprovalByAction, markApprovalSkipped } from "./approval.js";
+import { findCreatorByTelegram, type Creator } from "../db/queries/creators.js";
 import { saveCreatorFeedback } from "../agent/os/creator-memory.js";
 import { handleMessage } from "./handler.js";
 import { ipv4Fetch } from "../network/ipv4-fetch.js";
@@ -38,7 +39,54 @@ function parseFeedbackCallbackData(data: string) {
   return { direction, creatorId, skill: skillParts.join(":") };
 }
 
-// Track pending "tell me what was wrong" prompts: chatId → { creatorId, skill }
+export type TelegramApprovalCallbackResolution =
+  | {
+      status: "authorized";
+      approval: NonNullable<
+        Awaited<ReturnType<typeof getPendingApprovalByAction>>
+      >;
+    }
+  | { status: "unauthorized" }
+  | { status: "expired" };
+
+/**
+ * Callback data names an action, but never authenticates its sender. Resolve
+ * the Telegram user first, then compare its linked creator to the action owner.
+ */
+export async function resolveTelegramApprovalCallback(input: {
+  telegramUserId: string;
+  creatorIdHint: string;
+  actionId: string;
+}): Promise<TelegramApprovalCallbackResolution> {
+  const callbackCreator = await findCreatorByTelegram(input.telegramUserId);
+  if (!callbackCreator) return { status: "unauthorized" };
+
+  const approval = await getPendingApprovalByAction(
+    input.creatorIdHint,
+    input.actionId,
+  );
+  if (!approval) return { status: "expired" };
+
+  if (approval.creatorId !== callbackCreator.id) {
+    return { status: "unauthorized" };
+  }
+
+  return { status: "authorized", approval };
+}
+
+async function resolveTelegramFeedbackCreator(input: {
+  telegramUserId: string;
+  creatorIdHint: string;
+}): Promise<Creator | null> {
+  const callbackCreator = await findCreatorByTelegram(input.telegramUserId);
+  if (!callbackCreator || callbackCreator.id !== input.creatorIdHint) {
+    return null;
+  }
+
+  return callbackCreator;
+}
+
+// Track pending "tell me what was wrong" prompts by authenticated Telegram user.
 const pendingFeedbackRequests = new Map<
   string,
   { creatorId: string; skill: string }
@@ -78,12 +126,15 @@ export function createTelegramBot(): Bot {
 
   bot.on("message:text", async (ctx) => {
     const chatId = String(ctx.chat.id);
+    const telegramUserId = ctx.from ? String(ctx.from.id) : "";
     const displayName = ctx.from?.first_name ?? ctx.from?.username ?? "Creator";
 
     // Check if this is a pending feedback clarification
-    const pendingFeedback = pendingFeedbackRequests.get(chatId);
+    const pendingFeedback = telegramUserId
+      ? pendingFeedbackRequests.get(telegramUserId)
+      : undefined;
     if (pendingFeedback) {
-      pendingFeedbackRequests.delete(chatId);
+      pendingFeedbackRequests.delete(telegramUserId);
       const { creatorId, skill } = pendingFeedback;
       await saveCreatorFeedback(
         creatorId,
@@ -121,16 +172,34 @@ export function createTelegramBot(): Bot {
 
   bot.on("callback_query:data", async (ctx) => {
     const data = ctx.callbackQuery.data;
+    const telegramUserId = ctx.from ? String(ctx.from.id) : "";
+
+    if (!telegramUserId) {
+      await ctx.answerCallbackQuery({
+        text: "❌ Unable to verify your account",
+      });
+      return;
+    }
 
     // Handle feedback callbacks
     const feedbackParsed = parseFeedbackCallbackData(data);
     if (feedbackParsed) {
       const { direction, creatorId, skill } = feedbackParsed;
+      const callbackCreator = await resolveTelegramFeedbackCreator({
+        telegramUserId,
+        creatorIdHint: creatorId,
+      });
+      if (!callbackCreator) {
+        await ctx.answerCallbackQuery({
+          text: "❌ This feedback is not yours",
+        });
+        return;
+      }
       const chatId = String(ctx.chat?.id ?? ctx.from?.id);
 
       if (direction === "up") {
         await saveCreatorFeedback(
-          creatorId,
+          callbackCreator.id,
           skill,
           "Creator rated this response positively (👍)",
         ).catch((error) => {
@@ -143,7 +212,10 @@ export function createTelegramBot(): Bot {
         await ctx.editMessageReplyMarkup({ reply_markup: undefined });
       } else {
         // Ask for specifics
-        pendingFeedbackRequests.set(chatId, { creatorId, skill });
+        pendingFeedbackRequests.set(telegramUserId, {
+          creatorId: callbackCreator.id,
+          skill,
+        });
         await ctx.answerCallbackQuery({ text: "Thanks for the feedback" });
         await ctx.editMessageReplyMarkup({ reply_markup: undefined });
         await ctx.reply(
@@ -159,15 +231,21 @@ export function createTelegramBot(): Bot {
       return;
     }
 
-    const approval = await getPendingApprovalByAction(
-      parsed.creatorId,
-      parsed.actionId,
-    );
-    if (!approval) {
+    const resolution = await resolveTelegramApprovalCallback({
+      telegramUserId,
+      creatorIdHint: parsed.creatorId,
+      actionId: parsed.actionId,
+    });
+    if (resolution.status === "unauthorized") {
+      await ctx.answerCallbackQuery({ text: "❌ This action is not yours" });
+      return;
+    }
+    if (resolution.status === "expired") {
       await ctx.answerCallbackQuery({ text: "⏰ Action expired" });
       await ctx.reply("⏰ That action has expired or was already handled.");
       return;
     }
+    const { approval } = resolution;
 
     if (parsed.action === "skip") {
       await markApprovalSkipped(approval.actionId);

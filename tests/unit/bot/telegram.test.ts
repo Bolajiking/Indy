@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../../src/db/queries/agent-actions.js", () => ({
   createPendingAgentAction: vi.fn().mockImplementation(async (input) => ({
     id: input.id,
@@ -12,6 +12,7 @@ vi.mock("../../../src/db/queries/agent-actions.js", () => ({
     requires_approval: true,
     approved_at: null,
     executed_at: null,
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
     created_at: new Date().toISOString(),
   })),
   getAgentActionByIdForCreator: vi
@@ -28,10 +29,17 @@ vi.mock("../../../src/db/queries/agent-actions.js", () => ({
       requires_approval: true,
       approved_at: null,
       executed_at: null,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
       created_at: new Date().toISOString(),
     })),
   listPendingAgentActionsForCreator: vi.fn().mockResolvedValue([]),
   updateAgentActionStatus: vi.fn(),
+  updatePendingAgentActionStatus: vi.fn(),
+  claimPendingAgentActionForCreator: vi.fn(),
+}));
+
+vi.mock("../../../src/db/queries/creators.js", () => ({
+  findCreatorByTelegram: vi.fn(),
 }));
 
 import {
@@ -42,6 +50,9 @@ import {
   getPendingApprovalByAction,
   storePendingApproval,
 } from "../../../src/bot/approval.js";
+import { findCreatorByTelegram } from "../../../src/db/queries/creators.js";
+import { getAgentActionByIdForCreator } from "../../../src/db/queries/agent-actions.js";
+import { resolveTelegramApprovalCallback } from "../../../src/bot/telegram.js";
 
 describe("telegram configuration", () => {
   it("exposes whether telegram is configured", () => {
@@ -50,6 +61,10 @@ describe("telegram configuration", () => {
 });
 
 describe("telegram approval callback payloads", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("uses creator-scoped callback data for approval buttons", async () => {
     const action = await storePendingApproval({
       id: "action-tele",
@@ -65,6 +80,42 @@ describe("telegram approval callback payloads", () => {
     expect(
       (await getPendingApprovalByAction("creator-tele", "action-tele"))?.type,
     ).toBe("generate_pitch");
+  });
+
+  it("rejects a callback from a different Telegram identity even when its payload names the action creator", async () => {
+    vi.mocked(findCreatorByTelegram).mockResolvedValue({
+      id: "creator-b",
+      telegram_chat_id: "222",
+    } as never);
+    vi.mocked(getAgentActionByIdForCreator).mockResolvedValue({
+      id: "action-a",
+      creator_id: "creator-a",
+      action_type: "email_sender",
+      status: "pending",
+      description: "Send a pitch",
+      input: { preview: "Pitch Acme", params: {} },
+      output: null,
+      cost_cents: 0,
+      requires_approval: true,
+      approved_at: null,
+      executed_at: null,
+      expires_at: new Date(Date.now() + 60_000).toISOString(),
+      created_at: new Date().toISOString(),
+    } as never);
+
+    await expect(
+      resolveTelegramApprovalCallback({
+        telegramUserId: "222",
+        creatorIdHint: "creator-a",
+        actionId: "action-a",
+      }),
+    ).resolves.toEqual({ status: "unauthorized" });
+
+    expect(findCreatorByTelegram).toHaveBeenCalledWith("222");
+    expect(getAgentActionByIdForCreator).toHaveBeenCalledWith(
+      "creator-a",
+      "action-a",
+    );
   });
 });
 

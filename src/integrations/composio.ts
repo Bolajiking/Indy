@@ -12,7 +12,8 @@
 
 import { Composio } from "@composio/core";
 import type Anthropic from "@anthropic-ai/sdk";
-import pino from "pino";
+import pino from "#logger";
+import { incrementMetric } from "../observability/metrics.js";
 import { env } from "../config/env.js";
 import { isJsonObject, isRecord, type JsonObject } from "../db/json.js";
 import { serializeToolResult } from "../agent/tool-result.js";
@@ -98,7 +99,7 @@ async function buildClient(): Promise<Composio> {
       const latest = toolkit.meta?.availableVersions?.[0];
       if (latest) toolkitVersions[slug] = latest;
     } catch (error) {
-      log.warn({ error, slug }, "Could not resolve Composio toolkit version");
+      log.warn({ slug }, "Could not resolve Composio toolkit version");
     }
   }
   return new Composio({ apiKey, toolkitVersions });
@@ -149,7 +150,7 @@ export async function getConnectedAppsForContext(
     ].filter((t) => !connected.includes(t));
     return { connected, reconnect };
   } catch (error) {
-    log.warn({ error, userId }, "Failed to load connected apps for context");
+    log.warn({ userId }, "Failed to load connected apps for context");
     return { connected: [], reconnect: [] };
   }
 }
@@ -186,15 +187,12 @@ export async function initiateComposioConnection(
         client.connectedAccounts
           .delete(i.id)
           .catch((error) =>
-            log.warn(
-              { error, slug, id: i.id },
-              "Stale connection cleanup failed",
-            ),
+            log.warn({ slug, id: i.id }, "Stale connection cleanup failed"),
           ),
       ),
     );
   } catch (error) {
-    log.warn({ error, slug }, "Could not enumerate connections for cleanup");
+    log.warn({ slug }, "Could not enumerate connections for cleanup");
   }
 
   // `link` is the current flow for both Composio-managed and custom OAuth
@@ -299,10 +297,26 @@ export async function disconnectComposioToolkit(
       await client.connectedAccounts.delete(account.id);
       removed += 1;
     } catch (error) {
-      log.warn({ error, toolkit, accountId: account.id }, "Disconnect failed");
+      log.warn({ toolkit, accountId: account.id }, "Disconnect failed");
     }
   }
   if (removed > 0) invalidateConnectionsCache(userId);
+  return removed;
+}
+
+/** Revoke every Composio account belonging to a creator during account cleanup. */
+export async function disconnectAllComposioConnections(
+  userId: string,
+): Promise<number> {
+  if (!isComposioEnabled()) return 0;
+  const client = await getClient();
+  const response = await client.connectedAccounts.list({ userIds: [userId] });
+  let removed = 0;
+  for (const account of response.items) {
+    await client.connectedAccounts.delete(account.id);
+    removed += 1;
+  }
+  invalidateConnectionsCache(userId);
   return removed;
 }
 
@@ -421,9 +435,15 @@ function readComposioExecuteResponse(value: unknown): ComposioExecuteResponse {
 // behind approval), so an unrecognised/destructive action never runs silently.
 const READ_VERB =
   /_(GET|FETCH|LIST|SEARCH|READ|RETRIEVE|FIND|COUNT|CHECK|VIEW|STATISTICS|DETAILS|DOWNLOAD|LOAD)/i;
+// Mutation precedence is intentional: compound actions such as
+// GET_OR_CREATE and FIND_OR_UPDATE still change external state and must never
+// become autonomous merely because their slug also contains a read verb.
+const WRITE_VERB =
+  /(?:^|_)(CREATE|SEND|UPDATE|PATCH|DELETE|REMOVE|TRASH|POST|REPLY|DRAFT|UPLOAD|MOVE|SUBSCRIBE|UNSUBSCRIBE|MARK|SET|PUT|WRITE|MODIFY|ARCHIVE|INVITE|PUBLISH)(?:_|$)/i;
 
 /** True if a Composio tool slug mutates the connected account (send/create/…). */
 export function isComposioWriteSlug(slug: string): boolean {
+  if (WRITE_VERB.test(slug)) return true;
   return !READ_VERB.test(slug);
 }
 
@@ -492,7 +512,8 @@ export function selectToolkitTools(
 
 // Result keys that signal something went wrong inside an otherwise-"successful"
 // response — surfaced to the top so the agent can't miss them in a large payload.
-const ISSUE_KEY = /^(error|errors|failed|failure|failures|warning|warnings|rejected|invalid|denied)$/i;
+const ISSUE_KEY =
+  /^(error|errors|failed|failure|failures|warning|warnings|rejected|invalid|denied)$/i;
 const MAX_ISSUES = 5;
 const MAX_ISSUE_CHARS = 160;
 
@@ -512,7 +533,9 @@ function collectResultIssues(
       entry === false ||
       (Array.isArray(entry) && entry.length === 0);
     if (ISSUE_KEY.test(key) && !isEmpty) {
-      found.push(`${entryPath}: ${JSON.stringify(entry).slice(0, MAX_ISSUE_CHARS)}`);
+      found.push(
+        `${entryPath}: ${JSON.stringify(entry).slice(0, MAX_ISSUE_CHARS)}`,
+      );
     } else if (isRecord(entry)) {
       collectResultIssues(entry, entryPath, depth + 1, found);
     } else if (Array.isArray(entry)) {
@@ -536,9 +559,7 @@ export function triageAppToolResult(
   slug: string,
   outcome: { success: boolean; data: unknown },
 ): string {
-  const lines = [
-    `ACTION ${slug}: ${outcome.success ? "completed" : "FAILED"}`,
-  ];
+  const lines = [`ACTION ${slug}: ${outcome.success ? "completed" : "FAILED"}`];
 
   const issues = outcome.success ? collectResultIssues(outcome.data) : [];
   if (issues.length > 0) {
@@ -641,7 +662,10 @@ function buildConnectionsNote(
 // The raw per-toolkit catalog is user-independent and changes rarely — cache it
 // so discovery calls don't refetch 200 schemas from Composio each time.
 const CATALOG_TTL_MS = 10 * 60 * 1000;
-const catalogCache = new Map<string, { at: number; tools: RawComposioTool[] }>();
+const catalogCache = new Map<
+  string,
+  { at: number; tools: RawComposioTool[] }
+>();
 
 async function getToolkitCatalog(toolkit: string): Promise<RawComposioTool[]> {
   const cached = catalogCache.get(toolkit);
@@ -786,7 +810,11 @@ export async function composioLoopTools(
       ...new Set(all.filter((c) => !c.connected).map((c) => c.toolkit)),
     ].filter((t) => !connected.includes(t));
   } catch (error) {
-    log.warn({ error, userId }, "Failed to load Composio connections");
+    incrementMetric("external_provider_health_total", {
+      provider: "composio",
+      outcome: "error",
+    });
+    log.warn({ userId }, "Failed to load Composio connections");
     return {};
   }
 
@@ -824,7 +852,7 @@ export async function composioLoopTools(
       try {
         catalog = await getToolkitCatalog(app);
       } catch (error) {
-        log.warn({ error, app, userId }, "Failed to load toolkit catalog");
+        log.warn({ app, userId }, "Failed to load toolkit catalog");
         return {
           content: `Could not load the ${app} catalog right now — try again.`,
           isError: true,

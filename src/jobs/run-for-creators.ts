@@ -1,4 +1,4 @@
-import type pino from "pino";
+import type { Logger } from "#logger";
 
 /**
  * Shared fan-out for scheduled jobs: run for one creator when an id is given
@@ -9,7 +9,7 @@ export async function runForCreators(
   creatorId: string | undefined,
   listCreators: () => Promise<Array<{ id: string }>>,
   runSingle: (creatorId: string) => Promise<void>,
-  log: pino.Logger,
+  log: Logger,
   failureMessage: string,
 ): Promise<void> {
   if (creatorId) {

@@ -12,6 +12,7 @@ export interface WhatsAppWebhookPayload {
       value?: {
         contacts?: Array<{ profile?: { name?: string } }>;
         messages?: Array<{
+          id?: string;
           from?: string;
           type?: string;
           text?: { body?: string };
@@ -31,10 +32,12 @@ function isWhatsAppWebhookPayload(
 
 export function verifyWhatsAppWebhook(
   query: Record<string, string | undefined>,
+  verifyToken = env.WHATSAPP_VERIFY_TOKEN,
 ): { ok: boolean; challenge?: string } {
   if (
+    verifyToken.length > 0 &&
     query["hub.mode"] === "subscribe" &&
-    query["hub.verify_token"] === env.WHATSAPP_VERIFY_TOKEN
+    query["hub.verify_token"] === verifyToken
   ) {
     return { ok: true, challenge: query["hub.challenge"] ?? "" };
   }
@@ -45,21 +48,27 @@ export function verifyWhatsAppWebhook(
 export function verifyWhatsAppSignature(
   payload: string,
   signature: string | undefined,
+  secret = env.WHATSAPP_WEBHOOK_SECRET,
 ): boolean {
-  if (!env.WHATSAPP_WEBHOOK_SECRET || !signature) {
+  if (!secret || !signature) {
     return false;
   }
 
-  const expected = crypto
-    .createHmac("sha256", env.WHATSAPP_WEBHOOK_SECRET)
-    .update(payload)
-    .digest("hex");
+  const match = /^sha256=([a-fA-F0-9]{64})$/.exec(signature);
+  if (!match) return false;
 
-  return signature === `sha256=${expected}`;
+  const expected = crypto.createHmac("sha256", secret).update(payload).digest();
+  const supplied = Buffer.from(match[1], "hex");
+
+  return (
+    supplied.length === expected.length &&
+    crypto.timingSafeEqual(supplied, expected)
+  );
 }
 
 export async function handleWhatsAppWebhookPayload(
   payload: unknown,
+  providerEventId?: string,
 ): Promise<Array<{ to: string; response: OutgoingMessage }>> {
   if (!isWhatsAppWebhookPayload(payload)) {
     return [];
@@ -79,19 +88,19 @@ export async function handleWhatsAppWebhookPayload(
         continue;
       }
 
-      const message = change.value?.messages?.[0];
-      if (!message?.from || message.type !== "text") {
-        continue;
+      for (const message of change.value?.messages ?? []) {
+        if (providerEventId && message.id !== providerEventId) continue;
+        if (!message.from || message.type !== "text") continue;
+
+        const response = await handleMessage({
+          platform: "whatsapp",
+          platformUserId: message.from,
+          displayName: change.value?.contacts?.[0]?.profile?.name ?? "Creator",
+          text: message.text?.body ?? "",
+        });
+
+        responses.push({ to: message.from, response });
       }
-
-      const response = await handleMessage({
-        platform: "whatsapp",
-        platformUserId: message.from,
-        displayName: change.value?.contacts?.[0]?.profile?.name ?? "Creator",
-        text: message.text?.body ?? "",
-      });
-
-      responses.push({ to: message.from, response });
     }
   }
 

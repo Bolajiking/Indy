@@ -35,20 +35,14 @@ Authorization: Bearer <privy_access_token>
 
 ### GET /health
 
-Check API health and dependency status.
+Cheap process liveness check. This endpoint does not probe external dependencies.
 
 **Response:** `200 OK`
 
 ```json
 {
   "status": "ok",
-  "timestamp": "2026-03-20T12:00:00.000Z",
-  "uptime": 3600,
-  "dependencies": {
-    "database": "ok",
-    "redis": "ok",
-    "anthropic": "ok"
-  }
+  "timestamp": "2026-07-03T12:00:00.000Z"
 }
 ```
 
@@ -60,9 +54,15 @@ Readiness probe for deployment health checks.
 
 ```json
 {
-  "ready": true
+  "ready": true,
+  "checks": {
+    "database": "ok",
+    "rateLimit": "ok"
+  }
 }
 ```
+
+When a dependency is unavailable, the endpoint returns `503` with `ready: false` and that check set to `"unreachable"`.
 
 ---
 
@@ -548,21 +548,35 @@ Get upcoming deadlines and scheduled tasks.
 
 ### POST /webhooks/telegram
 
-Telegram bot webhook endpoint.
+Telegram bot webhook endpoint. It is active only when `TELEGRAM_MODE=webhook`
+and `ENABLE_JOBS=true`; startup verifies the worker can reach Redis before the
+ingress binds. Polling and disabled modes return `404`.
+The configured secret must be a random 32-256 character value containing only
+letters, numbers, underscores, and hyphens. Generate one with
+`openssl rand -hex 32`.
 
 **Setup:**
 
 ```bash
-curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook?url=https://your-api.railway.app/webhooks/telegram"
+curl --request POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
+  --form-string "url=https://your-api.railway.app/webhooks/telegram" \
+  --form-string "secret_token=${TELEGRAM_WEBHOOK_SECRET}"
 ```
 
-**Request:** Telegram webhook payload (automatically sent by Telegram)
+Pass the secret as Telegram's `secret_token` field, never as part of the webhook
+URL. Telegram then supplies it in the
+`X-Telegram-Bot-Api-Secret-Token` header on each delivery.
 
-**Response:** `200 OK`
+**Request:** Telegram webhook payload with the
+`X-Telegram-Bot-Api-Secret-Token` header (automatically sent by Telegram)
+
+**Response:** `202 Accepted` after a durable receipt is queued. An ambiguous
+external delivery is held for reconciliation rather than retried automatically.
 
 ### GET /webhooks/whatsapp
 
-WhatsApp webhook verification.
+WhatsApp webhook verification. This endpoint returns `404` unless
+`ENABLE_WHATSAPP=true` (which also requires `ENABLE_JOBS=true`).
 
 **Query Parameters:**
 
@@ -574,7 +588,8 @@ WhatsApp webhook verification.
 
 ### POST /webhooks/whatsapp
 
-WhatsApp message webhook.
+WhatsApp message webhook. This endpoint returns `404` unless
+`ENABLE_WHATSAPP=true`.
 
 **Headers:**
 
@@ -582,7 +597,8 @@ WhatsApp message webhook.
 
 **Request:** WhatsApp webhook payload
 
-**Response:** `200 OK`
+**Response:** `202 Accepted` after a durable receipt is queued. An ambiguous
+external delivery is held for reconciliation rather than retried automatically.
 
 ---
 
@@ -681,7 +697,10 @@ Link: </api/deals?limit=50&offset=50>; rel="next"
 
 ### Telegram
 
-Telegram webhooks are verified automatically by the grammY framework.
+Telegram webhook authentication is application-managed, not automatically
+verified by grammY. Indyfren compares the configured secret with the
+`X-Telegram-Bot-Api-Secret-Token` header using an equal-length, timing-safe
+comparison before checking bot availability or processing the update.
 
 ### WhatsApp
 
@@ -748,7 +767,7 @@ curl -H "Authorization: Bearer <token>" \
 ## Support
 
 - **Documentation:** https://docs.indyfren.xyz
-- **Email:** support@indyfren.xyz
+- **Email:** support@chainfren.com
 - **GitHub:** https://github.com/indyfren/indyfren
 
 ---

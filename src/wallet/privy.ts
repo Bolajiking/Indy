@@ -5,7 +5,7 @@ import { env } from "../config/env.js";
 import { updateCreator } from "../db/queries/creators.js";
 import { supabase } from "../db/client.js";
 import type { JsonObject } from "../db/json.js";
-import pino from "pino";
+import pino from "#logger";
 import { ipv4Fetch } from "../network/ipv4-fetch.js";
 import {
   buildAgentWalletCreateParams,
@@ -21,6 +21,28 @@ const privy = new PrivyClient({
   jwtVerificationKey: env.PRIVY_JWT_VERIFICATION_KEY || undefined,
   fetch: ipv4Fetch,
 });
+
+/**
+ * Permanently delete a Privy user. Privy disassociates/archives embedded
+ * wallets; it does not delete them. The policy-backed agent wallet is not user
+ * owned and the current SDK exposes no wallet deletion method.
+ */
+export async function deletePrivyUser(privyUserId: string): Promise<void> {
+  await deletePrivyUserWithClient(privy.users(), privyUserId);
+}
+
+export async function deletePrivyUserWithClient(
+  users: { delete: (userId: string) => Promise<unknown> },
+  privyUserId: string,
+): Promise<void> {
+  try {
+    await users.delete(privyUserId);
+  } catch (error) {
+    const status = (error as { status?: unknown }).status;
+    if (status === 404) return;
+    throw error;
+  }
+}
 
 interface ProvisioningCreatorRecord extends ProvisioningCreatorIdentity {
   wallet_id: string | null;

@@ -6,7 +6,7 @@ import {
   getCreatorByPrivyUserId,
   updateCreator,
 } from "../../db/queries/creators.js";
-import pino from "pino";
+import pino from "#logger";
 import { getAuthContext, requirePrivyAuth } from "../middleware/auth.js";
 import {
   CREATOR_SERVICE_UNAVAILABLE_MESSAGE,
@@ -254,7 +254,12 @@ auth.patch("/me", async (c) => {
       onboarding: getOnboardingState(updatedCreator),
     } satisfies ApiAuthProfileResponse);
   } catch (err: unknown) {
-    return handleAuthRouteError(c, err, "Creator update failed", "Update failed");
+    return handleAuthRouteError(
+      c,
+      err,
+      "Creator update failed",
+      "Update failed",
+    );
   }
 });
 

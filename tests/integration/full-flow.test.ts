@@ -57,7 +57,7 @@ vi.mock("../../src/bot/approval.js", () => {
       (creatorId: string) => store.get(creatorId) ?? [],
     ),
     getPendingApprovalByAction: vi.fn(),
-    markApprovalApproved: vi.fn(),
+    claimPendingApproval: vi.fn(),
     markApprovalSkipped: vi.fn(),
   };
 });

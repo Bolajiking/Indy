@@ -18,20 +18,35 @@ import {
   readRecentConnectionSuccess,
   resolveConnectionCardState,
   writePendingConnectionToolkit,
+  type ConnectionAccountLike,
 } from "@/lib/connection-success";
 import {
   createMessagingLink,
+  downloadAccountExport,
   disconnectConnection,
   fetchConnectionsInfo,
   fetchDeals,
   fetchTransactions,
   initiateConnection,
+  requestAccountDeletion,
+  fetchAccountDeletionStatus,
+  retryAccountDeletion,
+  type DashboardAccountDeletion,
   type DashboardConnectionsInfo,
   type DashboardMessagingLink,
   type DashboardMessagingPlatform,
 } from "@/lib/api";
+import {
+  ACCOUNT_DELETE_CONFIRMATION,
+  canSubmitAccountDeletion,
+  clearAccountDeletionReceipt,
+  purgeAccountBrowserState,
+  readAccountDeletionReceipt,
+  writeAccountDeletionReceipt,
+} from "@/lib/account-settings";
 import { useAuthedQuery } from "@/lib/use-authed-query";
 import { useAuth } from "@/lib/auth-context";
+import { publicSupportEmail } from "@/lib/public-config";
 
 const NAV: Array<{
   k?: SettingsPane;
@@ -73,14 +88,65 @@ function SecLabel({ children }: { children: React.ReactNode }) {
 
 /* ───────── Account ───────── */
 function PaneAccount() {
-  const { creator, user, updateProfile, syncing } = useAuth();
+  const { creator, user, accessToken, updateProfile, syncing, logout } =
+    useAuth();
   const [name, setName] = useState(creator?.display_name ?? "");
   const [niche, setNiche] = useState(creator?.niche ?? "");
   const [msg, setMsg] = useState<string | null>(null);
+  const [deletePhrase, setDeletePhrase] = useState("");
+  const [accountBusy, setAccountBusy] = useState<"export" | "delete" | null>(
+    null,
+  );
+  const [showDelete, setShowDelete] = useState(false);
+  const [deletionReceipt, setDeletionReceipt] = useState<{
+    token: string;
+    expiresAt: string;
+  } | null>(null);
+  const [deletionStatus, setDeletionStatus] =
+    useState<DashboardAccountDeletion | null>(null);
   useEffect(() => {
     setName(creator?.display_name ?? "");
     setNiche(creator?.niche ?? "");
   }, [creator?.display_name, creator?.niche]);
+  useEffect(() => setDeletionReceipt(readAccountDeletionReceipt()), []);
+  useEffect(() => {
+    if (!deletionReceipt) return;
+    let cancelled = false;
+    let timer: number | null = null;
+    const poll = async () => {
+      try {
+        const status = await fetchAccountDeletionStatus(deletionReceipt.token);
+        if (cancelled) return;
+        setDeletionStatus(status);
+        setMsg(
+          status.state === "retryable-failure"
+            ? "Cleanup paused and can be retried."
+            : status.state === "completed"
+              ? "Deletion completed. Signing out…"
+              : `Deletion progress: ${status.state.replaceAll("-", " ")}…`,
+        );
+        if (status.sessionEnds) {
+          if (timer !== null) window.clearInterval(timer);
+          clearAccountDeletionReceipt();
+          purgeAccountBrowserState();
+          await logout();
+        }
+      } catch (error) {
+        if (!cancelled)
+          setMsg(
+            error instanceof Error
+              ? error.message
+              : "Couldn't check deletion progress.",
+          );
+      }
+    };
+    void poll();
+    timer = window.setInterval(() => void poll(), 2_000);
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [deletionReceipt, logout]);
   const email =
     (user as { email?: { address?: string } } | null)?.email?.address ?? "—";
 
@@ -94,6 +160,73 @@ function PaneAccount() {
       setMsg("Saved.");
     } catch {
       setMsg("Couldn't save.");
+    }
+  }
+  async function downloadData() {
+    if (!accessToken) return;
+    setAccountBusy("export");
+    setMsg(null);
+    try {
+      const blob = await downloadAccountExport(accessToken);
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `indyfren-export-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setMsg("Your export has downloaded.");
+    } catch (error) {
+      setMsg(
+        error instanceof Error ? error.message : "Couldn't download your data.",
+      );
+    } finally {
+      setAccountBusy(null);
+    }
+  }
+
+  async function deleteAccount() {
+    if (!accessToken || !canSubmitAccountDeletion(deletePhrase)) return;
+    setAccountBusy("delete");
+    setMsg("Requesting deletion…");
+    try {
+      const result = await requestAccountDeletion(accessToken, deletePhrase);
+      if (result.receiptToken && result.receiptExpiresAt) {
+        const receipt = {
+          token: result.receiptToken,
+          expiresAt: result.receiptExpiresAt,
+        };
+        writeAccountDeletionReceipt(receipt.token, receipt.expiresAt);
+        setDeletionReceipt(receipt);
+        setDeletionStatus(result);
+        setMsg(
+          "Deletion requested. Keep this page open while cleanup completes.",
+        );
+        setAccountBusy(null);
+      }
+    } catch (error) {
+      setMsg(
+        error instanceof Error
+          ? `${error.message} Retry here or contact ${publicSupportEmail}.`
+          : `Deletion couldn't start. Retry or contact ${publicSupportEmail}.`,
+      );
+      setAccountBusy(null);
+    }
+  }
+  async function retryDeletion() {
+    if (!deletionReceipt) return;
+    setAccountBusy("delete");
+    try {
+      const status = await retryAccountDeletion(deletionReceipt.token);
+      setDeletionStatus(status);
+      setMsg("Cleanup retry started.");
+    } catch (error) {
+      setMsg(
+        error instanceof Error
+          ? `${error.message} Contact ${publicSupportEmail}.`
+          : `Retry failed. Contact ${publicSupportEmail}.`,
+      );
+    } finally {
+      setAccountBusy(null);
     }
   }
   return (
@@ -183,6 +316,86 @@ function PaneAccount() {
           <span style={{ color: "rgb(var(--ink) / 0.6)" }}>Active · Free</span>
         </div>
       </div>
+      <SecLabel>Your data</SecLabel>
+      <p style={{ fontSize: 13, color: "rgb(var(--ink) / 0.56)" }}>
+        Download a JSON copy of your profile, deals, activity, messages, and
+        connection metadata.
+      </p>
+      <button
+        className="dark-pill"
+        disabled={!accessToken || accountBusy !== null}
+        onClick={() => void downloadData()}
+      >
+        {accountBusy === "export" ? "Preparing…" : "Download my data"}
+      </button>
+      <SecLabel>Danger zone</SecLabel>
+      {deletionStatus?.state === "retryable-failure" && (
+        <button
+          className="dark-pill"
+          onClick={() => void retryDeletion()}
+          disabled={accountBusy !== null}
+        >
+          Retry account cleanup
+        </button>
+      )}
+      {!showDelete ? (
+        <button
+          className="dark-pill"
+          style={{ color: "var(--cf-coral)" }}
+          onClick={() => setShowDelete(true)}
+        >
+          Delete account
+        </button>
+      ) : (
+        <div
+          role="group"
+          aria-labelledby="delete-account-heading"
+          className="field-group"
+          style={{ padding: 16 }}
+        >
+          <strong id="delete-account-heading">
+            Permanently delete this account
+          </strong>
+          <p style={{ fontSize: 13, lineHeight: 1.5 }}>
+            This removes Indyfren data and revokes connections. Public
+            blockchain history remains, and Privy archives/disassociates
+            embedded wallets. Type{" "}
+            <strong>{ACCOUNT_DELETE_CONFIRMATION}</strong> exactly.
+          </p>
+          <label htmlFor="delete-account-confirmation" style={{ fontSize: 13 }}>
+            Confirmation phrase
+          </label>
+          <input
+            id="delete-account-confirmation"
+            aria-describedby="delete-account-help"
+            value={deletePhrase}
+            onChange={(event) => setDeletePhrase(event.target.value)}
+          />
+          <span id="delete-account-help" style={{ fontSize: 12 }}>
+            If cleanup cannot start, you can retry here or email
+            {publicSupportEmail}.
+          </span>
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button
+              className="dark-pill"
+              onClick={() => setShowDelete(false)}
+              disabled={accountBusy === "delete"}
+            >
+              Cancel
+            </button>
+            <button
+              className="dark-pill dark-pill--solid"
+              style={{ background: "var(--cf-coral)" }}
+              disabled={
+                !canSubmitAccountDeletion(deletePhrase) || accountBusy !== null
+              }
+              onClick={() => void deleteAccount()}
+            >
+              {accountBusy === "delete" ? "Deleting…" : "Delete permanently"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -247,8 +460,8 @@ function PaneSubscription() {
       <p
         style={{ fontSize: 13, color: "rgb(var(--ink) / 0.5)", marginTop: 16 }}
       >
-        Pro — unlimited runs, deeper analytics, and first access to new skills
-        — is coming soon.
+        Pro — unlimited runs, deeper analytics, and first access to new skills —
+        is coming soon.
       </p>
     </div>
   );
@@ -332,7 +545,7 @@ function PaneConnections() {
     if (
       recentSuccessToolkit &&
       data.accounts.some(
-        (account) =>
+        (account: ConnectionAccountLike) =>
           account.toolkit.toLowerCase() === recentSuccessToolkit &&
           account.connected,
       )
@@ -399,7 +612,7 @@ function PaneConnections() {
         </p>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
-          {data.toolkits.map((slug) => {
+          {data.toolkits.map((slug: string) => {
             const state = resolveConnectionCardState(
               slug,
               data.accounts,

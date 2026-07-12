@@ -297,8 +297,9 @@ describe("Database Queries", () => {
         expect.objectContaining({
           creator_id: "creator123",
           platform: "youtube",
-          access_token: expect.stringMatching(/^v1:/),
-          refresh_token: expect.stringMatching(/^v1:/),
+          access_token: expect.stringMatching(/^v2:2:/),
+          refresh_token: expect.stringMatching(/^v2:2:/),
+          key_version: 2,
         }),
         { onConflict: "creator_id,platform" },
       );

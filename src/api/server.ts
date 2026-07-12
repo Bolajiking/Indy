@@ -1,7 +1,28 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { logger } from "hono/logger";
 import { HTTPException } from "hono/http-exception";
+import type { Context } from "hono";
+import { getConnInfo } from "@hono/node-server/conninfo";
+import {
+  InMemoryRateLimitStore,
+  type RateLimitStore,
+} from "./rate-limit-store.js";
+import {
+  anonymousPolicyFor,
+  createBoundedFallbackStore,
+  createRateLimitMiddleware,
+  resolveNetworkIdentity,
+  type RateLimitPolicy,
+} from "./middleware/rate-limit.js";
+import {
+  resolveRequestId,
+  runWithRequestId,
+} from "../observability/request-context.js";
+import { publicError, reportError } from "../observability/errors.js";
+import { incrementMetric, observeDuration } from "../observability/metrics.js";
+import createLogger from "../observability/logger.js";
+
+const log = createLogger({ name: "api:server" });
 
 interface RateLimitOptions {
   windowMs: number;
@@ -12,14 +33,13 @@ interface ApiServerOptions {
   allowedOrigins?: string[];
   maxBodyBytes?: number;
   rateLimit?: RateLimitOptions;
+  rateLimitStore?: RateLimitStore;
+  anonymousPolicy?: RateLimitPolicy;
+  trustedProxyHops?: number;
+  getSocketAddress?: (context: Context) => string | undefined;
 }
 
 const DEFAULT_MAX_BODY_BYTES = 1_000_000;
-const DEFAULT_RATE_LIMIT: RateLimitOptions = {
-  windowMs: 60_000,
-  maxRequests: 120,
-};
-
 function getDefaultAllowedOrigins(): string[] {
   return [
     "http://localhost:3001",
@@ -30,12 +50,12 @@ function getDefaultAllowedOrigins(): string[] {
   ].filter((origin): origin is string => Boolean(origin));
 }
 
-function getClientKey(request: Request): string {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "local"
-  );
+function getNodeSocketAddress(context: Context): string | undefined {
+  try {
+    return getConnInfo(context).remote.address;
+  } catch {
+    return undefined;
+  }
 }
 
 export function createApiServer(options: ApiServerOptions = {}) {
@@ -44,15 +64,80 @@ export function createApiServer(options: ApiServerOptions = {}) {
     options.allowedOrigins ?? getDefaultAllowedOrigins(),
   );
   const maxBodyBytes = options.maxBodyBytes ?? DEFAULT_MAX_BODY_BYTES;
-  const rateLimit = options.rateLimit ?? DEFAULT_RATE_LIMIT;
-  const requestBuckets = new Map<string, { count: number; resetAt: number }>();
+  const rateLimitStore = options.rateLimitStore ?? new InMemoryRateLimitStore();
+  const anonymousPolicy =
+    options.anonymousPolicy ??
+    (options.rateLimit
+      ? {
+          name: "anonymous",
+          limit: options.rateLimit.maxRequests,
+          windowMs: options.rateLimit.windowMs,
+          failClosed: true,
+        }
+      : undefined);
+  const getSocketAddress = options.getSocketAddress ?? getNodeSocketAddress;
+  const trustedProxyHops = options.trustedProxyHops ?? 0;
+  const fallbackStore = createBoundedFallbackStore();
 
-  app.use("*", logger());
+  app.use("*", async (context, next) => {
+    const requestId = resolveRequestId(context.req.header("X-Request-Id"));
+    const startedAt = performance.now();
+    context.header("X-Request-Id", requestId);
+    await runWithRequestId(requestId, async () => {
+      try {
+        await next();
+        if (
+          context.res.status >= 400 &&
+          context.res.headers.get("Content-Type")?.includes("application/json")
+        ) {
+          const body: unknown = await context.res
+            .clone()
+            .json()
+            .catch(() => null);
+          if (
+            body &&
+            typeof body === "object" &&
+            typeof (body as { error?: unknown }).error === "string"
+          ) {
+            const legacy = body as Record<string, unknown> & { error: string };
+            const { error: legacyMessage, ...legacyMetadata } = legacy;
+            const headers = new Headers(context.res.headers);
+            headers.set("X-Request-Id", requestId);
+            context.res = new Response(
+              JSON.stringify({
+                ...legacyMetadata,
+                ...publicError(
+                  `HTTP_${context.res.status}`,
+                  legacyMessage,
+                  requestId,
+                ),
+              }),
+              { status: context.res.status, headers },
+            );
+          }
+        }
+      } finally {
+        observeDuration(
+          "http_request_duration_ms",
+          performance.now() - startedAt,
+          {
+            method: context.req.method,
+            status: context.res.status,
+          },
+        );
+        incrementMetric("http_requests_total", {
+          method: context.req.method,
+          status: context.res.status,
+        });
+      }
+    });
+  });
   app.use(
     "*",
     cors({
       origin: (origin) => (allowedOrigins.has(origin) ? origin : undefined),
-      allowHeaders: ["Authorization", "Content-Type"],
+      allowHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
+      exposeHeaders: ["X-Request-Id"],
       allowMethods: ["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
       credentials: true,
     }),
@@ -64,27 +149,46 @@ export function createApiServer(options: ApiServerOptions = {}) {
       return context.json({ error: "Request body too large" }, 413);
     }
 
-    const now = Date.now();
-    const key = getClientKey(context.req.raw);
-    const bucket = requestBuckets.get(key);
-    if (!bucket || bucket.resetAt <= now) {
-      requestBuckets.set(key, { count: 1, resetAt: now + rateLimit.windowMs });
-    } else {
-      bucket.count += 1;
-      if (bucket.count > rateLimit.maxRequests) {
-        return context.json({ error: "Too many requests" }, 429);
-      }
-    }
-
     await next();
   });
+  app.use(
+    "*",
+    createRateLimitMiddleware({
+      store: rateLimitStore,
+      fallbackStore,
+      policy: anonymousPolicy ?? anonymousPolicyFor,
+      key: (context) =>
+        `ip:${resolveNetworkIdentity({
+          socketAddress: getSocketAddress(context),
+          forwardedFor: context.req.header("x-forwarded-for"),
+          trustedProxyHops,
+        })}`,
+    }),
+  );
 
   app.onError((error, context) => {
+    const requestId = resolveRequestId(context.res.headers.get("X-Request-Id"));
+    incrementMetric("http_errors_total", {
+      status: error instanceof HTTPException ? error.status : 500,
+    });
     if (error instanceof HTTPException) {
-      return context.json({ error: error.message }, error.status);
+      return context.json(
+        publicError(`HTTP_${error.status}`, error.message, requestId),
+        error.status,
+        { "X-Request-Id": requestId },
+      );
     }
-
-    return context.json({ error: "Internal server error" }, 500);
+    log.error({ error }, "Unhandled API error");
+    reportError(error, {
+      component: "api",
+      operation: `${context.req.method} ${new URL(context.req.url).pathname}`,
+      requestId,
+    });
+    return context.json(
+      publicError("INTERNAL_ERROR", "Internal server error", requestId),
+      500,
+      { "X-Request-Id": requestId },
+    );
   });
 
   app.get("/health", (context) =>

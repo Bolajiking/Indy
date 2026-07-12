@@ -14,7 +14,7 @@ import { resolveWalletForCreator } from "../wallet/privy.js";
 import { getCreatorById, deductCredits } from "../db/queries/creators.js";
 import { maybeSendLowCreditAlert } from "../messaging/notify.js";
 import { runAgentLoop } from "./loop.js";
-import pino from "pino";
+import pino from "#logger";
 
 import "./tools/enrichment.js";
 import "./tools/web-search.js";
@@ -116,7 +116,7 @@ export async function runAgent(
   if (creator && creator.free_credits_remaining_cents <= 0) {
     log.warn({ creatorId }, "Creator has no credits remaining");
     return {
-      text: "You've used all your free credits, so I held off on paid work. Add USDC on the dashboard Wallet page and I'll pick this right back up. Meanwhile everything free still works — try \"show my deals\", \"calendar\", \"finances\", or \"content plan\" and I'll run them now.",
+      text: 'You\'ve used all your free credits, so I held off on paid work. Add USDC on the dashboard Wallet page and I\'ll pick this right back up. Meanwhile everything free still works — try "show my deals", "calendar", "finances", or "content plan" and I\'ll run them now.',
       requiresApproval: false,
     };
   }

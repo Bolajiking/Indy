@@ -71,7 +71,7 @@ For early beta users:
 
 1. Share your wallet address with the Indyfren team
 2. We'll send you testnet pathUSD to get started
-3. Contact: support@indyfren.xyz (or your onboarding contact)
+3. Contact: support@chainfren.com (or your onboarding contact)
 
 ## Recommended Funding Amounts
 
@@ -188,7 +188,7 @@ npm run db:migrate:payment-attempts
 
 Need help with wallet funding?
 
-- 📧 Email: support@indyfren.xyz
+- 📧 Email: support@chainfren.com
 - 💬 Telegram: @indyfren_support
 - 📖 Docs: https://docs.indyfren.xyz/wallet
 

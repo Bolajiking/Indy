@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { env } from "../config/env.js";
 import type { OutgoingMessage } from "./messages.js";
 

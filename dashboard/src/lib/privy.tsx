@@ -1,6 +1,7 @@
 "use client";
 
 import { PrivyProvider, usePrivy } from "@privy-io/react-auth";
+import type { User } from "@privy-io/react-auth";
 import {
   useCallback,
   startTransition,
@@ -33,6 +34,7 @@ import {
   type AuthContextValue,
 } from "@/lib/auth-context";
 import { invalidateAuthedQueryCache } from "@/lib/use-authed-query";
+import { purgeAccountBrowserState } from "@/lib/account-settings";
 
 // Per-user cached auth profile so a returning user's creator, wallet, and
 // onboarding state hydrate instantly on login (stale-while-revalidate) instead
@@ -85,6 +87,7 @@ function writeCachedProfile(
 // plus the in-memory cache. Non-scoped prefs like the theme are intentionally kept.
 function purgeScopedCaches() {
   invalidateAuthedQueryCache();
+  purgeAccountBrowserState();
   try {
     for (let i = sessionStorage.length - 1; i >= 0; i--) {
       const key = sessionStorage.key(i);
@@ -129,6 +132,86 @@ function MissingPrivyConfigProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+function E2EAuthProvider({ children }: { children: ReactNode }) {
+  const initialUnregistered =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("e2eStage") ===
+      "unregistered";
+  const [creator, setCreator] = useState<DashboardCreator | null>(
+    initialUnregistered
+      ? null
+      : {
+          id: "creator-e2e",
+          display_name: "E2E Creator",
+          niche: "technology",
+          wallet_id: "wallet-e2e",
+          wallet_address: "0x1111111111111111111111111111111111111111",
+          privy_user_id: "did:privy:e2e",
+          telegram_chat_id: null,
+          whatsapp_phone: null,
+          settings: {},
+        },
+  );
+  const [onboarding, setOnboarding] = useState<DashboardOnboardingState>(
+    initialUnregistered
+      ? defaultOnboarding
+      : {
+          status: "complete",
+          walletProvisioned: true,
+          onboardingComplete: true,
+        },
+  );
+  const value = useMemo<AuthContextValue>(
+    () => ({
+      ready: true,
+      authenticated: true,
+      user: { id: "did:privy:e2e" } as User,
+      accessToken: "e2e-local-token",
+      creator,
+      onboarding,
+      stage: creator ? "active" : "unregistered",
+      error: null,
+      syncing: false,
+      login: async () => {},
+      logout: async () => {},
+      refreshProfile: async () => {},
+      register: async (input) => {
+        setCreator({
+          id: "creator-e2e",
+          display_name: input.displayName,
+          niche: input.niche ?? null,
+          wallet_id: "wallet-e2e",
+          wallet_address: "0x1111111111111111111111111111111111111111",
+          privy_user_id: "did:privy:e2e",
+          telegram_chat_id: null,
+          whatsapp_phone: null,
+          settings: {},
+        });
+        setOnboarding({
+          status: "complete",
+          walletProvisioned: true,
+          onboardingComplete: true,
+        });
+      },
+      updateProfile: async (input) => {
+        setCreator((current) =>
+          current
+            ? {
+                ...current,
+                display_name: input.displayName ?? current.display_name,
+                niche: input.niche ?? current.niche,
+                settings: input.settings ?? current.settings,
+              }
+            : current,
+        );
+      },
+      retryWalletProvisioning: async () => {},
+    }),
+    [creator, onboarding],
+  );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
@@ -373,6 +456,12 @@ function AuthBridge({ children }: { children: ReactNode }) {
     }
   }, [login, ready]);
 
+  const safeLogout = useCallback(async () => {
+    purgeScopedCaches();
+    await logout();
+    purgeScopedCaches();
+  }, [logout]);
+
   const stage = resolveDashboardAuthStage({
     ready,
     authenticated,
@@ -393,7 +482,7 @@ function AuthBridge({ children }: { children: ReactNode }) {
       error,
       syncing,
       login: openLogin,
-      logout,
+      logout: safeLogout,
       refreshProfile: async () => {
         lastSyncedUserIdRef.current = null;
         await syncSession();
@@ -414,7 +503,7 @@ function AuthBridge({ children }: { children: ReactNode }) {
       creator,
       error,
       login,
-      logout,
+      safeLogout,
       onboarding,
       openLogin,
       patchProfile,
@@ -432,6 +521,12 @@ function AuthBridge({ children }: { children: ReactNode }) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  if (
+    process.env.NODE_ENV !== "production" &&
+    process.env.NEXT_PUBLIC_E2E_AUTH === "true"
+  ) {
+    return <E2EAuthProvider>{children}</E2EAuthProvider>;
+  }
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
   const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
 

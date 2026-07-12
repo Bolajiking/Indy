@@ -78,4 +78,18 @@ describe("isComposioWriteSlug", () => {
       expect(isComposioWriteSlug(slug)).toBe(true);
     }
   });
+
+  it("gives mutation verbs precedence in mixed read/write slugs", () => {
+    for (const slug of [
+      "CONTACTS_GET_OR_CREATE",
+      "NOTION_FIND_OR_CREATE_PAGE",
+      "GMAIL_GET_AND_UPDATE_MESSAGE",
+      "CALENDAR_SEARCH_OR_DELETE_EVENT",
+      "FILES_LIST_AND_MOVE",
+      "SOME_GET_OR_PUBLISH_ACTION",
+      "CREATE_AND_GET_RESOURCE",
+    ]) {
+      expect(isComposioWriteSlug(slug)).toBe(true);
+    }
+  });
 });

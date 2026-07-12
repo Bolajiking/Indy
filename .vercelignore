@@ -1,7 +1,6 @@
 # Vercel build exclusions
-src/
-tests/
-scripts/
+/tests/
+/scripts/
 !dashboard/
 *.md
 !README.md

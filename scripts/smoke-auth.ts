@@ -32,10 +32,13 @@ async function fetchAuthedJson<T>(
 
     try {
       const parsed = JSON.parse(rawBody) as {
-        error?: string;
+        error?: string | { message?: string; requestId?: string };
         message?: string;
       };
-      detail = parsed.error ?? parsed.message ?? rawBody;
+      detail =
+        typeof parsed.error === "string"
+          ? parsed.error
+          : (parsed.error?.message ?? parsed.message ?? rawBody);
     } catch {
       // Preserve the raw body when the response is not JSON.
     }

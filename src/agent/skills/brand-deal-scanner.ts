@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { AGENT } from "../../config/constants.js";
 import { createDeal } from "../../db/queries/deals.js";
 import llm from "../llm.js";

@@ -17,7 +17,7 @@ export function formatMorningBrief(brief: MorningBrief): string {
 
 export function formatRateCard(rates: RateCard[]): string {
   if (rates.length === 0) {
-    return 'I can\'t build your rate card yet — I need at least one connected platform to see your real stats. Say "connect my YouTube" (or Instagram/TikTok) and I\'ll set it up, then calculate your rates right away.';
+    return "I can't build your rate card yet — I need at least one connected platform to see your real stats. Say \"connect my YouTube\" (or Instagram/TikTok) and I'll set it up, then calculate your rates right away.";
   }
 
   let message = "*Your Rate Card*\n\n";

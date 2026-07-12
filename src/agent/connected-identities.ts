@@ -8,7 +8,7 @@
  * a safety net on each message. Structured to extend to other toolkits.
  */
 
-import pino from "pino";
+import pino from "#logger";
 import { getCreatorById, updateCreator } from "../db/queries/creators.js";
 import { isJsonObject, type JsonObject } from "../db/json.js";
 import {

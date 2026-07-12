@@ -26,6 +26,36 @@ const MAX_RESULT_ARRAY_ITEMS = 50;
 const MAX_RESULT_TOTAL_CHARS = 40000;
 const MAX_DEPTH = 6;
 
+const CLOSING_ENVELOPE = /<\/untrusted_external_data\s*>/gi;
+
+function escapeSource(source: string): string {
+  return source
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+/** Wrap already-serialized external output without allowing it to close the envelope. */
+export function wrapUntrustedExternalData(
+  serialized: string,
+  source: string,
+): string {
+  const inert = serialized.replace(
+    CLOSING_ENVELOPE,
+    "<\\/untrusted_external_data>",
+  );
+  return `<untrusted_external_data source="${escapeSource(source)}">\n${inert}\n</untrusted_external_data>`;
+}
+
+/** Serialize, clamp, and label external data before it can re-enter the model. */
+export function serializeUntrustedExternalData(
+  data: unknown,
+  source: string,
+): string {
+  return wrapUntrustedExternalData(serializeToolResult(data), source);
+}
+
 // Per-string budgets tried from generous to tight. We keep all items and shrink
 // their text until the serialized result fits, rather than truncating items off
 // the end (which would make the model summarize fewer items than it claims).

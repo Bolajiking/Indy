@@ -1,4 +1,5 @@
 import {
+  claimPendingAgentActionForCreator,
   createPendingAgentAction,
   getAgentActionByIdForCreator,
   listPendingAgentActionsForCreator,
@@ -6,6 +7,7 @@ import {
   updatePendingAgentActionStatus,
 } from "../db/queries/agent-actions.js";
 import { isJsonObject, toJsonValue, type JsonObject } from "../db/json.js";
+import { env } from "../config/env.js";
 
 export interface ApprovalAction {
   id: string;
@@ -15,6 +17,7 @@ export interface ApprovalAction {
   description: string;
   preview: string;
   input: JsonObject;
+  expiresAt?: string;
   /** Continuation context — present when the action originated from an agent loop */
   continuation?: {
     toolUseId: string;
@@ -40,6 +43,7 @@ function mapAgentAction(action: {
   action_type: string;
   description: string;
   input: JsonObject | null;
+  expires_at: string;
 }): ApprovalAction {
   const input = action.input ?? {};
   const continuation = isApprovalContinuation(input.continuation)
@@ -54,14 +58,23 @@ function mapAgentAction(action: {
     preview:
       typeof input.preview === "string" ? input.preview : action.description,
     input: isJsonObject(input.params) ? input.params : {},
+    expiresAt: action.expires_at,
     ...(continuation ? { continuation } : {}),
   };
+}
+
+function hasUnexpiredApproval(action: { expires_at: string }): boolean {
+  const expiry = Date.parse(action.expires_at);
+  return Number.isFinite(expiry) && expiry > Date.now();
 }
 
 export async function storePendingApproval(
   action: Omit<ApprovalAction, "id"> & { id?: string },
 ): Promise<ApprovalAction> {
   const actionId = action.id ?? action.actionId;
+  const expiresAt = new Date(
+    Date.now() + env.APPROVAL_TTL_SECONDS * 1000,
+  ).toISOString();
   const input: JsonObject = {
     preview: action.preview,
     params: action.input,
@@ -79,6 +92,7 @@ export async function storePendingApproval(
     action_type: action.type,
     description: action.description,
     input,
+    expires_at: expiresAt,
   });
 
   return mapAgentAction(created);
@@ -100,20 +114,23 @@ export async function getPendingApprovalByAction(
   actionId: string,
 ): Promise<ApprovalAction | undefined> {
   const action = await getAgentActionByIdForCreator(creatorId, actionId);
-  if (!action || action.status !== "pending") {
+  if (!action || action.status !== "pending" || !hasUnexpiredApproval(action)) {
     return undefined;
   }
 
   return mapAgentAction(action);
 }
 
-export async function markApprovalApproved(actionId: string): Promise<boolean> {
-  const updated = await updatePendingAgentActionStatus(actionId, {
-    status: "approved",
-    approved_at: new Date().toISOString(),
-  });
-
-  return Boolean(updated);
+export async function claimPendingApproval(
+  creatorId: string,
+  actionId: string,
+): Promise<ApprovalAction | undefined> {
+  const claimed = await claimPendingAgentActionForCreator(
+    creatorId,
+    actionId,
+    new Date().toISOString(),
+  );
+  return claimed ? mapAgentAction(claimed) : undefined;
 }
 
 export async function markApprovalSkipped(actionId: string): Promise<boolean> {
@@ -151,5 +168,5 @@ export async function getPendingApprovalsForCreator(
   creatorId: string,
 ): Promise<ApprovalAction[]> {
   const actions = await listPendingAgentActionsForCreator(creatorId);
-  return actions.map(mapAgentAction);
+  return actions.filter(hasUnexpiredApproval).map(mapAgentAction);
 }

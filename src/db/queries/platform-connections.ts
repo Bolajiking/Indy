@@ -1,7 +1,8 @@
 import { supabase } from "../client.js";
 import {
-  decryptSecretValue,
+  decryptStoredSecretValue,
   encryptSecretValue,
+  getCurrentPlatformKeyVersion,
 } from "../../security/secrets.js";
 import type { JsonObject } from "../json.js";
 
@@ -15,24 +16,33 @@ export interface PlatformConnection {
   platform_username: string | null;
   metadata: JsonObject;
   expires_at: string | null;
+  key_version: number;
   created_at: string;
 }
 
 function hydrateSecrets(connection: PlatformConnection): PlatformConnection {
   return {
     ...connection,
-    access_token: decryptSecretValue(connection.access_token) ?? "",
-    refresh_token: decryptSecretValue(connection.refresh_token),
+    access_token:
+      decryptStoredSecretValue(
+        connection.access_token,
+        connection.key_version,
+      ) ?? "",
+    refresh_token: decryptStoredSecretValue(
+      connection.refresh_token,
+      connection.key_version,
+    ),
   };
 }
 
 export async function upsertConnection(
-  connectionData: Omit<PlatformConnection, "id" | "created_at">,
+  connectionData: Omit<PlatformConnection, "id" | "created_at" | "key_version">,
 ): Promise<PlatformConnection> {
   const encryptedConnectionData = {
     ...connectionData,
     access_token: encryptSecretValue(connectionData.access_token) ?? "",
     refresh_token: encryptSecretValue(connectionData.refresh_token),
+    key_version: getCurrentPlatformKeyVersion(),
   };
 
   const { data, error } = await supabase

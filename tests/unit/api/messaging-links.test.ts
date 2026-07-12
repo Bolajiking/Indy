@@ -83,6 +83,6 @@ describe("messaging link routes", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toContain("Unsupported messaging platform");
+    expect(body.error.message).toContain("Unsupported messaging platform");
   });
 });

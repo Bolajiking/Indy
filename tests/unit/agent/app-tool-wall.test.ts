@@ -55,7 +55,11 @@ describe("execute_app_tool approval unwrapping in the agent loop", () => {
     vi.mocked(llm.messages.create).mockResolvedValueOnce(
       toolUseMessage("execute_app_tool", {
         slug: "GMAIL_SEND_EMAIL",
-        arguments: { to: "brand@example.com", subject: "Pitch" },
+        arguments: {
+          to: "brand@example.com",
+          subject: "Pitch",
+          access_token: "raw-secret-value",
+        },
       }),
     );
 
@@ -66,8 +70,7 @@ describe("execute_app_tool approval unwrapping in the agent loop", () => {
       dynamicTools: [],
       executeDynamicTool: async () => ({ content: "ok", isError: false }),
       dynamicToolNeedsApproval: (name, input) =>
-        name === "execute_app_tool" &&
-        String(input.slug).includes("SEND"),
+        name === "execute_app_tool" && String(input.slug).includes("SEND"),
     });
 
     expect(result.requiresApproval).toBe(true);
@@ -77,8 +80,45 @@ describe("execute_app_tool approval unwrapping in the agent loop", () => {
     expect(result.pendingAction?.input).toEqual({
       to: "brand@example.com",
       subject: "Pitch",
+      access_token: "raw-secret-value",
     });
     expect(result.text).toContain("GMAIL_SEND_EMAIL");
+    expect(result.text).toContain("Service: gmail");
+    expect(result.text).toContain("Operation: GMAIL_SEND_EMAIL");
+    expect(result.text).toContain("Target: brand@example.com");
+    expect(result.text).toContain("Maximum cost: $0.00");
+    expect(result.text).toContain('"access_token":"[redacted]"');
+    expect(result.text).not.toContain("raw-secret-value");
+  });
+
+  it("rejects approval creation when a connected-app write has no target", async () => {
+    vi.mocked(llm.messages.create)
+      .mockResolvedValueOnce(
+        toolUseMessage("execute_app_tool", {
+          slug: "GMAIL_SEND_EMAIL",
+          arguments: { subject: "Pitch", body: "Hello" },
+        }),
+      )
+      .mockResolvedValueOnce({
+        ...toolUseMessage("noop", {}),
+        content: [{ type: "text", text: "Need a recipient", citations: null }],
+        stop_reason: "end_turn",
+      } as Anthropic.Messages.Message);
+
+    const result = await runAgentLoop({
+      systemPrompt: "test",
+      messages: [{ role: "user", content: "send the pitch" }],
+      toolContext: null,
+      executeDynamicTool: async () => ({ content: "ok", isError: false }),
+      dynamicToolNeedsApproval: () => true,
+    });
+
+    expect(result.requiresApproval).toBe(false);
+    expect(result.pendingAction).toBeUndefined();
+    const followUp = vi.mocked(llm.messages.create).mock.calls[1]?.[0];
+    expect(JSON.stringify(followUp?.messages)).toContain(
+      "Approval preview unavailable",
+    );
   });
 
   it("executes read actions without approval", async () => {
@@ -92,7 +132,9 @@ describe("execute_app_tool approval unwrapping in the agent loop", () => {
       )
       .mockResolvedValueOnce({
         ...toolUseMessage("noop", {}),
-        content: [{ type: "text", text: "Here are your emails", citations: null }],
+        content: [
+          { type: "text", text: "Here are your emails", citations: null },
+        ],
         stop_reason: "end_turn",
       } as Anthropic.Messages.Message);
 
@@ -117,9 +159,15 @@ describe("execute_app_tool approval unwrapping in the agent loop", () => {
 describe("searchCatalog", () => {
   const catalog = [
     { slug: "GMAIL_SEND_EMAIL", description: "Send an email message" },
-    { slug: "GMAIL_GET_VACATION_SETTINGS", description: "Read vacation auto-reply settings" },
+    {
+      slug: "GMAIL_GET_VACATION_SETTINGS",
+      description: "Read vacation auto-reply settings",
+    },
     { slug: "GMAIL_CREATE_LABEL", description: "Create a new label" },
-    { slug: "GMAIL_LIST_LABELS", description: "List all labels in the mailbox" },
+    {
+      slug: "GMAIL_LIST_LABELS",
+      description: "List all labels in the mailbox",
+    },
   ];
 
   it("matches against slug and description, slug-first", () => {

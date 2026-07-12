@@ -5,7 +5,7 @@
  * back to the standard orchestrator.
  */
 
-import pino from "pino";
+import pino from "#logger";
 import { routeToSkill } from "./router.js";
 import { runSkill } from "./skill-runner.js";
 import { assembleContext } from "../memory.js";

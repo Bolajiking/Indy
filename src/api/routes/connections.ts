@@ -20,6 +20,7 @@ import type {
   ApiConnectionInitiateResponse,
   ApiConnectionsInfo,
 } from "../contracts.js";
+import { incrementMetric } from "../../observability/metrics.js";
 
 export const connections = new Hono();
 connections.use("*", requireCreatorAuth);
@@ -82,6 +83,10 @@ connections.post("/:toolkit/initiate", async (c) => {
     );
     return c.json({ redirectUrl } satisfies ApiConnectionInitiateResponse);
   } catch (error) {
+    incrementMetric("connection_failures_total", {
+      operation: "initiate",
+      provider: "composio",
+    });
     throw new HTTPException(502, {
       message:
         error instanceof Error
@@ -106,6 +111,10 @@ connections.delete("/:toolkit", async (c) => {
     const disconnected = await disconnectComposioToolkit(creatorId, toolkit);
     return c.json({ disconnected } satisfies ApiConnectionDisconnectResponse);
   } catch (error) {
+    incrementMetric("connection_failures_total", {
+      operation: "disconnect",
+      provider: "composio",
+    });
     throw new HTTPException(502, {
       message: error instanceof Error ? error.message : "Could not disconnect.",
     });

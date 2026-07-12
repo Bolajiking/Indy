@@ -135,6 +135,7 @@ export async function createDeal(dealData: CreateDealInput): Promise<Deal> {
       .from("deals")
       .update(updates)
       .eq("id", existing.id)
+      .eq("creator_id", dealData.creator_id)
       .select()
       .single();
 
@@ -164,9 +165,10 @@ export async function createDeal(dealData: CreateDealInput): Promise<Deal> {
 }
 
 export async function updateDeal(
+  creatorId: string,
   dealId: string,
   updates: UpdateDealInput,
-): Promise<Deal> {
+): Promise<Deal | null> {
   const payload = {
     ...updates,
     ...(updates.brand_name ? { brand_name: updates.brand_name.trim() } : {}),
@@ -177,8 +179,9 @@ export async function updateDeal(
     .from("deals")
     .update(payload)
     .eq("id", dealId)
+    .eq("creator_id", creatorId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw error;
@@ -188,16 +191,18 @@ export async function updateDeal(
 }
 
 export async function updateDealStage(
+  creatorId: string,
   dealId: string,
   stage: DealStage,
   extra?: Partial<Deal>,
-): Promise<Deal> {
+): Promise<Deal | null> {
   const { data, error } = await supabase
     .from("deals")
     .update({ stage, ...extra, updated_at: new Date().toISOString() })
     .eq("id", dealId)
+    .eq("creator_id", creatorId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     throw error;

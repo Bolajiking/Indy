@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { getDealsForCreator } from "../db/queries/deals.js";
 import { listCreatorsForMorningBriefs } from "../db/queries/creators.js";
 import type { DealStage } from "../config/constants.js";

@@ -1,16 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { DashboardAuthGate } from "@/components/dashboard-auth-gate";
 import { PageHead, StatCard, EmptyState } from "@/components/cf/ui";
 import { Icon, FrenBadge } from "@/components/cf/primitives";
+import { DealForm } from "@/components/deals/deal-form";
+import { DealDetail } from "@/components/deals/deal-detail";
 import {
   fetchAgentState,
   fetchDeals,
+  createDashboardDeal,
   formatCurrency,
   patchDealStage,
+  updateDashboardDeal,
+  ApiRequestError,
   type DashboardAgentState,
   type DashboardDeal,
   type DashboardDealStage,
@@ -18,6 +23,11 @@ import {
 import { broadcastDealsChanged, subscribeDealsChanged } from "@/lib/deals-sync";
 import { useAuthedQuery } from "@/lib/use-authed-query";
 import { useAuth } from "@/lib/auth-context";
+import {
+  applyOptimisticDealEdit,
+  makeOptimisticDeal,
+  replaceOptimisticDeal,
+} from "@/lib/deal-optimistic";
 
 const EMPTY_AGENT_STATE: DashboardAgentState = {
   messages: [],
@@ -80,12 +90,18 @@ function DealCard({
   onOptimisticStage,
   onServerDeal,
   onChange,
+  onView,
+  onArchive,
+  archiveError,
 }: {
   deal: DashboardDeal;
   token: string;
   onOptimisticStage: (dealId: string, stage: DashboardDealStage) => void;
   onServerDeal: (deal: DashboardDeal) => void;
   onChange: () => void;
+  onView: () => void;
+  onArchive: () => void;
+  archiveError?: string | null;
 }) {
   const [working, setWorking] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -202,6 +218,11 @@ function DealCard({
             {err}
           </p>
         )}
+        {archiveError && (
+          <p role="alert" style={{ color: "var(--cf-coral)" }}>
+            {archiveError}
+          </p>
+        )}
       </div>
 
       {value != null && (
@@ -280,6 +301,16 @@ function DealCard({
           )}
         </div>
       )}
+      <button
+        className="dark-pill"
+        aria-label={`View ${deal.brand_name} deal details`}
+        onClick={onView}
+      >
+        Details
+      </button>
+      <button className="dark-pill" onClick={onArchive}>
+        {deal.archived_at ? "Restore" : "Archive"}
+      </button>
     </div>
   );
 }
@@ -299,6 +330,14 @@ function DealsInner() {
     "indyfren_agent_v1",
   );
   const [filter, setFilter] = useState("all");
+  const [editing, setEditing] = useState<DashboardDeal | "new" | null>(null);
+  const [selected, setSelected] = useState<DashboardDeal | null>(null);
+  const [mutationBusy, setMutationBusy] = useState(false);
+  const [mutationError, setMutationError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  const [archiveErrors, setArchiveErrors] = useState<Record<string, string>>(
+    {},
+  );
 
   const stableRefresh = useCallback(() => {
     if (document.visibilityState !== "visible") {
@@ -329,9 +368,87 @@ function DealsInner() {
       setDeals((current) =>
         current.map((deal) => (deal.id === updated.id ? updated : deal)),
       );
+      setSelected((current: DashboardDeal | null) =>
+        current?.id === updated.id ? updated : current,
+      );
     },
     [setDeals],
   );
+
+  async function saveDeal(input: Parameters<typeof createDashboardDeal>[1]) {
+    if (!accessToken || !editing) return;
+    setMutationBusy(true);
+    setMutationError(null);
+    setFieldErrors({});
+    if (editing === "new") {
+      const temporary = makeOptimisticDeal(input);
+      setDeals((current) => [temporary, ...current]);
+      try {
+        const created = await createDashboardDeal(accessToken, input);
+        setDeals((current) =>
+          replaceOptimisticDeal(current, temporary.id, created),
+        );
+        setEditing(null);
+      } catch (error) {
+        setDeals((current) => replaceOptimisticDeal(current, temporary.id));
+        setMutationError(
+          error instanceof Error ? error.message : "Couldn't create deal.",
+        );
+        if (error instanceof ApiRequestError) setFieldErrors(error.fieldErrors);
+      }
+    } else {
+      const previous = editing;
+      const optimistic = applyOptimisticDealEdit(previous, input);
+      setDeals((current) =>
+        current.map((deal) => (deal.id === previous.id ? optimistic : deal)),
+      );
+      try {
+        const updated = await updateDashboardDeal(
+          accessToken,
+          previous.id,
+          input,
+        );
+        applyServerDeal(updated);
+        setSelected(updated);
+        setEditing(null);
+      } catch (error) {
+        applyServerDeal(previous);
+        setMutationError(
+          error instanceof Error ? error.message : "Couldn't update deal.",
+        );
+        if (error instanceof ApiRequestError) setFieldErrors(error.fieldErrors);
+      }
+    }
+    setMutationBusy(false);
+  }
+
+  async function toggleArchive(deal: DashboardDeal) {
+    if (!accessToken) return;
+    const previous = deal;
+    const archivedAt = deal.archived_at ? null : new Date().toISOString();
+    setArchiveErrors((current) => ({ ...current, [deal.id]: "" }));
+    setDeals((current) =>
+      current.map((item) =>
+        item.id === deal.id
+          ? applyOptimisticDealEdit(item, { archivedAt })
+          : item,
+      ),
+    );
+    try {
+      applyServerDeal(
+        await updateDashboardDeal(accessToken, deal.id, { archivedAt }),
+      );
+    } catch (error) {
+      applyServerDeal(previous);
+      setArchiveErrors((current) => ({
+        ...current,
+        [deal.id]:
+          error instanceof Error
+            ? error.message
+            : "Couldn't update archive status.",
+      }));
+    }
+  }
 
   const pipelineValue = deals.reduce(
     (s, d) => s + (d.estimated_value_cents ?? 0),
@@ -352,18 +469,29 @@ function DealsInner() {
 
   const shown = deals.filter((d) =>
     filter === "all"
-      ? true
-      : filter === "progress"
-        ? ["pitched", "responded", "negotiating", "contracted"].includes(
-            d.stage,
-          )
-        : d.stage === filter,
+      ? !d.archived_at
+      : filter === "archived"
+        ? !!d.archived_at
+        : filter === "progress"
+          ? ["pitched", "responded", "negotiating", "contracted"].includes(
+              d.stage,
+            )
+          : d.stage === filter,
   );
 
   return (
     <div className="page-wrap">
       <div className="page-inner">
         <PageHead eyebrow="Deal pipeline" title="Your deals, working for you" />
+        <button
+          className="dark-pill dark-pill--solid"
+          onClick={() => {
+            setMutationError(null);
+            setEditing("new");
+          }}
+        >
+          Add deal
+        </button>
 
         {pending > 0 && (
           <div
@@ -448,18 +576,29 @@ function DealsInner() {
               {l}
             </button>
           ))}
+          <button
+            className="seg-chip"
+            data-active={filter === "archived"}
+            onClick={() => setFilter("archived")}
+          >
+            Archived
+          </button>
         </div>
 
         <div style={{ display: "grid", gap: 12 }}>
           {shown.map((d) => (
-            <DealCard
-              key={d.id}
-              deal={d}
-              token={accessToken ?? ""}
-              onOptimisticStage={optimisticStage}
-              onServerDeal={applyServerDeal}
-              onChange={stableRefresh}
-            />
+            <Fragment key={d.id}>
+              <DealCard
+                deal={d}
+                token={accessToken ?? ""}
+                onOptimisticStage={optimisticStage}
+                onServerDeal={applyServerDeal}
+                onChange={stableRefresh}
+                onView={() => setSelected(d)}
+                onArchive={() => void toggleArchive(d)}
+                archiveError={archiveErrors[d.id]}
+              />
+            </Fragment>
           ))}
           {shown.length === 0 && (
             <div className="gcard" style={{ padding: 28 }}>
@@ -491,6 +630,25 @@ function DealsInner() {
             </div>
           )}
         </div>
+        {selected && !editing && (
+          <DealDetail
+            deal={selected}
+            onClose={() => setSelected(null)}
+            onEdit={() => setEditing(selected)}
+          />
+        )}
+        {editing && (
+          <DealForm
+            deal={editing === "new" ? null : editing}
+            busy={mutationBusy}
+            serverError={mutationError}
+            serverFieldErrors={fieldErrors}
+            onCancel={() => setEditing(null)}
+            onSubmit={(input) =>
+              void saveDeal(input as Parameters<typeof createDashboardDeal>[1])
+            }
+          />
+        )}
       </div>
     </div>
   );

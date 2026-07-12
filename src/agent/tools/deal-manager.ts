@@ -208,7 +208,15 @@ registerTool({
     if (contractNotes) extra.contract_notes = contractNotes;
     if (notes) extra.notes = notes;
 
-    const updated = await updateDealStage(dealId, stage, extra);
+    const updated = await updateDealStage(
+      context.creatorId,
+      dealId,
+      stage,
+      extra,
+    );
+    if (!updated) {
+      return { success: false, data: null, error: "Deal not found" };
+    }
 
     return {
       success: true,

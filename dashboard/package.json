@@ -2,6 +2,9 @@
   "name": "indyfren-dashboard",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "next dev --port 3001",
     "build": "next build",
@@ -14,6 +17,7 @@
     "react-dom": "^19.1.1"
   },
   "overrides": {
+    "hono": "4.12.27",
     "@reown/appkit": "1.8.20",
     "@reown/appkit-controllers": "1.8.20",
     "@reown/appkit-pay": "1.8.20",
@@ -37,6 +41,7 @@
     "@types/react": "^19.1.13",
     "@types/react-dom": "^19.1.9",
     "autoprefixer": "^10.4.21",
+    "dotenv": "^17.4.2",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.9.3"

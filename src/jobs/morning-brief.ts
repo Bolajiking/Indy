@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { generateMorningBrief } from "../agent/skills/morning-brief.js";
 import { formatMorningBrief } from "../bot/formatters.js";
 import {

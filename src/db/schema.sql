@@ -1,5 +1,7 @@
 -- Indyfren Database Schema
 -- Run via: npm run db:init
+-- Ordered migrations are authoritative for upgrades; this clean-install snapshot is generated
+-- and must be updated (including ledger checksums below) with every migration.
 
 -- Creators table
 CREATE TABLE IF NOT EXISTS creators (
@@ -11,6 +13,8 @@ CREATE TABLE IF NOT EXISTS creators (
   niche TEXT,
   wallet_id TEXT,
   wallet_address TEXT,
+  account_status TEXT NOT NULL DEFAULT 'active',
+  deletion_requested_at TIMESTAMPTZ,
   free_credits_remaining_cents INTEGER DEFAULT 1000,
   monthly_spend_cents INTEGER DEFAULT 0,
   settings JSONB DEFAULT '{}',
@@ -29,6 +33,7 @@ CREATE TABLE IF NOT EXISTS platform_connections (
   platform_username TEXT,
   metadata JSONB DEFAULT '{}',
   expires_at TIMESTAMPTZ,
+  key_version INTEGER NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(creator_id, platform)
 );
@@ -98,6 +103,8 @@ CREATE TABLE IF NOT EXISTS payment_attempts (
   receipt_reference TEXT,
   tx_hash TEXT,
   error TEXT,
+  status_token_hash TEXT NOT NULL,
+  status_token_expires_at TIMESTAMPTZ NOT NULL,
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -116,6 +123,7 @@ CREATE TABLE IF NOT EXISTS agent_actions (
   requires_approval BOOLEAN DEFAULT false,
   approved_at TIMESTAMPTZ,
   executed_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -172,6 +180,40 @@ CREATE TABLE IF NOT EXISTS skill_outcomes (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Durable webhook receipt ledger (provider event IDs make ingestion idempotent)
+CREATE TABLE IF NOT EXISTS webhook_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  provider TEXT NOT NULL,
+  provider_event_id TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'queued',
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  delivery_lease_token UUID,
+  delivery_started_at TIMESTAMPTZ,
+  delivery_outcome TEXT NOT NULL DEFAULT 'pending',
+  error TEXT,
+  processed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(provider, provider_event_id),
+  CONSTRAINT webhook_events_status_check CHECK (status IN ('queued', 'processing', 'processed', 'failed', 'outcome_unknown')),
+  CONSTRAINT webhook_events_delivery_outcome_check CHECK (delivery_outcome IN ('pending', 'confirmed', 'unknown'))
+);
+
+CREATE TABLE IF NOT EXISTS account_deletions (
+  creator_id UUID PRIMARY KEY,
+  privy_user_id TEXT,
+  agent_wallet_id TEXT,
+  wallet_address TEXT,
+  state TEXT NOT NULL DEFAULT 'requested',
+  residuals JSONB NOT NULL DEFAULT '[]',
+  error TEXT,
+  requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  CONSTRAINT account_deletions_state_check CHECK (state IN ('requested', 'revoking-connections', 'deleting', 'completed', 'retryable-failure'))
+);
+
 -- Indexes (IF NOT EXISTS requires Postgres 9.5+)
 CREATE INDEX IF NOT EXISTS idx_creators_telegram_chat_id ON creators(telegram_chat_id);
 CREATE INDEX IF NOT EXISTS idx_creators_whatsapp_phone ON creators(whatsapp_phone);
@@ -191,6 +233,12 @@ CREATE INDEX IF NOT EXISTS idx_creator_memories_creator_id ON creator_memories(c
 CREATE INDEX IF NOT EXISTS idx_creator_memories_skill ON creator_memories(creator_id, skill);
 CREATE INDEX IF NOT EXISTS idx_skill_outcomes_creator_skill ON skill_outcomes(creator_id, skill);
 CREATE INDEX IF NOT EXISTS idx_skill_outcomes_created_at ON skill_outcomes(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_status_created_at ON webhook_events(status, created_at);
+CREATE INDEX IF NOT EXISTS idx_webhook_events_reconciliation ON webhook_events(status, delivery_outcome, delivery_started_at) WHERE status = 'outcome_unknown';
+CREATE INDEX IF NOT EXISTS idx_account_deletions_state_updated_at ON account_deletions(state, updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_account_deletions_status_token_hash ON account_deletions(status_token_hash);
+CREATE INDEX IF NOT EXISTS idx_agent_actions_expires_at ON agent_actions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_creators_account_status ON creators(account_status);
 
 -- Enable Row Level Security on all tables
 ALTER TABLE creators ENABLE ROW LEVEL SECURITY;
@@ -203,6 +251,8 @@ ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messaging_link_sessions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE creator_memories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE skill_outcomes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE account_deletions ENABLE ROW LEVEL SECURITY;
 
 -- RLS policies: allow service_role full access (backend uses service key)
 -- These are no-ops for service_role but protect against anon-key access.
@@ -286,6 +336,20 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_messaging_link_sessions') THEN
     CREATE POLICY deny_anon_messaging_link_sessions ON messaging_link_sessions FOR ALL TO anon USING (false);
   END IF;
+
+  -- Webhook events
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'service_role_webhook_events') THEN
+    CREATE POLICY service_role_webhook_events ON webhook_events FOR ALL TO service_role USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_webhook_events') THEN
+    CREATE POLICY deny_anon_webhook_events ON webhook_events FOR ALL TO anon USING (false);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'service_role_account_deletions') THEN
+    CREATE POLICY service_role_account_deletions ON account_deletions FOR ALL TO service_role USING (true) WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'deny_anon_account_deletions') THEN
+    CREATE POLICY deny_anon_account_deletions ON account_deletions FOR ALL TO anon USING (false);
+  END IF;
 END $$;
 
 -- Auto-update updated_at trigger
@@ -307,6 +371,12 @@ DO $$ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_creator_memories_updated_at') THEN
     CREATE TRIGGER trg_creator_memories_updated_at BEFORE UPDATE ON creator_memories FOR EACH ROW EXECUTE FUNCTION update_updated_at();
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_webhook_events_updated_at') THEN
+    CREATE TRIGGER trg_webhook_events_updated_at BEFORE UPDATE ON webhook_events FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_account_deletions_updated_at') THEN
+    CREATE TRIGGER trg_account_deletions_updated_at BEFORE UPDATE ON account_deletions FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+  END IF;
 END $$;
 
 -- Atomic credit deduction function (prevents race conditions)
@@ -320,3 +390,42 @@ RETURNS TABLE(
   WHERE creators.id = creator_id
   RETURNING creators.id, creators.free_credits_remaining_cents;
 $$ LANGUAGE sql VOLATILE;
+
+-- Snapshot-to-migration handoff. A database installed from this file is current
+-- through 0005 and can immediately use db:migrate or db:migrate:check.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  version TEXT PRIMARY KEY,
+  checksum TEXT NOT NULL,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+INSERT INTO schema_migrations (version, checksum) VALUES
+  ('0001', 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94'),
+  ('0002', '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906'),
+  ('0003', 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad'),
+  ('0004', '7ea646dd9556b30742bcfeafe88375a335f494d72d25a8f819603b2a98ab446d'),
+  ('0005', 'e19405cf8e5d4b40f71db732235d89725843e478d42f0477f2831725771fb498')
+ON CONFLICT (version) DO NOTHING;
+
+DO $$
+DECLARE
+  drift_version TEXT;
+BEGIN
+  SELECT version INTO drift_version
+  FROM schema_migrations
+  WHERE
+    (version = '0001' AND checksum <> 'f25973b7b0b2b04459305c94f512ee39372c48773846fb52c935d8526180de94')
+    OR
+    (version = '0002' AND checksum <> '5db66ca0b1b621fe83e3cdb7856f5bbac594c77bde01b7c6904921cc1481d906')
+    OR
+    (version = '0003' AND checksum <> 'a7c9ddcadd71fe3fdfa4c8d5c6462d758cb35af5e1e749e766c31a1d734627ad')
+    OR
+    (version = '0004' AND checksum <> '7ea646dd9556b30742bcfeafe88375a335f494d72d25a8f819603b2a98ab446d')
+    OR
+    (version = '0005' AND checksum <> 'e19405cf8e5d4b40f71db732235d89725843e478d42f0477f2831725771fb498')
+  LIMIT 1;
+
+  IF drift_version IS NOT NULL THEN
+    RAISE EXCEPTION 'schema_migrations checksum drift for version %', drift_version;
+  END IF;
+END $$;

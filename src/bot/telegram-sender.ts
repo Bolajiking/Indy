@@ -1,4 +1,4 @@
-import pino from "pino";
+import pino from "#logger";
 import { Bot, InlineKeyboard } from "grammy";
 import type { OutgoingMessage } from "./messages.js";
 

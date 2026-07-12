@@ -44,9 +44,33 @@ import { getOnChainBalanceWithTimeout } from "../../../src/wallet/mpp.js";
 import { createApiServer } from "../../../src/api/server.js";
 import { deals as dealsRoutes } from "../../../src/api/routes/deals.js";
 import { wallet as walletRoutes } from "../../../src/api/routes/wallet.js";
-import { webhooks } from "../../../src/api/routes/webhooks.js";
+import { createWebhookRoutes } from "../../../src/api/routes/webhooks.js";
 
 describe("API server", () => {
+  it("accepts a valid request ID and returns it in stable errors", async () => {
+    const app = createApiServer();
+    app.get("/boom", () => {
+      throw new Error("internal secret");
+    });
+    const response = await app.request("/boom", {
+      headers: { "X-Request-Id": "req_valid-123" },
+    });
+    expect(response.headers.get("X-Request-Id")).toBe("req_valid-123");
+    expect(await response.json()).toEqual({
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Internal server error",
+        requestId: "req_valid-123",
+      },
+    });
+  });
+
+  it("generates a request ID when inbound input is invalid", async () => {
+    const response = await createApiServer().request("/missing", {
+      headers: { "X-Request-Id": "bad id with spaces" },
+    });
+    expect(response.headers.get("X-Request-Id")).toMatch(/^[a-f0-9-]{36}$/);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(authenticateAccessToken).mockResolvedValue({
@@ -95,7 +119,7 @@ describe("API server", () => {
     const body = await response.json();
 
     expect(response.status).toBe(413);
-    expect(body.error).toContain("Request body too large");
+    expect(body.error.message).toContain("Request body too large");
   });
 
   it("rate limits noisy callers with a bounded in-memory window", async () => {
@@ -118,7 +142,7 @@ describe("API server", () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body.error).toContain("Missing bearer token");
+    expect(body.error.message).toContain("Missing bearer token");
   });
 
   it("returns deals for the authenticated creator with optional stage filtering", async () => {
@@ -157,7 +181,9 @@ describe("API server", () => {
     const body = await response.json();
 
     expect(response.status).toBe(503);
-    expect(body.error).toContain("Creator service is temporarily unavailable");
+    expect(body.error.message).toContain(
+      "Creator service is temporarily unavailable",
+    );
   });
 
   it("returns a single deal only within the authenticated creator scope", async () => {
@@ -172,7 +198,7 @@ describe("API server", () => {
     const body = await response.json();
 
     expect(response.status).toBe(404);
-    expect(body.error).toBe("Not found");
+    expect(body.error.message).toBe("Not found");
     expect(getDealByIdForCreator).toHaveBeenCalledWith("creator-1", "deal-404");
   });
 
@@ -197,7 +223,10 @@ describe("API server", () => {
     const body = await response.json();
 
     expect(response.status).toBe(400);
-    expect(body.error).toContain("Invalid stage");
+    expect(body).toMatchObject({
+      error: expect.objectContaining({ message: "Validation failed" }),
+      fieldErrors: { stage: expect.any(Array) },
+    });
     expect(updateDealStage).not.toHaveBeenCalled();
   });
 
@@ -275,7 +304,7 @@ describe("API server", () => {
     });
 
     expect(response.status).toBe(200);
-    expect(updateDeal).toHaveBeenCalledWith("deal-1", {
+    expect(updateDeal).toHaveBeenCalledWith("creator-1", "deal-1", {
       next_action: "Send follow-up",
       follow_up_at: "2026-06-10T09:00:00.000Z",
     });
@@ -353,7 +382,13 @@ describe("API server", () => {
 
   it("verifies the WhatsApp webhook handshake", async () => {
     const app = createApiServer();
-    app.route("/webhooks", webhooks);
+    app.route(
+      "/webhooks",
+      createWebhookRoutes({
+        whatsappEnabled: true,
+        whatsappVerifyToken: "indyfren-verify",
+      }),
+    );
 
     const response = await app.request(
       "/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=indyfren-verify&hub.challenge=12345",
@@ -365,7 +400,7 @@ describe("API server", () => {
 
   it("rejects unsigned WhatsApp webhook deliveries", async () => {
     const app = createApiServer();
-    app.route("/webhooks", webhooks);
+    app.route("/webhooks", createWebhookRoutes({ whatsappEnabled: true }));
 
     const response = await app.request("/webhooks/whatsapp", {
       method: "POST",
@@ -375,6 +410,6 @@ describe("API server", () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body.error).toContain("Invalid WhatsApp signature");
+    expect(body.error.message).toContain("Invalid WhatsApp signature");
   });
 });

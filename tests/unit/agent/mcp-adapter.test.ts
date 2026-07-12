@@ -118,6 +118,25 @@ describe("MCPToolAdapter", () => {
       description: "Currency code",
       required: false,
     });
+    expect(
+      tool.buildApprovalPreview?.({
+        amount: 5000,
+        currency: "usd",
+        target: "customer-123",
+        api_token: "do-not-display",
+      }),
+    ).toEqual({
+      service: "mcp:stripe",
+      operation: "charge_card",
+      target: "customer-123",
+      materialArguments: {
+        amount: 5000,
+        currency: "usd",
+        target: "customer-123",
+        api_token: "[redacted]",
+      },
+      maxCostCents: 100,
+    });
   });
 
   it("executes an MCP tool and returns the result", async () => {

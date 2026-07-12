@@ -5,6 +5,7 @@ import path from "node:path";
 export default defineConfig({
   plugins: [react()],
   test: {
+    include: ["tests/**/*.test.ts", "tests/**/*.test.tsx"],
     typecheck: {
       tsconfig: "./tsconfig.vitest.json",
     },

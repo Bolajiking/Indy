@@ -2,6 +2,7 @@ import type { Client as MCPClient } from "@modelcontextprotocol/sdk/client/index
 import type Anthropic from "@anthropic-ai/sdk";
 import type { JsonObject } from "../../db/json.js";
 import type { findService as FindServiceFn } from "./x402-registry.js";
+import type { ActionPreview } from "../action-preview.js";
 
 export type AutonomyLevel = "autonomous" | "hybrid";
 export type CostCategory = "free" | "mpp" | "platform-api";
@@ -12,6 +13,8 @@ export interface AgentTool {
   autonomyLevel: AutonomyLevel;
   costCategory: CostCategory;
   maxCostPerUseCents: number;
+  /** Required for any hybrid/write tool so approval screens bind intent. */
+  buildApprovalPreview?: (input: JsonObject) => Partial<ActionPreview>;
   /**
    * Deferred tools keep their full schema out of the resident prompt: they are
    * listed as one-liners on the `use_tool` meta-tool and invoked through it.
@@ -45,13 +48,19 @@ export interface ToolResult {
 }
 
 /** Read a string tool parameter, or null when absent or not a string. */
-export function readStringParam(params: JsonObject, key: string): string | null {
+export function readStringParam(
+  params: JsonObject,
+  key: string,
+): string | null {
   const value = params[key];
   return typeof value === "string" ? value : null;
 }
 
 /** Read a finite number tool parameter, or null when absent or invalid. */
-export function readNumberParam(params: JsonObject, key: string): number | null {
+export function readNumberParam(
+  params: JsonObject,
+  key: string,
+): number | null {
   const value = params[key];
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }

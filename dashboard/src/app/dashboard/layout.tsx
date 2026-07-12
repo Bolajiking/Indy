@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { LegalFooter } from "@/components/legal-footer";
 
 const DashboardAuthBoundary = dynamic(
   () =>
@@ -26,5 +27,10 @@ const DashboardAuthBoundary = dynamic(
 export default function DashboardLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return <DashboardAuthBoundary>{children}</DashboardAuthBoundary>;
+  return (
+    <>
+      <DashboardAuthBoundary>{children}</DashboardAuthBoundary>
+      <LegalFooter />
+    </>
+  );
 }

@@ -922,7 +922,7 @@ export function AgentHome({ initialQuery }: { initialQuery?: string }) {
   useEffect(() => {
     if (!recentSuccessToolkit) return;
     const confirmed = connectionsInfo.accounts.some(
-      (account) =>
+      (account: ConnectionAccountLike) =>
         account.toolkit.toLowerCase() === recentSuccessToolkit &&
         account.connected,
     );
