@@ -18,6 +18,7 @@ import {
   readRecentConnectionSuccess,
   resolveConnectionCardState,
   writePendingConnectionToolkit,
+  type ConnectionAccountLike,
 } from "@/lib/connection-success";
 import {
   createMessagingLink,
@@ -544,7 +545,7 @@ function PaneConnections() {
     if (
       recentSuccessToolkit &&
       data.accounts.some(
-        (account) =>
+        (account: ConnectionAccountLike) =>
           account.toolkit.toLowerCase() === recentSuccessToolkit &&
           account.connected,
       )
@@ -611,7 +612,7 @@ function PaneConnections() {
         </p>
       ) : (
         <div style={{ display: "grid", gap: 10 }}>
-          {data.toolkits.map((slug) => {
+          {data.toolkits.map((slug: string) => {
             const state = resolveConnectionCardState(
               slug,
               data.accounts,

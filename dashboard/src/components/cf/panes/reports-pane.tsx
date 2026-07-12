@@ -2,7 +2,12 @@
 
 import { EmptyState } from "@/components/cf/ui";
 import { BrandGlyph } from "@/components/cf/primitives";
-import { fetchAnalytics, fetchFinancial, formatCurrency } from "@/lib/api";
+import {
+  fetchAnalytics,
+  fetchFinancial,
+  formatCurrency,
+  type AggregatedAnalytics,
+} from "@/lib/api";
 import { formatDashboardNumber } from "@/lib/datetime";
 import { useAuthedQuery } from "@/lib/use-authed-query";
 import { useShell } from "@/components/cf/shell-context";
@@ -186,78 +191,83 @@ export function ReportsPane({ heading = true }: { heading?: boolean }) {
         </div>
         {analytics && analytics.platforms.length > 0 ? (
           <div style={{ display: "grid", gap: 10 }}>
-            {analytics.platforms.map((p) => (
-              <div
-                key={p.platform}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "12px 4px",
-                }}
-              >
-                <BrandGlyph
-                  name={
-                    p.platform.charAt(0).toUpperCase() + p.platform.slice(1)
-                  }
-                  size={38}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: 15,
-                      fontWeight: 600,
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {p.platform}
-                  </div>
-                  <div
-                    style={{ fontSize: 12.5, color: "rgb(var(--ink) / 0.45)" }}
-                  >
-                    {p.error
-                      ? "Sync error — reconnect in Settings"
-                      : `${p.followers != null ? formatDashboardNumber(p.followers) : "—"} followers`}
-                  </div>
-                </div>
-                {!p.error && (
-                  <>
-                    <div style={{ width: 120, maxWidth: "30vw" }}>
-                      <div
-                        style={{
-                          height: 6,
-                          borderRadius: 99,
-                          background: "rgb(var(--ink) / 0.1)",
-                          overflow: "hidden",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: `${Math.min(100, (p.engagementRate ?? 0) * 100 * 9)}%`,
-                            height: "100%",
-                            background: "var(--cf-cta-gradient)",
-                            borderRadius: 99,
-                          }}
-                        />
-                      </div>
+            {analytics.platforms.map(
+              (p: AggregatedAnalytics["platforms"][number]) => (
+                <div
+                  key={p.platform}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    padding: "12px 4px",
+                  }}
+                >
+                  <BrandGlyph
+                    name={
+                      p.platform.charAt(0).toUpperCase() + p.platform.slice(1)
+                    }
+                    size={38}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: 15,
+                        fontWeight: 600,
+                        textTransform: "capitalize",
+                      }}
+                    >
+                      {p.platform}
                     </div>
                     <div
                       style={{
-                        fontSize: 14,
-                        fontWeight: 700,
-                        minWidth: 48,
-                        textAlign: "right",
-                        color: "var(--cf-grad-end)",
+                        fontSize: 12.5,
+                        color: "rgb(var(--ink) / 0.45)",
                       }}
                     >
-                      {p.engagementRate != null
-                        ? `${(p.engagementRate * 100).toFixed(1)}%`
-                        : "—"}
+                      {p.error
+                        ? "Sync error — reconnect in Settings"
+                        : `${p.followers != null ? formatDashboardNumber(p.followers) : "—"} followers`}
                     </div>
-                  </>
-                )}
-              </div>
-            ))}
+                  </div>
+                  {!p.error && (
+                    <>
+                      <div style={{ width: 120, maxWidth: "30vw" }}>
+                        <div
+                          style={{
+                            height: 6,
+                            borderRadius: 99,
+                            background: "rgb(var(--ink) / 0.1)",
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.min(100, (p.engagementRate ?? 0) * 100 * 9)}%`,
+                              height: "100%",
+                              background: "var(--cf-cta-gradient)",
+                              borderRadius: 99,
+                            }}
+                          />
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 700,
+                          minWidth: 48,
+                          textAlign: "right",
+                          color: "var(--cf-grad-end)",
+                        }}
+                      >
+                        {p.engagementRate != null
+                          ? `${(p.engagementRate * 100).toFixed(1)}%`
+                          : "—"}
+                      </div>
+                    </>
+                  )}
+                </div>
+              ),
+            )}
           </div>
         ) : anaLoading ? (
           <div style={{ display: "grid", gap: 10 }}>

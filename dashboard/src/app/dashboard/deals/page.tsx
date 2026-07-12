@@ -368,7 +368,7 @@ function DealsInner() {
       setDeals((current) =>
         current.map((deal) => (deal.id === updated.id ? updated : deal)),
       );
-      setSelected((current) =>
+      setSelected((current: DashboardDeal | null) =>
         current?.id === updated.id ? updated : current,
       );
     },

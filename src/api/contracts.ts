@@ -1,10 +1,49 @@
 import type { DealStage } from "../config/constants.js";
-import type { AggregatedAnalytics } from "../agent/skills/analytics-aggregator.js";
-import type { FinancialSnapshot } from "../agent/skills/financial-tracker.js";
 import type { JsonObject } from "../db/json.js";
 import type { MessagingPlatform } from "../messaging/types.js";
 import type { PaymentAttemptStatus } from "../wallet/payment-attempt-status.js";
-import type { CreatorSpendingLimits } from "../wallet/spending.js";
+
+export interface ApiCreatorSpendingLimits {
+  perTransactionCents: number;
+  dailyCents: number;
+  monthlyCents: number;
+}
+
+export interface ApiFinancialSnapshot {
+  creatorId: string;
+  period: string;
+  income: { totalCents: number; bySource: Record<string, number> };
+  expenses: {
+    totalCents: number;
+    agentSpendCents: number;
+    byCategory: Record<string, number>;
+  };
+  netCents: number;
+  pipeline: {
+    activeDealCount: number;
+    totalPipelineValueCents: number;
+  };
+  forecast: {
+    nextMonthEstimateCents: number;
+    confidence: "low" | "medium" | "high";
+  };
+}
+
+export interface ApiAggregatedAnalytics {
+  creatorId: string;
+  collectedAt: string;
+  platforms: Array<{
+    platform: string;
+    username: string;
+    followers?: number;
+    engagementRate?: number;
+    recentViews?: number;
+    data: unknown;
+    error?: string;
+  }>;
+  totalFollowers: number;
+  avgEngagementRate: number;
+}
 
 export type ApiDealStage = DealStage;
 
@@ -240,7 +279,7 @@ export interface ApiWalletBalance {
   fundingMode?: "tempo_testnet_faucet";
   lowBalance?: boolean;
   minimumRecommendedBalanceCents?: number;
-  spendingLimits?: CreatorSpendingLimits;
+  spendingLimits?: ApiCreatorSpendingLimits;
   network?: {
     name: string;
     chainId: number;
@@ -297,6 +336,3 @@ export interface ApiConnectionInitiateResponse {
 export interface ApiConnectionDisconnectResponse {
   disconnected: number;
 }
-
-export type ApiFinancialSnapshot = FinancialSnapshot;
-export type ApiAggregatedAnalytics = AggregatedAnalytics;
