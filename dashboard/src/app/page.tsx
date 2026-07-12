@@ -7,22 +7,23 @@ import {
   LogoBadge,
 } from "@/components/cf/primitives";
 import { LandingComposer } from "@/components/landing-composer";
+import { LegalFooter } from "@/components/legal-footer";
 
 const LIVE_CARDS = [
   {
-    label: "Brand match",
-    title: "Pitch sent to Glow Labs",
-    detail: "$3,200 deal · 94% fit",
+    label: "Example · Brand match",
+    title: "Sample pitch to Glow Labs",
+    detail: "Example $3,200 deal · 94% fit",
     accent: "var(--cf-grad-end)",
   },
   {
-    label: "Contract review",
+    label: "Example · Contract review",
     title: "2 red flags found",
     detail: "Exclusivity + late-payment clause",
     accent: "var(--cf-coral)",
   },
   {
-    label: "Morning brief",
+    label: "Example · Morning brief",
     title: "3 new brand fits discovered",
     detail: "Beauty, wellness, tech — ready to pitch",
     accent: "var(--cf-accent-blue)",
@@ -152,7 +153,7 @@ function LiveCards() {
             fontWeight: 500,
           }}
         >
-          Indyfren is running for creators right now
+          Example workflow preview
         </span>
       </div>
     </div>
@@ -458,6 +459,8 @@ export default function HomePage() {
           </div>
         </section>
       </div>
+
+      <LegalFooter />
 
       <style>{`
         @media (max-width: 860px) {

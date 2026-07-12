@@ -767,7 +767,7 @@ curl -H "Authorization: Bearer <token>" \
 ## Support
 
 - **Documentation:** https://docs.indyfren.xyz
-- **Email:** support@indyfren.xyz
+- **Email:** support@chainfren.com
 - **GitHub:** https://github.com/indyfren/indyfren
 
 ---

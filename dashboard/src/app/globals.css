@@ -179,6 +179,82 @@ textarea {
   z-index: 1;
 }
 
+.legal-footer {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding: 24px;
+  color: rgb(var(--ink) / 0.65);
+  font-size: 12px;
+}
+.legal-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.legal-footer a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.legal-page {
+  min-height: 100vh;
+  padding: 32px 24px 0;
+  background: #06060c;
+  color: #fff;
+}
+.legal-page article {
+  width: min(720px, 100%);
+  margin: 72px auto;
+  font-size: 16px;
+  line-height: 1.7;
+}
+.legal-page h1 {
+  font-size: clamp(42px, 8vw, 76px);
+  line-height: 0.95;
+  letter-spacing: -0.055em;
+  margin: 8px 0 16px;
+}
+.legal-page h2 {
+  margin: 42px 0 10px;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+.legal-page p,
+.legal-page li {
+  color: rgb(255 255 255 / 0.78);
+}
+.legal-page li + li {
+  margin-top: 8px;
+}
+.legal-page a {
+  color: var(--cf-cyan);
+  text-underline-offset: 3px;
+}
+.legal-back {
+  color: rgb(255 255 255 / 0.8);
+  font-size: 14px;
+}
+.legal-updated {
+  color: rgb(255 255 255 / 0.58) !important;
+  font-size: 14px;
+}
+@media print {
+  .legal-page {
+    background: #fff;
+    color: #000;
+  }
+  .legal-page p,
+  .legal-page li {
+    color: #222;
+  }
+  .legal-footer {
+    color: #333;
+  }
+}
+
 /* ── Glass cards ───────────────────────────────────────── */
 .glass {
   position: relative;

@@ -1,6 +1,7 @@
 # Indyfren
 
 [![CI/CD](https://github.com/Bolajiking/Indy/actions/workflows/ci.yml/badge.svg)](https://github.com/Bolajiking/Indy/actions/workflows/ci.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 AI business manager for independent content creators. Manages brand deals, rate negotiations, pitching, financial tracking, and content strategy through Telegram/WhatsApp chat and a companion web dashboard.
 
@@ -119,6 +120,7 @@ If you start or build the dashboard from `dashboard/` directly, also provide its
 ```bash
 NEXT_PUBLIC_PRIVY_APP_ID="$PRIVY_APP_ID"
 NEXT_PUBLIC_API_URL=http://localhost:3000
+NEXT_PUBLIC_SUPPORT_EMAIL=support@chainfren.com
 ```
 
 The root `.env` helps when you launch everything from the workspace, but it is not a substitute for the dashboard's own build/runtime env in every deployment setup.

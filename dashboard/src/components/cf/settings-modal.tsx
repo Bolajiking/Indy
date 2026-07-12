@@ -45,6 +45,7 @@ import {
 } from "@/lib/account-settings";
 import { useAuthedQuery } from "@/lib/use-authed-query";
 import { useAuth } from "@/lib/auth-context";
+import { publicSupportEmail } from "@/lib/public-config";
 
 const NAV: Array<{
   k?: SettingsPane;
@@ -204,8 +205,8 @@ function PaneAccount() {
     } catch (error) {
       setMsg(
         error instanceof Error
-          ? `${error.message} Retry here or contact support@indyfren.com.`
-          : "Deletion couldn't start. Retry or contact support@indyfren.com.",
+          ? `${error.message} Retry here or contact ${publicSupportEmail}.`
+          : `Deletion couldn't start. Retry or contact ${publicSupportEmail}.`,
       );
       setAccountBusy(null);
     }
@@ -220,8 +221,8 @@ function PaneAccount() {
     } catch (error) {
       setMsg(
         error instanceof Error
-          ? `${error.message} Contact support@indyfren.com.`
-          : "Retry failed. Contact support@indyfren.com.",
+          ? `${error.message} Contact ${publicSupportEmail}.`
+          : `Retry failed. Contact ${publicSupportEmail}.`,
       );
     } finally {
       setAccountBusy(null);
@@ -371,7 +372,7 @@ function PaneAccount() {
           />
           <span id="delete-account-help" style={{ fontSize: 12 }}>
             If cleanup cannot start, you can retry here or email
-            support@indyfren.com.
+            {publicSupportEmail}.
           </span>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
             <button

@@ -7,6 +7,7 @@ export type ProductionEnvironment = Pick<
   | "AI_API_KEY"
   | "ANTHROPIC_API_KEY"
   | "OPENAI_API_KEY"
+  | "PUBLIC_SUPPORT_EMAIL"
   | "MESSAGING_LINK_SECRET"
   | "PRIVY_JWT_VERIFICATION_KEY"
   | "ENABLE_YOUTUBE_OAUTH"
@@ -86,6 +87,11 @@ export function getProductionEnvIssues(
     "MESSAGING_LINK_SECRET",
     config.MESSAGING_LINK_SECRET,
     "required to sign messaging link tokens",
+  );
+  requireValue(
+    "PUBLIC_SUPPORT_EMAIL",
+    config.PUBLIC_SUPPORT_EMAIL,
+    "required for public support and account-recovery contact",
   );
   requireValue(
     "PLATFORM_ENCRYPTION_KEY_VERSION",

@@ -177,6 +177,7 @@ function productionEnv(
     AI_API_KEY: "ai-key",
     ANTHROPIC_API_KEY: "",
     OPENAI_API_KEY: "",
+    PUBLIC_SUPPORT_EMAIL: "support@chainfren.com",
     MESSAGING_LINK_SECRET: "messaging-secret",
     PRIVY_JWT_VERIFICATION_KEY: "privy-verification-key",
     ENABLE_YOUTUBE_OAUTH: false,
@@ -204,6 +205,12 @@ function productionEnv(
 }
 
 describe("validateProductionEnv", () => {
+  it("rejects a missing public support email", () => {
+    expect(() =>
+      validateProductionEnv(productionEnv({ PUBLIC_SUPPORT_EMAIL: "" })),
+    ).toThrow(/PUBLIC_SUPPORT_EMAIL/);
+  });
+
   it("rejects a missing messaging link secret", () => {
     expect(() =>
       validateProductionEnv(productionEnv({ MESSAGING_LINK_SECRET: "" })),
