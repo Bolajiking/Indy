@@ -94,6 +94,7 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: https://api.indyfren.xyz
           NEXT_PUBLIC_PRIVY_APP_ID: ${{ secrets.NEXT_PUBLIC_PRIVY_APP_ID }}
+          NEXT_PUBLIC_SUPPORT_EMAIL: support@chainfren.com
 
       - name: Upload dashboard artifacts
         uses: actions/upload-artifact@v4
@@ -132,6 +133,7 @@ jobs:
           PRIVY_APP_SECRET: ci-placeholder
           PRIVY_JWT_VERIFICATION_KEY: ci-placeholder
           MESSAGING_LINK_SECRET: ci-placeholder
+          PUBLIC_SUPPORT_EMAIL: support@chainfren.com
           NODE_ENV: test
 
   smoke-preflight:
@@ -161,6 +163,7 @@ jobs:
           PRIVY_APP_SECRET: ci-placeholder
           PRIVY_JWT_VERIFICATION_KEY: ci-placeholder
           MESSAGING_LINK_SECRET: ci-placeholder
+          PUBLIC_SUPPORT_EMAIL: support@chainfren.com
           NODE_ENV: test
 
       - name: Run preflight with CI placeholder env
@@ -173,12 +176,14 @@ jobs:
           PRIVY_APP_SECRET: ci-placeholder
           PRIVY_JWT_VERIFICATION_KEY: ci-placeholder
           MESSAGING_LINK_SECRET: ci-placeholder
+          PUBLIC_SUPPORT_EMAIL: support@chainfren.com
           TELEGRAM_BOT_TOKEN: ci-placeholder
           ENABLE_TELEGRAM_BOT: "false"
           ENABLE_JOBS: "false"
           NEXT_PUBLIC_PRIVY_APP_ID: ci-placeholder
           NEXT_PUBLIC_PRIVY_CLIENT_ID: ci-placeholder
           NEXT_PUBLIC_API_URL: http://localhost:3000
+          NEXT_PUBLIC_SUPPORT_EMAIL: support@chainfren.com
 
   browser-e2e:
     name: Browser E2E and Accessibility

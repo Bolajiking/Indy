@@ -225,11 +225,13 @@ In Vercel dashboard → Settings → Environment Variables:
 
 - `NEXT_PUBLIC_API_URL` = the deployed backend API origin (`API_BASE_URL` above)
 - `NEXT_PUBLIC_PRIVY_APP_ID` = the public Privy app ID
+- `NEXT_PUBLIC_SUPPORT_EMAIL` = `support@chainfren.com`
 
 **Preview & Development:**
 
 - `NEXT_PUBLIC_API_URL` = `http://localhost:3000`
 - `NEXT_PUBLIC_PRIVY_APP_ID` = the non-production public Privy app ID
+- `NEXT_PUBLIC_SUPPORT_EMAIL` = `support@chainfren.com`
 
 #### 4. Deploy to Production
 
@@ -464,7 +466,7 @@ Open the linked Vercel project dashboard and select the deployment environment.
 | `ENABLE_JOBS`                              | No            | true               | Strict boolean enabling jobs; required for Telegram webhook mode or WhatsApp, and requires Redis when true |
 | `ENABLE_DISTRIBUTED_RATE_LIMIT`            | Yes           | true in production | Must be true in production; false is development/test only                                                 |
 | `ERROR_REPORTING_DSN`                      | No            | -                  | Optional error-reporting provider DSN                                                                      |
-| `PUBLIC_SUPPORT_EMAIL`                     | No            | -                  | Optional valid public support email address                                                                |
+| `PUBLIC_SUPPORT_EMAIL`                     | Yes           | -                  | Valid public support email address                                                                         |
 
 ### Dashboard (Vercel)
 

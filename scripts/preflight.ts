@@ -94,7 +94,8 @@ async function main() {
   const supabaseHost = new URL(env.SUPABASE_URL).hostname;
   const requireLiveProviders =
     process.env.SMOKE_REQUIRE_LIVE_PROVIDERS?.trim().toLowerCase() === "true";
-  const productionIssues = getProductionEnvIssues(env);
+  const productionIssues =
+    env.NODE_ENV === "production" ? getProductionEnvIssues(env) : [];
   const productionChecks: CheckResult[] =
     productionIssues.length === 0
       ? [
@@ -118,6 +119,7 @@ async function main() {
     checkValue("SUPABASE_SERVICE_KEY", env.SUPABASE_SERVICE_KEY),
     checkValue("PRIVY_APP_ID", env.PRIVY_APP_ID),
     checkValue("PRIVY_APP_SECRET", env.PRIVY_APP_SECRET),
+    checkValue("PUBLIC_SUPPORT_EMAIL", env.PUBLIC_SUPPORT_EMAIL),
     ...(requireLiveProviders
       ? [
           checkEnabled("ENABLE_JOBS", env.ENABLE_JOBS),

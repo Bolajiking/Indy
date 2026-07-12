@@ -13,6 +13,7 @@ dashboard/tsconfig.tsbuildinfo
 .superpowers/
 .vscode/
 .playwright-mcp/
+.vercel/
 playwright-report/
 test-results/
 .worktrees/
